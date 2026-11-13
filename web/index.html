@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shorts Studio</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="brand">Shorts Studio</div>
+    <nav id="nav" aria-label="Steps"></nav>
+    <div class="proj">
+      <button class="rail-btn" data-act="save-project">Save project</button>
+      <select id="proj-list" aria-label="Saved projects"><option value="">Open a saved project</option></select>
+    </div>
+  </aside>
+
+  <main>
+    <div id="banners"></div>
+
+    <section class="step" id="step-1" hidden>
+      <h1>Your story</h1>
+      <p class="lead">Describe what happens in a few sentences. Hindi or English both work.</p>
+      <label>Video title<input data-path="title" lang="hi" placeholder="राहुल और बंद दरवाज़ा"></label>
+      <label>Scenario<textarea data-path="scenario" lang="hi" rows="6"
+        placeholder="राहुल को घर में एक बंद दरवाज़ा मिलता है। प्रिया उसे चाबी ढूँढने में मदद करती है।"></textarea></label>
+      <div class="row2">
+        <label>Dialogue language
+          <select data-path="language"><option value="hi">Hindi</option><option value="en">English</option></select></label>
+        <label>Target length
+          <select data-path="seconds"><option value="30">About 30 seconds</option><option value="45">About 45 seconds</option><option value="60">About 60 seconds</option></select></label>
+      </div>
+      <div class="actions">
+        <button class="ghost" data-act="example">Fill in an example</button>
+        <button class="primary" data-act="go" data-step="2">Next: cast</button>
+      </div>
+    </section>
+
+    <section class="step" id="step-2" hidden>
+      <h1>Cast</h1>
+      <p class="lead">Name each character, pick a look and a voice, and play a sample to hear it.</p>
+      <div id="cast"></div>
+      <div class="actions">
+        <button class="secondary" data-act="add-char">Add character</button>
+        <button class="primary" data-act="go" data-step="3">Next: scenes</button>
+      </div>
+    </section>
+
+    <section class="step" id="step-3" hidden>
+      <h1>Scenes and sound</h1>
+      <p class="lead">Choose where the sound comes from, then write or draft your scenes. In each scene you choose which characters are in it, and with your own audio you choose which part of it the scene plays.</p>
+
+      <div class="soundbox">
+        <h2>Sound</h2>
+        <div class="choice" role="radiogroup" aria-label="Audio source">
+          <label class="radio"><input type="radio" name="amode" value="tts" data-path="audio.mode">Voices made by the app</label>
+          <label class="radio"><input type="radio" name="amode" value="file" data-path="audio.mode">My own audio file (voice-over or dubbing)</label>
+        </div>
+        <div id="audio-file" hidden>
+          <p class="hint">"Write captions from my audio" listens to your audio with Gemini and types each line's words (Hindi in Devanagari). With no lines yet, it makes one line per spoken part. Lines you leave empty are also captioned automatically when you make the video.</p>
+          <p class="hint">Your audio is the soundtrack and the characters act while it plays. Each scene plays its own trimmed part of it, so you can use one long recording for the whole video. The text of a line becomes the caption and can stay empty.</p>
+          <label>Audio file from this computer
+            <input type="file" id="audio-input" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.opus,.flac,.mp4,.mov"></label>
+          <div id="audio-info"></div>
+          <canvas id="wave" height="84" role="img" aria-label="Waveform of your audio with each scene's part shaded"></canvas>
+          <label class="narrow">A pause longer than <b id="pause-out"></b> seconds starts a new line
+            <input type="range" min="0.2" max="1.2" step="0.05" data-path="audio.pause"></label>
+          <div class="actions row-actions">
+            <button class="primary" data-act="match-audio">Match my lines to the audio</button>
+            <button class="secondary" data-act="caption-audio">Write captions from my audio</button>
+            <button class="secondary" data-act="play-all">Play all scenes in order</button>
+            <button class="ghost" data-act="stop-audio">Stop</button>
+          </div>
+        </div>
+        <h3>Background music (optional)</h3>
+        <label>Music file from this computer
+          <input type="file" id="music-input" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.opus,.flac"></label>
+        <div id="music-info"></div>
+        <label class="narrow">Music volume <b id="vol-out"></b>
+          <input type="range" min="0" max="100" step="5" data-path="audio.musicVolume"></label>
+      </div>
+
+      <div class="draft">
+        <label>Draft with<select id="provider" data-path="provider"></select></label>
+        <button class="primary" data-act="draft">Write script</button>
+      </div>
+      <p class="hint" id="provider-hint"></p>
+      <p class="hint">Every line can also have an optional emotional sound (laugh, angry growl, frustrated groan, and more). A line with a sound and no words is a reaction: that character stays in the scene and reacts while the sound plays. Leave it on "No sound" if you do not want one.</p>
+      <div id="scenes"></div>
+      <div class="actions">
+        <button class="secondary" data-act="add-scene">Add scene</button>
+        <button class="primary" data-act="go" data-step="4">Next: voices</button>
+      </div>
+    </section>
+
+    <section class="step" id="step-4" hidden>
+      <h1>Voices</h1>
+      <p class="lead">Generate the audio for every line. The length of each clip sets how long its scene lasts.</p>
+      <div id="voices-tts">
+        <label class="narrow">Voice engine
+          <select data-path="tts">
+            <option value="auto">Automatic (online voices, silent if unavailable)</option>
+            <option value="edge">Online voices only</option>
+            <option value="gemini">Gemini voices for everyone (emotional, uses your Gemini key)</option>
+            <option value="silent">Silent (fast test)</option>
+          </select></label>
+        <p class="hint">Gemini voices speak each line with its emotion (angry, crying, laughing...). Pick a "Gemini" voice for a character in the Cast step, or choose "Gemini voices for everyone" here. The free Gemini tier has a small daily limit; when it runs out, lines use the Microsoft voices. Each line is made once and saved, so changing one line only remakes that line.</p>
+        <div class="actions"><button class="primary" data-act="voices">Generate voices</button></div>
+        <div id="voice-out"></div>
+      </div>
+      <div id="voices-file" hidden>
+        <div class="banner">You chose your own audio in the Scenes and sound step, so there are no voices to make. Go on to make the video.</div>
+      </div>
+      <div class="actions"><button class="primary" data-act="go" data-step="5">Next: make video</button></div>
+    </section>
+
+    <section class="step" id="step-5" hidden>
+      <h1>Make the video</h1>
+      <p class="lead">Start with a quick preview. When it looks right, make the full-quality version and upload it to YouTube yourself.</p>
+      <label class="narrow">Quality
+        <select id="quality"><option value="low">Low quality (270 x 480, fastest)</option><option value="preview" selected>Quick preview (540 x 960)</option><option value="final">Full quality (1080 x 1920)</option></select></label>
+      <label class="radio"><input type="checkbox" data-path="look3d">3D-like look: soft lighting, shading and depth (a little slower to render)</label>
+      <label class="radio"><input type="checkbox" data-path="captions">Show captions (word-highlighted subtitles burned into the video)</label>
+      <p class="hint">Flat cartoon scenes (a "Flat cartoon" background, or any "Flat:" character) are drawn in a simple 2D street-cartoon style with an automatic camera: wide shots, shots on the speaker, over-the-shoulder shots and close-ups. Pick a shot per line in the Scenes step to override it.</p>
+      <div class="actions"><button class="primary" data-act="render">Make video</button></div>
+      <div id="progress" hidden>
+        <div class="bar"><div id="bar-fill"></div></div>
+        <p class="hint" id="stage"></p>
+      </div>
+      <div id="result"></div>
+    </section>
+  </main>
+
+  <aside class="phone-col">
+    <div class="phone"><img id="pv" alt="Preview of the current scene" hidden><p id="pv-empty">Your scene appears here</p></div>
+    <p class="hint" id="pv-label"></p>
+  </aside>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="/app.js"></script>
+</body>
+</html>

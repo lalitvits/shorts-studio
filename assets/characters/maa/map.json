@@ -1,0 +1,22 @@
+{
+ "neutral": "warm_big",
+ "happy": "warm_big",
+ "proud": "warm_big",
+ "relieved": "warm_big",
+ "in_love": "warm_big",
+ "laughing": "warm_big",
+ "excited": "warm_big",
+ "embarrassed": "warm_big",
+ "thinking": "thinking",
+ "confused": "thinking",
+ "surprised": "surprised",
+ "shocked": "surprised",
+ "worried": "worried",
+ "scared": "worried",
+ "angry": "worried",
+ "disgusted": "worried",
+ "sad": "sad",
+ "sleepy": "sad",
+ "bored": "sad",
+ "crying": "crying"
+}

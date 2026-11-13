@@ -1,0 +1,217 @@
+"""Tiny local web server (standard library only). Serves the UI and a JSON API."""
+from __future__ import annotations
+
+import json
+import mimetypes
+import re
+import threading
+import traceback
+import uuid
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import unquote
+
+from . import audio as audio_mod
+from . import script as script_mod
+from .backgrounds import list_backgrounds
+from .catalog import ACTION_LABELS, DEFAULT_VOICE, EMOTIONS, LOOKS, SHOT_LABELS, SOUND_EMOTIONS, SOUND_LABELS, VOICES
+from .config import OUTPUT_DIR, PROJECTS_DIR, UPLOADS_DIR, WEB_DIR, find_devanagari_font, find_ffmpeg
+from .render import RenderError, make_clip, normalize, render_still, render_video
+from .sfx import SoundError, get_sound
+from .tts import TTSError, get_clip
+
+JOBS: dict[str, dict] = {}
+LOCK = threading.Lock()
+
+
+def _has_edge() -> bool:
+    try:
+        import edge_tts  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def assets_payload() -> dict:
+    font = find_devanagari_font()
+    return {
+        "backgrounds": list_backgrounds(),
+        "looks": [{"id": k, "label": v["label"], "female": bool(v.get("female")), "flat": v.get("style") == "flat"}
+                  for k, v in LOOKS.items()],
+        "shots": [{"id": k, "label": v} for k, v in SHOT_LABELS.items()],
+        "voices": VOICES, "default_voice": DEFAULT_VOICE,
+        "emotions": EMOTIONS, "actions": [{"id": k, "label": v} for k, v in ACTION_LABELS.items()],
+        "sounds": [{"id": k, "label": v} for k, v in SOUND_LABELS.items()], "sound_emotions": SOUND_EMOTIONS,
+        "script_providers": script_mod.provider_status(),
+        "system": {"gemini": script_mod.provider_status()[0]["ready"], "ffmpeg": bool(find_ffmpeg()), "edge_tts": _has_edge(), "font": font.name if font else None},
+    }
+
+
+def _run_job(job_id: str, tl: dict, quality: str):
+    def progress(stage, frac):
+        with LOCK:
+            JOBS[job_id].update(stage=stage, progress=round(frac, 3))
+    try:
+        res = render_video(tl, quality, progress)
+        with LOCK:
+            JOBS[job_id].update(status="done", result=res, progress=1.0, stage="Done")
+    except Exception as e:  # shown in the UI
+        traceback.print_exc()
+        with LOCK:
+            JOBS[job_id].update(status="error", error=str(e))
+
+
+def _safe_name(name: str) -> str:
+    return re.sub(r"[^\w\- ]+", "", name, flags=re.U).strip()[:60]
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "ShortsStudio/1.0"
+
+    def log_message(self, fmt, *args):  # keep the console quiet
+        pass
+
+    # ------------------------------------------------------------ helpers
+    def _send(self, code: int, body: bytes, ctype: str = "application/json", extra: dict | None = None):
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _json(self, obj, code: int = 200):
+        self._send(code, json.dumps(obj, ensure_ascii=False).encode("utf-8"))
+
+    def _body(self) -> dict:
+        n = int(self.headers.get("Content-Length") or 0)
+        return json.loads(self.rfile.read(n) or b"{}")
+
+    def _file(self, path: Path, download: bool = False):
+        if not path.is_file():
+            return self._json({"error": "Not found"}, 404)
+        data = path.read_bytes()
+        ctype = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        size, start, end, code = len(data), 0, len(data) - 1, 200
+        extra = {"Accept-Ranges": "bytes"}
+        rng = self.headers.get("Range")
+        if rng and (m := re.match(r"bytes=(\d*)-(\d*)", rng)):
+            if m.group(1):
+                start = int(m.group(1))
+            if m.group(2):
+                end = min(int(m.group(2)), size - 1)
+            if m.group(1) == "" and m.group(2):
+                start, end = max(0, size - int(m.group(2))), size - 1
+            code = 206
+            extra["Content-Range"] = f"bytes {start}-{end}/{size}"
+        if download:
+            extra["Content-Disposition"] = f'attachment; filename="{path.name}"'
+        self._send(code, data[start:end + 1], ctype, extra)
+
+    # --------------------------------------------------------------- routes
+    def do_GET(self):
+        path = unquote(self.path.split("?")[0])
+        try:
+            if path == "/api/assets":
+                return self._json(assets_payload())
+            if path.startswith("/api/jobs/"):
+                with LOCK:
+                    job = JOBS.get(path.rsplit("/", 1)[1])
+                return self._json(job or {"error": "Unknown job"}, 200 if job else 404)
+            if path == "/api/projects":
+                names = sorted(p.stem for p in PROJECTS_DIR.glob("*.json"))
+                return self._json({"projects": names})
+            if path.startswith("/api/projects/"):
+                p = PROJECTS_DIR / (_safe_name(path.rsplit("/", 1)[1]) + ".json")
+                return self._file(p)
+            if path.startswith("/audio/"):
+                return self._file(UPLOADS_DIR / Path(path).name)
+            if path.startswith("/video/") or path.startswith("/download/"):
+                name = Path(path).name
+                return self._file(OUTPUT_DIR / name, download=path.startswith("/download/"))
+            rel = "index.html" if path in ("/", "") else path.lstrip("/")
+            target = (WEB_DIR / rel).resolve()
+            if WEB_DIR.resolve() not in target.parents and target != WEB_DIR.resolve():
+                return self._json({"error": "Not found"}, 404)
+            return self._file(target)
+        except Exception as e:
+            traceback.print_exc()
+            self._json({"error": str(e)}, 500)
+
+    def do_POST(self):
+        path = self.path.split("?")[0]
+        try:
+            if path == "/api/audio/upload":                      # raw file bytes, not JSON
+                meta = audio_mod.save_upload(self.rfile, int(self.headers.get("Content-Length") or 0),
+                                             self.headers.get("X-Filename", "audio"))
+                return self._json({"id": meta["id"], "name": meta["name"], "seconds": meta["seconds"],
+                                   "url": f"/audio/{meta['id']}{meta['ext']}"})
+            data = self._body()
+            if path == "/api/audio/match":
+                return self._json(audio_mod.match_lines(data.get("id", ""), int(data.get("lines", 0)),
+                                                        float(data.get("pause", 0.45))))
+            if path == "/api/audio/peaks":
+                return self._json(audio_mod.peaks(data.get("id", "")))
+            if path == "/api/audio/transcribe":                 # captions from your audio, one per range
+                from .transcribe import transcribe_many
+                texts, warn = transcribe_many(data.get("id", ""), data.get("ranges", []), data.get("language", "hi"))
+                return self._json({"texts": texts, "warning": warn})
+            if path == "/api/audio/segments":
+                return self._json({"segments": audio_mod.speech_segments(data.get("id", ""), float(data.get("pause", 0.45)))})
+            if path == "/api/script":
+                res = script_mod.generate(data.get("scenario", ""), data.get("characters", []),
+                                          data.get("language", "hi"), int(data.get("seconds", 45)),
+                                          data.get("provider", "gemini"))
+                return self._json(res)
+            if path == "/api/frame":
+                png = render_still(data["timeline"], int(data.get("scene", 0)), int(data.get("line", 0)),
+                                   int(data.get("width", 270)))
+                return self._send(200, png, "image/png")
+            if path == "/api/sample":
+                clip = get_clip(data.get("text", "") or "नमस्ते", data.get("voice", DEFAULT_VOICE),
+                                data.get("engine", "auto"), emotion=data.get("emotion") or "neutral")
+                headers = {"X-Warning": clip.warning.encode("ascii", "ignore").decode()} if clip.warning else {}
+                return self._send(200, clip.wav.read_bytes(), "audio/wav", headers)
+            if path == "/api/sound":                              # hear one emotional sound
+                clip = get_sound(data.get("sound", ""), data.get("voice", DEFAULT_VOICE))
+                return self._send(200, clip.wav.read_bytes(), "audio/wav")
+            if path == "/api/voices":
+                tl = normalize(data["timeline"])
+                by_id = {c["id"]: c for c in tl["characters"]}
+                rows, warnings, total = [], [], 0.0
+                for si, sc in enumerate(tl["scenes"]):
+                    for li, ln in enumerate(sc["lines"]):
+                        clip = make_clip(ln, by_id[ln["speaker"]], tl["tts"])
+                        total += clip.duration
+                        if clip.warning and clip.warning not in warnings:
+                            warnings.append(clip.warning)
+                        rows.append({"scene": si, "line": li, "seconds": round(clip.duration, 1),
+                                     "silent": clip.synthetic})
+                return self._json({"rows": rows, "total": round(total, 1), "warnings": warnings})
+            if path == "/api/render":
+                normalize(data["timeline"])  # fail fast with a readable message
+                job_id = uuid.uuid4().hex[:10]
+                with LOCK:
+                    JOBS[job_id] = {"status": "running", "stage": "Starting", "progress": 0.0}
+                threading.Thread(target=_run_job, args=(job_id, data["timeline"], data.get("quality", "preview")),
+                                 daemon=True).start()
+                return self._json({"job": job_id})
+            if path == "/api/projects":
+                name = _safe_name(data.get("name", ""))
+                if not name:
+                    return self._json({"error": "Give the project a name."}, 400)
+                (PROJECTS_DIR / f"{name}.json").write_text(json.dumps(data.get("data", {}), ensure_ascii=False,
+                                                                      indent=1), encoding="utf-8")
+                return self._json({"saved": name})
+            return self._json({"error": "Unknown action"}, 404)
+        except (RenderError, TTSError, script_mod.ScriptError, audio_mod.AudioError, SoundError) as e:
+            self._json({"error": str(e)}, 400)
+        except Exception as e:
+            traceback.print_exc()
+            self._json({"error": f"Something went wrong: {e}"}, 500)
+
+
+def serve(host: str = "127.0.0.1", port: int = 8000) -> ThreadingHTTPServer:
+    return ThreadingHTTPServer((host, port), Handler)

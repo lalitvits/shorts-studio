@@ -1,0 +1,1070 @@
+"""Flat cartoon style: simple vector characters, animated backgrounds and an automatic camera.
+
+Everything here is drawn from shapes (no picture files), in the style of flat 2D street cartoons:
+outlined characters (uncle in a cap and vest, aunty, boy, dog, cat), a city street with cars and birds,
+and a camera that cuts between wide shots, singles, over-the-shoulder shots and close-ups, with a slow
+drift inside every shot.
+
+A scene uses this style when its background is one of the flat backgrounds or when any of its characters
+has a flat look. Older looks (Rahul, Priya, ...) are redrawn as flat people with their own colours.
+"""
+from __future__ import annotations
+
+import math
+import random
+import zlib
+from collections import OrderedDict
+from functools import lru_cache
+
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
+
+from .backgrounds import get_background
+from .catalog import FLAT_BACKGROUNDS, LOOKS
+from .realms import REALMS, animate as animate_realm, draw_static as draw_realm
+from .rig import KEEP_EMOTION, PERSISTENT, blink_amount
+
+OUT = (36, 31, 32)          # outline colour
+OL = 5.5                    # outline width (world units)
+FW, FH = 1080, 1920         # frame in world units
+STRONG = {"angry", "shocked", "surprised", "crying", "laughing", "scared", "excited"}
+SHOTS = ("auto", "wide", "single", "ots", "close")
+
+
+def _h(*parts) -> int:
+    return zlib.crc32("|".join(map(str, parts)).encode())
+
+
+def _mix(c, k):
+    return tuple(max(0, min(255, int(v * k))) for v in c)
+
+
+# ===================================================================== looks
+def flat_spec(look: dict) -> dict:
+    """The flat drawing recipe for any look (flat looks have their own; older looks get one from their colours)."""
+    if look.get("style") in ("flat", "3d"):
+        return look["flat"]
+    fem = bool(look.get("female"))
+    if look.get("outfit") == "saree":
+        return dict(kind="human", skin=look["skin"], top="kurta", top_color=(236, 222, 190), accent=(150, 40, 50),
+                    bottom="dress", bottom_color=(150, 40, 50), hat=None, hair="bun", hair_color=(150, 150, 160),
+                    mustache=False, female=True, height=0.95, bindi=True)
+    return dict(kind="human", skin=look.get("skin", (200, 140, 95)),
+                top="kurta" if fem else "tshirt", top_color=look.get("shirt", (60, 120, 200)),
+                accent=_mix(look.get("shirt", (60, 120, 200)), 0.7),
+                bottom="dress" if fem else "pants", bottom_color=look.get("pants", (40, 50, 70)), hat=None,
+                hair="long" if fem else "short", hair_color=look.get("hair", (50, 35, 28)),
+                mustache=False, female=fem, height=0.97 * look.get("scale", 1.0), bindi=fem)
+
+
+def is_flat_look(look_id: str) -> bool:
+    return LOOKS.get(look_id, {}).get("style") in ("flat", "3d")
+
+
+# ===================================================================== pen
+class Pen:
+    """Draws in character units: origin at the feet, y up is negative. s = pixels per unit."""
+
+    def __init__(self, im, ox, oy, s):
+        self.d = ImageDraw.Draw(im)
+        self.ox, self.oy, self.s = ox, oy, s
+
+    def p(self, x, y):
+        return (self.ox + x * self.s, self.oy + y * self.s)
+
+    def box(self, x0, y0, x1, y1):
+        a, b = self.p(x0, y0), self.p(x1, y1)
+        return [min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]) + 0.01, max(a[1], b[1]) + 0.01]
+
+    def wd(self, w):
+        return max(1, round(w * self.s))
+
+    def ellipse(self, x0, y0, x1, y1, fill, ol=OL, color=OUT):
+        self.d.ellipse(self.box(x0, y0, x1, y1), fill=fill, outline=color if ol else None, width=self.wd(ol) if ol else 0)
+
+    def circle(self, cx, cy, r, fill, ol=OL, color=OUT):
+        self.ellipse(cx - r, cy - r, cx + r, cy + r, fill, ol, color)
+
+    def poly(self, pts, fill, ol=OL, color=OUT):
+        q = [self.p(*a) for a in pts]
+        self.d.polygon(q, fill=fill)
+        if ol:
+            self.d.line(q + [q[0], q[1]], fill=color, width=self.wd(ol), joint="curve")
+
+    def line(self, pts, fill, w):
+        q = [self.p(*a) for a in pts]
+        self.d.line(q, fill=fill, width=self.wd(w), joint="curve")
+        r = w * self.s / 2
+        for x, y in (q[0], q[-1]):
+            self.d.ellipse([x - r, y - r, x + r, y + r], fill=fill)
+
+    def limb(self, pts, w, fill, ol=OL):
+        """A thick outlined stroke with round ends (arms, legs, tails)."""
+        self.line(pts, OUT, w + 2 * ol)
+        self.line(pts, fill, w)
+
+    def arc(self, x0, y0, x1, y1, a0, a1, w, color=OUT):
+        self.d.arc(self.box(x0, y0, x1, y1), a0, a1, fill=color, width=self.wd(w))
+
+    def pie(self, x0, y0, x1, y1, a0, a1, fill, ol=OL):
+        self.d.pieslice(self.box(x0, y0, x1, y1), a0, a1, fill=fill, outline=OUT if ol else None,
+                        width=self.wd(ol) if ol else 0)
+
+
+def _sup(cx, cy, a, b, n=2.6, steps=56):
+    pts = []
+    for i in range(steps):
+        th = 2 * math.pi * i / steps
+        c, s = math.cos(th), math.sin(th)
+        pts.append((cx + a * math.copysign(abs(c) ** (2 / n), c), cy + b * math.copysign(abs(s) ** (2 / n), s)))
+    return pts
+
+
+def _ik(sx, sy, tx, ty, l1, l2, side):
+    """Elbow position for a two-bone arm reaching (tx, ty); the elbow bends outward."""
+    dx, dy = tx - sx, ty - sy
+    d = max(abs(l1 - l2) + 1, min(l1 + l2 - 0.5, math.hypot(dx, dy)))
+    base = math.atan2(dy, dx)
+    a = math.acos(max(-1, min(1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d))))
+    c1 = (sx + l1 * math.cos(base + a), sy + l1 * math.sin(base + a))
+    c2 = (sx + l1 * math.cos(base - a), sy + l1 * math.sin(base - a))
+    e = c1 if c1[0] * side > c2[0] * side else c2
+    k = d / max(1e-6, math.hypot(dx, dy))
+    return e, (sx + dx * k, sy + dy * k)
+
+
+def _fk(sx, sy, a_deg, e_deg, l1, l2, side):
+    a = math.radians(a_deg)
+    ex, ey = sx + l1 * side * math.sin(a), sy + l1 * math.cos(a)
+    b = math.radians(a_deg + e_deg)
+    return (ex, ey), (ex + l2 * side * math.sin(b), ey + l2 * math.cos(b))
+
+
+# ===================================================================== poses
+HIP_T = ("ik", 126, -520)
+
+
+def _talk_style(key: str) -> str:
+    return ["hips_point", "hips_point", "hips", "explain", "point", "hips"][_h(key) % 6]
+
+
+def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "") -> dict:
+    """Arms, body offsets and prop for a flat human. Arm specs are for the right arm (side +1)."""
+    s = math.sin
+    p = dict(L=("fk", 12, -6), R=("fk", 12, -6), dx=0.0, dy=3 * s(t * 2.3), head_dx=0.0, head_dy=0.0,
+             walk=0.0, prop=None, eyes_dir=0.0)
+    if action == "talk":
+        action = {"angry": "hips_point", "laughing": "hips", "crying": "cry", "scared": "stop2",
+                  "proud": "hips", "thinking": "think", "confused": "shrug", "excited": "explain"}.get(
+            emotion, _talk_style(key))
+    elif action == "idle":
+        action = {"angry": "hips", "proud": "hips", "crying": "cry", "thinking": "think", "scared": "stop2",
+                  "laughing": "hips", "bored": "arms_crossed"}.get(emotion, "rest")
+    if action == "rest":
+        pass
+    elif action == "hips":
+        p["L"] = p["R"] = HIP_T
+    elif action == "hips_point":
+        p["L"] = HIP_T
+        p["R"] = ("fk", 96 + 5 * s(t * 5), -6 + 6 * s(t * 3))
+    elif action == "point":
+        p["R"] = ("fk", 96 + 5 * s(t * 5), -6 + 6 * s(t * 3))
+    elif action == "explain":
+        w = 12 * s(t * 4.5)
+        p["L"] = ("fk", 40, 62 + w)
+        p["R"] = ("fk", 40, 62 - w)
+    elif action == "wave":
+        p["R"] = ("fk", 150, 22 + 28 * s(t * 9))
+        p["L"] = HIP_T
+    elif action in ("think",):
+        p["R"] = ("ik", 32, -812)
+        p["L"] = ("ik", 60, -650)
+        p["eyes_dir"] = 1.0
+    elif action == "facepalm":
+        p["R"] = ("ik", 18, -905)
+        p["head_dy"] = 10
+    elif action in ("thumbs_up", "ok_sign"):
+        p["R"] = ("fk", 70, 70)
+        p["L"] = HIP_T
+    elif action == "stop":
+        p["R"] = ("fk", 85, 70)
+    elif action == "stop2":
+        p["L"] = p["R"] = ("fk", 70, 80 + 5 * s(t * 14))
+    elif action == "arms_crossed":
+        p["L"] = ("ik", -50, -640)
+        p["R"] = ("ik", -40, -660)
+    elif action == "shrug":
+        p["L"] = p["R"] = ("fk", 48, 85)
+        p["head_dx"] = 6 * s(t * 3)
+    elif action == "look_around":
+        p["head_dx"] = 14 * s(t * 2.2)
+        p["eyes_dir"] = s(t * 2.2)
+    elif action == "walk":
+        p["walk"] = t
+        p["L"] = ("fk", 10 + 18 * s(t * 8), -10)
+        p["R"] = ("fk", 10 - 18 * s(t * 8), -10)
+        p["dy"] = -6 * abs(s(t * 8))
+    elif action == "jump":
+        p["dy"] = -110 * abs(s(t * 4.5))
+        p["L"] = p["R"] = ("fk", 150, 10)
+    elif action in ("cheer", "dance"):
+        p["L"] = ("fk", 150 + 10 * s(t * 7), 15)
+        p["R"] = ("fk", 150 - 10 * s(t * 7), 15)
+        if action == "dance":
+            p["dx"] = 22 * s(t * 5)
+            p["dy"] = -18 * abs(s(t * 10))
+    elif action == "clap":
+        g = 18 + 24 * abs(s(t * 9))
+        p["L"] = ("ik", -g, -660)
+        p["R"] = ("ik", g, -660)
+    elif action == "cry":
+        p["L"] = ("ik", -38, -890)
+        p["R"] = ("ik", 38, -890)
+        p["head_dy"] = 8
+        p["dy"] += 4 * s(t * 16)
+    elif action in ("use_phone", "sit_phone"):
+        p["R"] = ("ik", 30, -700)
+        p["L"] = ("ik", -10, -690)
+        p["prop"] = "phone"
+        p["head_dy"] = 10
+    elif action == "phone_call":
+        p["R"] = ("ik", 104, -878)
+        p["L"] = HIP_T
+        p["prop"] = "phone_ear"
+    elif action in ("drink_tea", "sit_tea"):
+        lift = 0.5 + 0.5 * s(t * 1.3)
+        p["R"] = ("ik", 40, -700 - 120 * lift ** 6)
+        p["prop"] = "cup"
+    elif action in ("read_book", "sit_read"):
+        p["L"] = ("ik", -55, -700)
+        p["R"] = ("ik", 55, -700)
+        p["prop"] = "book"
+        p["head_dy"] = 10
+    elif action in ("eat", "sit_eat"):
+        p["R"] = ("ik", 25, -720 - 100 * max(0, s(t * 2.5)))
+        p["prop"] = "snack"
+    elif action in ("sit", "sit_sleep"):
+        p["L"] = p["R"] = HIP_T if action == "sit" else ("fk", 12, -6)
+    if emotion == "laughing":
+        p["dy"] += 6 * s(t * 22)
+    if emotion in ("sad", "bored", "sleepy"):
+        p["head_dy"] += 8
+    if speaking and action not in ("look_around", "dance", "jump"):
+        p["head_dx"] += 3 * s(t * 3.1)
+    return p
+
+
+# ===================================================================== faces
+def _face_cfg(emotion: str) -> dict:
+    c = dict(eyes="open", brow=0, mouth="smile_s", fx=())
+    m = {
+        "happy": dict(eyes="open", mouth="smile"), "sad": dict(eyes="half", brow=-1, mouth="frown"),
+        "worried": dict(brow=-1, mouth="flat", fx=("sweat",)), "angry": dict(brow=1.2, mouth="frown", fx=("vein",)),
+        "surprised": dict(eyes="wide", brow=-1.4, mouth="o"), "shocked": dict(eyes="wide", brow=-1.6, mouth="o"),
+        "laughing": dict(eyes="happy", mouth="laugh"), "crying": dict(eyes="closed", brow=-1.2, mouth="cry", fx=("tears",)),
+        "scared": dict(eyes="wide", brow=-1.2, mouth="o", fx=("sweat",)), "excited": dict(eyes="wide", brow=-1, mouth="laugh"),
+        "sleepy": dict(eyes="closed", mouth="flat", fx=("zzz",)), "embarrassed": dict(eyes="happy", mouth="smile_s", fx=("blush", "sweat")),
+        "confused": dict(brow="confused", mouth="flat"), "bored": dict(eyes="half", mouth="flat"),
+        "in_love": dict(eyes="happy", mouth="smile", fx=("blush",)), "proud": dict(eyes="happy", mouth="smile"),
+        "disgusted": dict(eyes="half", brow=1, mouth="frown"), "thinking": dict(eyes="up", mouth="flat"),
+        "relieved": dict(eyes="happy", mouth="smile"),
+    }.get(emotion, {})
+    c.update(m)
+    return c
+
+
+def _eye(pen, x, y, kind, blink, look):
+    if blink > 0.5 and kind not in ("happy", "closed"):
+        kind = "closed"
+    lx = look * 5
+    if kind == "open" or kind == "up":
+        dy = -6 if kind == "up" else 0
+        pen.ellipse(x - 9 + lx, y - 13 + dy, x + 9 + lx, y + 13 + dy, (28, 24, 24), 0)
+        pen.circle(x - 3 + lx, y - 6 + dy, 3.2, (255, 255, 255), 0)
+    elif kind == "wide":
+        pen.circle(x, y, 17, (255, 255, 255), 4)
+        pen.circle(x + lx, y + 1, 8, (28, 24, 24), 0)
+    elif kind == "happy":
+        pen.arc(x - 16, y - 4, x + 16, y + 22, 200, 340, 6)
+    elif kind == "closed":
+        pen.arc(x - 16, y - 18, x + 16, y + 6, 25, 155, 6)
+    elif kind == "half":
+        pen.pie(x - 10 + lx, y - 10, x + 10 + lx, y + 14, 0, 180, (28, 24, 24), 0)
+        pen.line([(x - 13, y - 1), (x + 13, y - 1)], OUT, 5)
+
+
+def _brows(pen, cx, y, brow):
+    for side in (-1, 1):
+        x = cx + side * 38
+        if brow == "confused":
+            d_in, d_out = (-14, -8) if side < 0 else (4, 2)
+        else:
+            d_in, d_out = 12 * brow, -6 * brow
+        pen.line([(x + side * 20, y + d_out), (x - side * 18, y + d_in)], OUT, 8)
+
+
+def _mouth(pen, cx, cy, kind, m, t):
+    if kind == "laugh" and m < 0.35:
+        m = 0.45 + 0.25 * abs(math.sin(t * 11))
+    if kind == "cry" and m < 0.2:
+        m = 0.25
+    if m > 0.08:
+        w = 32 + 8 * m
+        h = 7 + 30 * m
+        pen.ellipse(cx - w, cy - h, cx + w, cy + h, (110, 26, 34), 4.5)
+        pen.ellipse(cx - w * 0.55, cy + h * 0.05, cx + w * 0.55, cy + h * 0.85, (232, 110, 120), 0)
+        if h > 18:
+            pen.ellipse(cx - w * 0.6, cy - h * 0.92, cx + w * 0.6, cy - h * 0.55, (250, 250, 245), 0)
+        return
+    if kind in ("smile", "laugh"):
+        pen.arc(cx - 30, cy - 24, cx + 30, cy + 12, 25, 155, 6)
+    elif kind == "smile_s":
+        pen.arc(cx - 22, cy - 16, cx + 22, cy + 6, 30, 150, 5.5)
+    elif kind in ("frown", "cry"):
+        pen.arc(cx - 26, cy - 2, cx + 26, cy + 26, 205, 335, 6)
+    elif kind == "o":
+        pen.ellipse(cx - 12, cy - 14, cx + 12, cy + 14, (110, 26, 34), 4.5)
+    else:
+        pen.line([(cx - 20, cy), (cx + 20, cy)], OUT, 5.5)
+
+
+def _effects(pen, fx, hx, hy, r, t, sides=(-1, 1)):
+    if "tears" in fx:
+        for side in sides:
+            for k in range(2):
+                ph = (t * 1.6 + k * 0.5 + (0.25 if side > 0 else 0)) % 1.0
+                x, y = hx + side * (40 + 18 * ph), hy - 5 + 140 * ph
+                pen.ellipse(x - 7, y - 9, x + 7, y + 9, (110, 180, 240), 2.5, (60, 120, 190))
+            pen.line([(hx + side * 40, hy + 8), (hx + side * 44, hy + 50)], (140, 200, 245), 7)
+    if "sweat" in fx:
+        y = hy - r * 0.6 + 8 * math.sin(t * 3)
+        pen.poly([(hx + r * 0.95, y - 26), (hx + r * 0.95 + 13, y + 2), (hx + r * 0.95 - 13, y + 2)], (150, 205, 245), 3)
+        pen.circle(hx + r * 0.95, y + 4, 13, (150, 205, 245), 3, (60, 120, 190))
+    if "vein" in fx:
+        x, y = hx + r * 0.75, hy - r * 0.95
+        k = 1 + 0.12 * math.sin(t * 12)
+        red = (220, 40, 40)
+        for ax, ay in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+            pen.arc(x + ax * 14 * k - 12, y + ay * 14 * k - 12, x + ax * 14 * k + 12, y + ay * 14 * k + 12,
+                    {(-1, -1): 0, (1, -1): 90, (-1, 1): 270, (1, 1): 180}[(ax, ay)],
+                    {(-1, -1): 90, (1, -1): 180, (-1, 1): 360, (1, 1): 270}[(ax, ay)], 6, red)
+    if "blush" in fx:
+        for side in (-1, 1):
+            pen.ellipse(hx + side * 62 - 20, hy + 30, hx + side * 62 + 20, hy + 46, (240, 140, 140), 0)
+    if "zzz" in fx:
+        for k in range(3):
+            ph = (t * 0.6 + k / 3) % 1.0
+            x, y, z = hx + r * 0.9 + 60 * ph, hy - r - 100 * ph, 10 + 10 * ph
+            pen.line([(x - z, y - z), (x + z, y - z), (x - z, y + z), (x + z, y + z)], (60, 60, 90), 5)
+
+
+# ===================================================================== humans
+def _hair_back(pen, sp, hx, hy, r):
+    hc = sp["hair_color"]
+    if sp["hair"] == "long":
+        pen.ellipse(hx - r * 1.18, hy - r * 1.05, hx + r * 1.18, hy + r * 1.75, hc)
+    if sp["hair"] == "bun":
+        pen.circle(hx, hy - r * 1.02, r * 0.45, hc)
+
+
+def _hair_front(pen, sp, hx, hy, r, back):
+    hc = sp["hair_color"]
+    if sp["hair"] == "short":
+        if back:
+            pen.pie(hx - r * 1.02, hy - r * 1.06, hx + r * 1.02, hy + r * 0.95, 180, 360, hc)
+            pen.ellipse(hx - r * 1.02, hy - r * 0.35, hx + r * 1.02, hy + r * 0.55, hc, 0)
+        else:
+            pen.pie(hx - r * 1.04, hy - r * 1.1, hx + r * 1.04, hy + r * 0.5, 180, 360, hc)
+            for k in range(-2, 3):
+                pen.poly([(hx + k * 30 - 22, hy - r * 0.32), (hx + k * 30 + 22, hy - r * 0.32),
+                          (hx + k * 30 + 4, hy - r * 0.05)], hc, 0)
+    elif sp["hair"] in ("long", "bun"):
+        if back:
+            pen.circle(hx, hy, r * 1.02, hc)
+            if sp["hair"] == "bun":
+                pen.circle(hx, hy - r * 0.55, r * 0.42, _mix(hc, 0.85))
+        else:
+            pen.pie(hx - r * 1.05, hy - r * 1.08, hx + r * 1.05, hy + r * 0.62, 180, 360, hc)
+
+
+def _cap(pen, sp, hx, hy, r, back):
+    c = sp.get("hat_color", (214, 60, 45))
+    dark = _mix(c, 0.8)
+    if back:
+        pen.pie(hx - r * 1.07, hy - r * 1.18, hx + r * 1.07, hy + r * 0.38, 180, 360, c)
+        pen.ellipse(hx - r * 1.12, hy - r * 0.5, hx + r * 1.12, hy - r * 0.18, dark)
+        pen.poly([(hx - r * 0.38, hy - r * 0.38), (hx + r * 0.38, hy - r * 0.38), (hx + r * 0.26, hy - r * 0.05),
+                  (hx - r * 0.26, hy - r * 0.05)], _mix(c, 0.62), 4)
+    else:
+        pen.pie(hx - r * 1.06, hy - r * 1.2, hx + r * 1.06, hy + r * 0.2, 180, 360, c)
+        pen.ellipse(hx - r * 1.14, hy - r * 0.62, hx + r * 1.14, hy - r * 0.34, dark)
+        pen.circle(hx, hy - r * 1.18, r * 0.08, dark, 3)
+
+
+def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
+    pen = Pen(im, ox + pose["dx"] * s, oy + pose["dy"] * s, s)
+    skin, sk_d = sp["skin"], _mix(sp["skin"], 0.85)
+    back = view == "back"
+    female = sp.get("female")
+    dress = sp["bottom"] == "dress"
+    hx, hy, r = pose["head_dx"], -890 + pose["head_dy"], 104
+    if back:
+        hy = -890
+
+    if not back:
+        _hair_back(pen, sp, hx, hy, r)
+
+    # legs and shoes
+    hip_y = -260 if dress else -470
+    wk = pose["walk"]
+    for side in (-1, 1):
+        sw = 26 * math.sin(wk * 8) * side if wk else 0
+        top, foot = (side * 44, hip_y), (side * 50 + sw, -34)
+        if sp["bottom"] == "shorts":
+            mid = (side * 47 + sw * 0.4, -330)
+            pen.limb([mid, foot], 30, skin)
+            pen.limb([top, mid], 48, sp["bottom_color"])
+        else:
+            pen.limb([top, foot], 36 if dress else 40, sp["bottom_color"] if not dress else _mix(sp["bottom_color"], 1.1))
+        pen.ellipse(side * 50 + sw - 42 + side * 8, -46, side * 50 + sw + 42 + side * 8, -6, sp.get("shoe", (44, 40, 42)))
+
+    # body
+    tc = sp["top_color"]
+    if sp["top"] == "kurta":
+        body = [(-92, -772), (92, -772), (110, -650), (118, -520), (160, -250), (-160, -250), (-118, -520), (-110, -650)]
+        pen.poly(body, tc)
+        if not back:
+            pen.poly([(-88, -770), (-50, -770), (150, -330), (122, -300)], sp.get("accent", _mix(tc, 0.7)), 4)
+            pen.line([(-150, -262), (150, -262)], sp.get("accent", _mix(tc, 0.7)), 14)
+    else:
+        pen.poly(_sup(0, -615, 135, 168), tc)
+        if sp["top"] == "vest" and not back:
+            pen.pie(-40, -812, 40, -742, 0, 180, skin, 4)
+        if sp["top"] == "tshirt" and not back:
+            pen.pie(-38, -812, 38, -752, 0, 180, skin, 4)
+
+    # head (drawn before arms, so hands can touch the face)
+    if not back:
+        pen.ellipse(hx - r - 22, hy - 24, hx - r + 18, hy + 22, skin)
+        pen.ellipse(hx + r - 18, hy - 24, hx + r + 22, hy + 22, skin)
+    pen.circle(hx, hy, r, skin)
+    if back:
+        pen.ellipse(hx - r - 22, hy - 4, hx - r + 18, hy + 40, skin)
+        pen.ellipse(hx + r - 18, hy - 4, hx + r + 22, hy + 40, skin)
+    if sp["hair"] != "none":
+        _hair_front(pen, sp, hx, hy, r, back)
+    if sp.get("hat") == "cap":
+        _cap(pen, sp, hx, hy, r, back)
+
+    if not back:
+        cfg = _face_cfg(emotion)
+        look = pose.get("eyes_dir", 0.0)
+        fx_ = hx + 6
+        ey = hy - 4
+        _eye(pen, fx_ - 38, ey, cfg["eyes"], blink, look)
+        _eye(pen, fx_ + 38, ey, cfg["eyes"], blink, look)
+        _brows(pen, fx_, ey - 36 - (8 if cfg["eyes"] == "wide" else 0), cfg["brow"])
+        pen.arc(fx_ - 12, hy + 8, fx_ + 14, hy + 34, 300, 110, 4.5, _mix(skin, 0.6))
+        if sp.get("bindi"):
+            pen.circle(fx_, hy - 52, 6, (200, 30, 40), 0)
+        _mouth(pen, fx_, hy + 72, cfg["mouth"], mouth, t)
+        if sp.get("mustache"):
+            mc = sp.get("hair_color", (60, 38, 30))
+            pen.poly([(fx_ - 50, hy + 54), (fx_ - 30, hy + 36), (fx_, hy + 42), (fx_ + 30, hy + 36), (fx_ + 50, hy + 54),
+                      (fx_ + 28, hy + 52), (fx_, hy + 56), (fx_ - 28, hy + 52)], mc, 3)
+        if female and cfg["mouth"] in ("smile", "smile_s", "flat") and mouth <= 0.08:
+            pass
+        _effects(pen, cfg["fx"], fx_, hy, r, t)
+
+    # arms
+    sleeve = sp["top"] in ("tshirt", "kurta")
+    for side, key in ((-1, "L"), (1, "R")):
+        spec = pose[key]
+        sx, sy = side * 110, -742
+        if spec[0] == "ik":
+            elbow, hand = _ik(sx, sy, side * spec[1], spec[2], 150, 142, side)
+        else:
+            elbow, hand = _fk(sx, sy, spec[1], spec[2], 150, 142, side)
+        pen.limb([(sx, sy), elbow, hand], 30, skin)
+        if sleeve:
+            k = 0.42 if sp["top"] == "tshirt" else 0.95
+            mid = (sx + (elbow[0] - sx) * k, sy + (elbow[1] - sy) * k)
+            pen.limb([(sx, sy), mid], 44, tc)
+            if sp["top"] == "kurta":
+                pen.limb([elbow, (elbow[0] + (hand[0] - elbow[0]) * 0.55, elbow[1] + (hand[1] - elbow[1]) * 0.55)], 40, tc)
+        if female:
+            bx, by = elbow[0] + (hand[0] - elbow[0]) * 0.8, elbow[1] + (hand[1] - elbow[1]) * 0.8
+            pen.circle(bx, by, 14, (226, 180, 60), 3)
+        pen.circle(hand[0], hand[1], 24, skin)
+        if key == "R" and spec[0] == "fk" and 80 < spec[1] < 120 and spec[2] < 20 and not back:   # pointing finger
+            ang = math.atan2(hand[1] - elbow[1], hand[0] - elbow[0])
+            pen.limb([hand, (hand[0] + 40 * math.cos(ang), hand[1] + 40 * math.sin(ang))], 11, skin, 4)
+        if key == "R" and not back and pose["prop"]:
+            _prop(pen, pose["prop"], hand)
+
+
+def _prop(pen, kind, hand):
+    x, y = hand
+    if kind in ("phone", "phone_ear"):
+        pen.ellipse(x - 2, y - 2, x + 2, y + 2, OUT, 0)
+        pen.d.rounded_rectangle(pen.box(x - 20, y - 46, x + 20, y + 22), radius=6 * pen.s, fill=(40, 44, 54),
+                                outline=OUT, width=pen.wd(4))
+        pen.d.rectangle(pen.box(x - 13, y - 38, x + 13, y + 10), fill=(120, 190, 240))
+    elif kind == "cup":
+        pen.poly([(x - 26, y - 34), (x + 26, y - 34), (x + 20, y + 22), (x - 20, y + 22)], (245, 245, 240), 4)
+        pen.line([(x - 22, y - 26), (x + 22, y - 26)], (170, 110, 60), 6)
+    elif kind == "book":
+        pen.poly([(x - 120, y - 70), (x + 6, y - 60), (x + 6, y + 30), (x - 120, y + 20)], (200, 60, 60), 4)
+    elif kind == "snack":
+        pen.circle(x, y - 18, 22, (230, 180, 80), 4)
+
+
+# ===================================================================== animals
+def draw_animal(im, ox, oy, s, sp, pose, emotion, mouth, blink, t, speaking):
+    cat = sp["kind"] == "cat"
+    pen = Pen(im, ox, oy + pose["dy"] * s, s)
+    col, dark, light = sp["color"], _mix(sp["color"], 0.72), sp.get("light", _mix(sp["color"], 1.25))
+    walk = pose["walk"]
+    happy = emotion in ("happy", "excited", "laughing", "in_love", "proud", "relieved")
+    sad = emotion in ("sad", "crying", "scared", "worried")
+    k = 0.8 if cat else 1.0
+    by0, by1 = -265 * k, -140 * k
+    # tail
+    wag = math.sin(t * (14 if happy else 5)) * (0.5 if happy else 0.18)
+    base = (-140 * k, -222 * k)
+    up = -1 if cat or happy else (0.35 if sad else -0.4)
+    pts = [base]
+    for i in range(1, 6):
+        u = i / 5
+        a = math.pi + wag * u * 2 + up * 1.1 * u
+        pts.append((base[0] + math.cos(a) * 120 * k * u, base[1] + math.sin(a) * 120 * k * u - (60 * u * u if cat else 0)))
+    pen.limb(pts, 18 * k if not cat else 15, col)
+    # legs (far legs first, darker)
+    legs = [(-95, 0.0, True), (105, 0.5, True), (-120, 0.5, False), (82, 0.0, False)]
+    for lx, ph, far in legs:
+        sw = 22 * math.sin((walk * 8 + ph * math.pi * 2)) if walk else 0
+        lx *= k
+        top, foot = (lx, by1 + 20), (lx + sw, -24)
+        pen.limb([top, foot], 22 * k, dark if far else col)
+        pen.ellipse(lx + sw - 18, -34, lx + sw + 20, -8, (40, 34, 34), 3)
+        if far:
+            pass
+    pen.ellipse(-152 * k, by0, 152 * k, by1, col)
+    pen.ellipse(-60 * k, by0 + 70 * k, 90 * k, by1 - 6, light, 0)
+    # head
+    hb = 6 * math.sin(t * 9) if speaking else 2 * math.sin(t * 2)
+    hx, hy, r = 168 * k, -292 * k + hb + (14 if sad else 0), 62 * k
+    if cat:
+        for ex in (-30, 25):
+            pen.poly([(hx + ex - 26, hy - r * 0.6), (hx + ex + 26, hy - r * 0.6), (hx + ex + 4, hy - r * 1.55)], col)
+            pen.poly([(hx + ex - 12, hy - r * 0.75), (hx + ex + 12, hy - r * 0.75), (hx + ex + 3, hy - r * 1.3)], (240, 160, 170), 0)
+    pen.circle(hx, hy, r, col)
+    if not cat:
+        pen.ellipse(hx - 62, hy - 48, hx - 18, hy + 42, dark)
+    # snout and mouth
+    sx0, sy0 = hx + 18, hy - 6
+    pen.ellipse(sx0, sy0 - 22, sx0 + 70 * k, sy0 + 26, light)
+    if mouth > 0.08 or emotion == "laughing":
+        m = max(mouth, 0.4 if emotion == "laughing" else 0)
+        pen.ellipse(sx0 + 12, sy0 + 12, sx0 + 64 * k, sy0 + 24 + 34 * m, (150, 30, 40), 4)
+        pen.ellipse(sx0 + 22, sy0 + 20 + 14 * m, sx0 + 52 * k, sy0 + 22 + 30 * m, (235, 110, 120), 0)
+    else:
+        pen.arc(sx0 + 20, sy0 + 2, sx0 + 58 * k, sy0 + 26, 20 if happy else 200, 160 if happy else 340, 4.5)
+    pen.ellipse(sx0 + 54 * k, sy0 - 16, sx0 + 78 * k, sy0 + 4, (36, 30, 30), 0)
+    if cat:
+        for dy in (-4, 8):
+            pen.line([(sx0 + 50, sy0 + dy), (sx0 + 110, sy0 + dy * 2.2)], OUT, 2.5)
+    # eye and brow
+    ex, ey = hx + 6, hy - 22
+    cfg = _face_cfg(emotion)
+    if blink > 0.5 or cfg["eyes"] in ("closed", "happy"):
+        pen.arc(ex - 12, ey - 12 if cfg["eyes"] == "closed" else ey - 4, ex + 12,
+                ey + 6 if cfg["eyes"] == "closed" else ey + 16, 25 if cfg["eyes"] == "closed" else 200,
+                155 if cfg["eyes"] == "closed" else 340, 5)
+    else:
+        rr = 11 if cfg["eyes"] == "wide" else 8
+        if cfg["eyes"] == "wide":
+            pen.circle(ex, ey, 14, (255, 255, 255), 3)
+        pen.ellipse(ex - rr * 0.8, ey - rr, ex + rr * 0.8, ey + rr, (28, 24, 24), 0)
+    b = cfg["brow"]
+    if isinstance(b, (int, float)) and b:
+        pen.line([(ex - 16, ey - 20 - 8 * b), (ex + 16, ey - 20 + 8 * b)], OUT, 6)
+    _effects(pen, tuple(f for f in cfg["fx"] if f in ("tears", "sweat", "vein")), ex - 40, ey + 5, r, t, sides=(1,))
+
+
+# ===================================================================== sprites
+HUMAN_BOX = (-470, -1110, 470, 40)
+ANIMAL_BOX = (-270, -470, 330, 30)
+
+
+class SpriteCache:
+    def __init__(self, n=220):
+        self.n, self.d = n, OrderedDict()
+
+    def get(self, key, make):
+        if key in self.d:
+            self.d.move_to_end(key)
+            return self.d[key]
+        v = make()
+        self.d[key] = v
+        if len(self.d) > self.n:
+            self.d.popitem(last=False)
+        return v
+
+
+@lru_cache(maxsize=16)
+def _shade_grad(w, h):
+    g = Image.linear_gradient("L").rotate(90, expand=True).resize((w, h))   # 255 at left -> 0 at right
+    return g.point(lambda v: int((255 - v) * 0.16))
+
+
+def render_sprite(sp, view, face_dir, scale_px, pose, emotion, mouth, blink, t, speaking, below_px=None):
+    """RGBA picture of one character and the pixel position of its feet inside it.
+    below_px: pixels from the feet down to the frame bottom (negative when the feet are below the frame);
+    the part of the character outside the frame is not drawn."""
+    ss = 2
+    s = scale_px * ss * sp.get("height", 1.0)
+    animal = sp["kind"] != "human"
+    x0, y0, x1, y1 = ANIMAL_BOX if animal else HUMAN_BOX
+    if below_px is not None:
+        y1 = min(y1, below_px * ss / s + 8)
+    W, H = max(4, int((x1 - x0) * s) // 2 * 2), max(4, int((y1 - y0) * s) // 2 * 2)
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ox, oy = -x0 * s, -y0 * s
+    if animal:
+        draw_animal(im, ox, oy, s, sp, pose, emotion, mouth, blink, t, speaking)
+    else:
+        draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t)
+    im = im.reduce(ss)                      # fast 2x box filter = smooth edges
+    W, H = im.size
+    ox, oy = ox / ss, oy / ss
+    a = im.getchannel("A")
+    shade = ImageChops.multiply(_shade_grad(W, H), a)
+    dark = Image.new("RGBA", (W, H), (20, 10, 30, 0))
+    dark.putalpha(shade)
+    im = Image.alpha_composite(im, dark)
+    if face_dir < 0:
+        im = im.transpose(Image.FLIP_LEFT_RIGHT)
+        ox = W - ox
+    return im, (ox, oy)
+
+
+@lru_cache(maxsize=32)
+def _shadow(wpx, hpx):
+    pad = max(2, hpx)
+    im = Image.new("L", (wpx + 2 * pad, hpx + 2 * pad), 0)
+    ImageDraw.Draw(im).ellipse([pad, pad, pad + wpx, pad + hpx], fill=85)
+    im = im.filter(ImageFilter.GaussianBlur(max(1, hpx * 0.35)))
+    sh = Image.new("RGBA", im.size, (20, 18, 30, 0))
+    sh.putalpha(im)
+    return sh
+
+
+# ===================================================================== backgrounds
+GROUND = {"flat": 1690, "picture": 1500}
+
+
+def _building_colors(night):
+    cols = [(132, 182, 160), (214, 150, 120), (152, 142, 196), (112, 166, 176), (228, 176, 122), (196, 132, 132)]
+    return [_mix(c, 0.55) for c in cols] if night else cols
+
+
+@lru_cache(maxsize=6)
+def panorama(bid: str, k: float):
+    """The whole wide background picture (sky, buildings, street), drawn once. Returns (image, px per unit, width units, ground y)."""
+    if bid not in FLAT_BACKGROUNDS:
+        ps = k * 1.25
+        im = get_background(bid, round(FW * ps), round(FH * ps)).copy()
+        return im, ps, FW, GROUND["picture"]
+    ps = k * 1.3
+    PW = 2600
+    night = bid == "flat_city_night"
+    park = bid == "flat_park"
+    W, H = round(PW * ps), round(FH * ps)
+    im = Image.new("RGB", (W, H))
+    if bid in REALMS:                      # Swarg / Nark: drawn in realms.py
+        draw_realm(bid, im, ps, PW)
+        return im, ps, PW, GROUND["flat"]
+    d = ImageDraw.Draw(im)
+    top, bot = ((22, 30, 72), (66, 76, 130)) if night else ((96, 160, 214), (206, 228, 242))
+    horizon = 1240 if not park else 1290
+    for y in range(H):
+        u = min(1.0, y / (horizon * ps))
+        d.line([(0, y), (W, y)], fill=tuple(int(a + (b - a) * u) for a, b in zip(top, bot)))
+    P = lambda *v: [x * ps for x in v]     # noqa: E731
+    L = lambda w: max(1, round(w * ps))     # noqa: E731
+    rnd = random.Random(_h(bid))
+    if night:
+        for _ in range(140):
+            x, y = rnd.uniform(0, PW), rnd.uniform(0, 900)
+            rr = rnd.uniform(1.5, 3.5)
+            d.ellipse(P(x - rr, y - rr, x + rr, y + rr), fill=(240, 240, 220))
+        d.ellipse(P(1850, 240, 2030, 420), fill=(245, 242, 222))
+        d.ellipse(P(1900, 210, 2080, 390), fill=top)
+    else:
+        d.ellipse(P(1800, 235, 1990, 425), fill=(250, 214, 108))
+    if park:
+        for cx, cy, rw, col in ((500, 1330, 900, (150, 196, 130)), (1500, 1350, 1000, (132, 186, 118)),
+                                (2400, 1330, 800, (150, 196, 130))):
+            d.ellipse(P(cx - rw, cy - 330, cx + rw, cy + 330), fill=col, outline=OUT, width=L(5))
+        d.rectangle(P(0, 1290, PW, FH), fill=(118, 178, 96))
+        for y in range(round(1290 * ps), H):
+            u = (y / ps - 1290) / (FH - 1290)
+            d.line([(0, y), (W, y)], fill=(int(118 - 30 * u), int(180 - 40 * u), int(96 - 20 * u)))
+        d.line(P(0, 1290, PW, 1290), fill=OUT, width=L(5))
+        d.polygon([tuple(P(x, y)) for x, y in ((0, 1560), (PW, 1560), (PW, 1800), (0, 1800))], fill=(214, 190, 140))
+        d.line(P(0, 1560, PW, 1560), fill=_mix((214, 190, 140), 0.75), width=L(5))
+        d.line(P(0, 1800, PW, 1800), fill=_mix((214, 190, 140), 0.75), width=L(5))
+        for _ in range(160):
+            x, y = rnd.uniform(0, PW), rnd.choice([rnd.uniform(1320, 1540), rnd.uniform(1830, 1910)])
+            c = rnd.choice([(240, 90, 90), (250, 220, 90), (250, 250, 250), (220, 120, 220)])
+            d.ellipse(P(x - 7, y - 7, x + 7, y + 7), fill=c)
+        for x in range(60, PW, 90):                                       # fence
+            d.rectangle(P(x - 8, 1180, x + 8, 1300), fill=(240, 236, 226), outline=OUT, width=L(3))
+        d.rectangle(P(0, 1205, PW, 1222), fill=(240, 236, 226), outline=OUT, width=L(3))
+        trees = range(200, PW, 520)
+        tree_r, foliage_y = 150, 900
+        for bx in (900, 2050):                                            # benches
+            d.rectangle(P(bx - 140, 1250, bx + 140, 1275), fill=(170, 110, 60), outline=OUT, width=L(4))
+            d.rectangle(P(bx - 140, 1205, bx + 140, 1228), fill=(170, 110, 60), outline=OUT, width=L(4))
+            for lx in (bx - 120, bx + 110):
+                d.rectangle(P(lx, 1275, lx + 12, 1320), fill=(60, 60, 64))
+    else:
+        cols = _building_colors(night)
+        x = -60
+        while x < PW + 60:
+            w = rnd.randint(190, 300)
+            topy = rnd.randint(560, 960)
+            c = rnd.choice(cols)
+            d.rectangle(P(x, topy, x + w, 1240), fill=c, outline=OUT, width=L(6))
+            nc = rnd.choice([2, 3])
+            ww, wh = 38, 50
+            gap = (w - nc * ww) / (nc + 1)
+            for row in range(int((1240 - topy - 70) // 100)):
+                wy = topy + 50 + row * 100
+                for cix in range(nc):
+                    wx = x + gap + cix * (ww + gap)
+                    lit = rnd.random() < (0.6 if night else 0.45)
+                    wc = ((250, 222, 120) if lit else (50, 60, 90)) if night else ((238, 226, 150) if lit else (112, 162, 212))
+                    d.rounded_rectangle(P(wx, wy, wx + ww, wy + wh), radius=L(5), fill=wc, outline=_mix(OUT, 1.6), width=L(3))
+            x += w + rnd.randint(-30, 6)
+        d.rectangle(P(0, 1240, PW, 1372), fill=_mix((214, 207, 196), 0.6 if night else 1.0))
+        d.line(P(0, 1240, PW, 1240), fill=OUT, width=L(6))
+        d.line(P(0, 1372, PW, 1372), fill=OUT, width=L(5))
+        for y in range(round(1372 * ps), H):
+            u = (y / ps - 1372) / (FH - 1372)
+            base = (86, 88, 98) if not night else (52, 54, 66)
+            d.line([(0, y), (W, y)], fill=_mix(base, 1.0 - 0.18 * u))
+        dash = (228, 196, 92)
+        for x in range(-40, PW, 230):
+            d.rounded_rectangle(P(x, 1708, x + 130, 1726), radius=L(4), fill=dash)
+        trees = range(150, PW, 640)
+        tree_r, foliage_y = 118, 800
+        for lx in range(470, PW, 1280):                                   # street lamps
+            if night:
+                glow = Image.new("L", (round(500 * ps), round(500 * ps)), 0)
+                ImageDraw.Draw(glow).ellipse([glow.width * 0.22, glow.height * 0.22, glow.width * 0.78,
+                                              glow.height * 0.78], fill=110)
+                glow = glow.filter(ImageFilter.GaussianBlur(60 * ps))
+                im.paste((255, 226, 140), (round((lx - 250) * ps), round((720 - 250) * ps)), glow)
+                d = ImageDraw.Draw(im)
+            d.rectangle(P(lx - 8, 740, lx + 8, 1250), fill=(34, 34, 40))
+            d.rounded_rectangle(P(lx - 38, 696, lx + 38, 746), radius=L(10), fill=(252, 226, 140), outline=OUT, width=L(5))
+    tc = (78, 150, 84) if not night else (40, 86, 52)
+    for tx in trees:
+        tx += rnd.randint(-60, 60)
+        d.rectangle(P(tx - 12, foliage_y, tx + 12, (1250 if not park else 1300)), fill=(110, 74, 46), outline=OUT, width=L(4))
+        d.ellipse(P(tx - tree_r, foliage_y - tree_r, tx + tree_r, foliage_y + tree_r), fill=tc, outline=OUT, width=L(6))
+    return im, ps, PW, GROUND["flat"]
+
+
+@lru_cache(maxsize=6)
+def _blurred(bid: str, k: float):
+    im, ps, *_ = panorama(bid, k)
+    return im.filter(ImageFilter.GaussianBlur(7 * ps))
+
+
+def _car_draw(color, s):
+    W, H = round(260 * s), round(130 * s)
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    pen = Pen(im, 15 * s, 10 * s, s)
+    pen.poly([(55, 10), (165, 10), (195, 52), (35, 52)], color)
+    pen.poly([(68, 20), (108, 20), (108, 48), (52, 48)], (170, 214, 240), 4)
+    pen.poly([(118, 20), (158, 20), (180, 48), (118, 48)], (170, 214, 240), 4)
+    pen.d.rounded_rectangle(pen.box(0, 48, 230, 92), radius=16 * s, fill=color, outline=OUT, width=pen.wd(5))
+    pen.d.rectangle(pen.box(212, 58, 228, 70), fill=(250, 230, 140))
+    for wx in (50, 180):
+        pen.circle(wx, 92, 22, (40, 38, 40))
+        pen.circle(wx, 92, 9, (190, 190, 196), 0)
+    return im
+
+
+@lru_cache(maxsize=24)
+def car_sprite(color, s_q, blur, flip):
+    s = s_q / 100
+    im = _car_draw(color, s * 2).resize((round(260 * s), round(130 * s)), Image.LANCZOS)
+    if flip:
+        im = im.transpose(Image.FLIP_LEFT_RIGHT)
+    if blur:
+        im = im.filter(ImageFilter.GaussianBlur(max(1, 3 * s)))
+    return im
+
+
+# ===================================================================== camera
+class FlatComposer:
+    """Draws the frames of flat-style scenes."""
+
+    def __init__(self, tl: dict, sched: list, w: int, h: int):
+        self.tl, self.sched, self.w, self.h = tl, sched, w, h
+        self.k = w / FW
+        self.chars = {c["id"]: c for c in tl["characters"]}
+        self.specs = {cid: flat_spec(LOOKS[c["look"]]) for cid, c in self.chars.items()}
+        self.sprites = SpriteCache()
+        self.warnings: list = []
+        self.segs: dict = {}
+        self.bgs: dict = {}
+
+    def handles(self, sc) -> bool:
+        return sc.bg in FLAT_BACKGROUNDS or any(is_flat_look(self.chars[c]["look"]) for c in sc.cast)
+
+    def _animal(self, cid):
+        return self.specs[cid]["kind"] in ("dog", "cat")
+
+    # ------------------------------------------------------------- shot list
+    def segments(self, sc):
+        key = id(sc)
+        if key in self.segs:
+            return self.segs[key]
+        cast, lines = sc.cast, sc.lines
+        segs = []
+        last_close: dict = {}
+        if not lines:
+            segs.append((sc.start, sc.end, dict(type="wide" if len(cast) > 1 else "single", subj=cast[0])))
+        for i, ln in enumerate(lines):
+            a = sc.start if i == 0 else ln.start
+            b = lines[i + 1].start if i + 1 < len(lines) else sc.end
+            subj = ln.char
+            others = [c for c in cast if c != subj]
+            partner = others[0] if others else None
+            kind = getattr(ln, "shot", "auto") or "auto"
+            auto = kind == "auto"
+            if auto:
+                if len(cast) > 1 and i == 0:
+                    kind = "wide"
+                elif ln.emotion in STRONG and last_close.get(subj, -9) < i - 2:
+                    kind = "close"
+                elif partner and len(cast) == 2 and not self._animal(partner):
+                    kind = "ots"
+                else:
+                    kind = "single"
+            if kind == "close":
+                last_close[subj] = i
+            if kind in ("ots",) and not partner:
+                kind = "single"
+            spec = dict(type=kind, subj=subj, partner=partner)
+            dur = ln.end - ln.start
+            if auto and partner and dur > 5.5 and kind != "wide":     # a reaction shot in the middle of a long line
+                cut = ln.start + dur * 0.58
+                segs.append((a, cut, spec))
+                if self._animal(subj):
+                    react = dict(type="single", subj=partner, partner=subj)
+                else:
+                    react = dict(type="ots", subj=partner, partner=subj)
+                segs.append((cut, b, react))
+            else:
+                segs.append((a, b, spec))
+        self.segs[key] = segs
+        return segs
+
+    def layout(self, sc, spec):
+        """Background view and where each character stands for one shot (in frame units)."""
+        bid = sc.bg
+        _, _, PW, G = panorama(bid, self.k)
+        si = self.sched.index(sc) if sc in self.sched else 0
+        base = PW / 2 + ((_h(bid, si) % 7) - 3) * 120
+        cast = sc.cast
+        subj, partner = spec["subj"], spec.get("partner")
+        side = 1 if partner and cast.index(partner) > cast.index(subj) else -1 if partner else 1
+        actors = []
+        t = spec["type"]
+        if t == "wide":
+            n = len(cast)
+            sc_ = 0.82 if n <= 2 else max(0.55, 0.82 - 0.09 * (n - 2))
+            xs = [540] if n == 1 else [FW * (0.2 + 0.6 * i / (n - 1)) for i in range(n)]
+            for i, cid in enumerate(cast):
+                fd = 1 if xs[i] < 540 else -1 if n > 1 else 1
+                actors.append(dict(cid=cid, view="front", x=xs[i], g=G, scale=sc_, face=fd))
+            bg = (base, 1.0, False)
+        elif t == "single":
+            fd = side
+            if self._animal(subj):
+                actors.append(dict(cid=subj, view="side", x=520, g=G + 40, scale=1.45, face=fd))
+            else:
+                actors.append(dict(cid=subj, view="front", x=540, g=G, scale=1.05, face=fd))
+            bg = (base + 260 * fd, 1.12, False)
+        elif t == "close":
+            fd = side
+            if self._animal(subj):
+                actors.append(dict(cid=subj, view="side", x=200, g=1660, scale=2.2, face=1))
+            else:
+                actors.append(dict(cid=subj, view="front", x=540, g=G + 820, scale=1.75, face=fd))
+            bg = (base + 260 * fd, 1.3, True)
+        else:  # over the shoulder: the partner's back big in front, the speaker further away
+            if self._animal(subj):
+                actors.append(dict(cid=subj, view="side", x=300, g=G + 100, scale=1.05, face=1))
+            else:
+                actors.append(dict(cid=subj, view="front", x=380, g=G + 60, scale=0.64, face=1))
+            if partner:
+                if self._animal(partner):
+                    actors.append(dict(cid=partner, view="side", x=760, g=G + 820, scale=2.4, face=-1, back=True))
+                else:
+                    actors.append(dict(cid=partner, view="back", x=930, g=G + 1490, scale=2.1, face=1, back=True))
+            bg = (base - 380, 1.0, True)
+        return dict(bg=bg, actors=actors, ground=G)
+
+    def _bg_image(self, bid, bg):
+        cx, z, blur = bg
+        key = (bid, round(cx), z, blur)
+        if key in self.bgs:
+            return self.bgs[key]
+        im, ps, PW, G = panorama(bid, self.k)
+        src = _blurred(bid, self.k) if blur else im
+        vw, vh = FW / z, FH / z
+        x0 = min(max(0.0, cx - vw / 2), PW - vw)
+        y0 = G - G / z
+        box = (x0 * ps, y0 * ps, min(src.width, (x0 + vw) * ps), min(src.height, (y0 + vh) * ps))  # rounding
+        out = src.resize((self.w, self.h), Image.LANCZOS, box=box)
+        if len(self.bgs) > 24:
+            self.bgs.clear()
+        self.bgs[key] = (out, x0, y0, z)
+        return self.bgs[key]
+
+    def _sprite_3d(self, a, sp, action, emotion, speaking, still, mq, blink, tq, k):
+        """A 3D character's picture for this frame, or None (then a flat stand-in is drawn)."""
+        from . import three_d
+        msg = three_d.status()
+        if msg:
+            if msg not in self.warnings:
+                self.warnings.append(msg)
+            return None
+        back = a["view"] == "back"
+        rot = math.pi + 0.25 if back else 0.42 * a["face"]
+        if back:
+            action, tq, mq, blink = ("idle" if action in ("idle", "talk") else action), 0.0, 0.0, 0.0
+        mouth = mq if speaking and not still else 0.0
+        ppu = a["scale"] * k * three_d.UNIT * sp.get("height", 1.0)
+        below = (FH - a["g"]) * k if a["g"] > FH * 0.9 else None
+        ck = ("3d", a["cid"], round(rot, 2), round(ppu, 1), action, emotion, mouth, round(blink, 1), tq,
+              round(below) if below is not None else None)
+        return self.sprites.get(ck, lambda: three_d.sprite(sp["model"], action, emotion, tq, mouth, blink, rot,
+                                                           ppu, below))
+
+    # ------------------------------------------------------------- frame
+    def frame(self, sc, t: float) -> Image.Image:
+        segs = self.segments(sc)
+        si = next((i for i, s in enumerate(segs) if s[0] <= t < s[1]), len(segs) - 1)
+        seg = segs[si]
+        lkey = ("lay", id(sc), si)
+        if lkey not in self.segs:
+            self.segs[lkey] = self.layout(sc, seg[2])
+        lay = self.segs[lkey]
+        bid = sc.bg
+        flat_bg = bid in FLAT_BACKGROUNDS
+        base, x0, y0, z = self._bg_image(bid, lay["bg"])
+        im = base.copy()
+        k = self.k
+        blur = lay["bg"][2]
+        d = ImageDraw.Draw(im)
+
+        def to_px(X, Y):
+            return ((X - x0) * z * k, (Y - y0) * z * k)
+
+        if bid in REALMS:
+            animate_realm(im, bid, t, x0, y0, z, k, panorama(bid, k)[2], blur)
+        elif flat_bg:
+            vw = FW / z
+            # birds
+            for j in range(3):
+                bx = x0 - 100 + ((t * 38 + j * 70 + _h(bid) % 300) % (vw + 260))
+                by = 330 + j * 22 + 10 * math.sin(t * 1.3 + j)
+                flap = math.sin(t * 9 + j * 1.7)
+                px, py = to_px(bx, by)
+                ws = 22 * z * k
+                d.line([(px - ws, py - ws * 0.5 * flap), (px, py), (px + ws, py - ws * 0.5 * flap)],
+                       fill=(30, 30, 40) if bid != "flat_city_night" else (200, 200, 220), width=max(1, round(3.5 * z * k)))
+            # cars (street only)
+            if bid != "flat_park":
+                for j, (col, spd, lane) in enumerate((((214, 58, 50), 300, 1478), ((60, 120, 210), -360, 1560))):
+                    span = vw + 700
+                    off = (t * abs(spd) + j * span * 0.5 + 200) % (span + 900)
+                    if off > span:
+                        continue
+                    cx = x0 - 350 + off if spd > 0 else x0 + vw + 350 - off
+                    s_q = round(z * k * 100 * (1.0 if j == 0 else 1.08))
+                    spr = car_sprite(col, s_q, blur, spd < 0)
+                    px, py = to_px(cx - 130, lane - 120 * (1.08 if j else 1.0))
+                    im.paste(spr, (round(px), round(py)), spr)
+
+        line = next((l for l in sc.lines if l.start <= t < l.end), None)
+        for a in lay["actors"]:
+            cid = a["cid"]
+            sp = self.specs[cid]
+            speaking = bool(line and line.char == cid)
+            mine = [l for l in sc.lines if l.char == cid]
+            recent = next((l for l in reversed(mine) if l.start <= t), mine[0] if mine else None)
+            if speaking:
+                action, emotion = line.action, line.emotion
+                t_act = t - line.start
+                key = line.text + cid
+            elif recent is None:
+                action, emotion, t_act, key = "idle", "neutral", t - sc.start, cid
+            else:
+                action = recent.action if recent.action in PERSISTENT else "idle"
+                emotion = recent.emotion if recent.emotion in KEEP_EMOTION else "neutral"
+                t_act, key = t - sc.start, cid
+            still = speaking and line.action == "idle"
+            mouth = line.clip.mouth_at(t - line.start) if speaking and not still else 0.0
+            phase = (_h(cid) % 100) / 30
+            blink = blink_amount(t, phase)
+            # quantize so repeated drawings come from the cache
+            mq = round(mouth * 6) / 6
+            tq = round(t_act * (15 if speaking else 6)) / (15 if speaking else 6)
+            if sp["kind"] == "3d":                  # real 3D model, rendered by the hidden browser
+                spr3 = self._sprite_3d(a, sp, action, emotion, speaking, still, mq, blink, tq, k)
+                if spr3 is not None:
+                    spr, (ax, ay) = spr3
+                    im.paste(spr, (round(a["x"] * k - ax), round(a["g"] * k - ay)), spr)
+                    continue
+                sp = sp["fallback"]
+            if sp["kind"] == "human":
+                pose = pose_for({"punch": "point", "slap": "wave"}.get(action, action), emotion, tq, speaking, key)
+            else:
+                pose = dict(dy=0.0, walk=tq if action == "walk" else 0.0)
+            if a.get("back"):                    # big foreground back: hardly moves, so it is drawn once
+                tq, mq, blink = (round(t_act * 6) / 6 if sp["kind"] != "human" else 0.0), 0.0, 0.0
+                if sp["kind"] == "human":
+                    pose = pose_for("rest" if action in ("idle", "talk") else action, "neutral", 0.0, False, key)
+                    pose["dy"] = 0.0
+            scale_px = a["scale"] * k
+            ck = (cid, a["view"], a["face"], round(scale_px, 3), action, emotion, mq, round(blink, 1), tq, speaking, key)
+            below = (FH - a["g"]) * k
+            spr, (ax, ay) = self.sprites.get(ck, lambda: render_sprite(sp, a["view"], a["face"], scale_px, pose,
+                                                                     emotion, mq, blink, tq, speaking, below))
+            fx, fy = a["x"] * k, a["g"] * k
+            if a["g"] < FH:   # feet in the frame: soft shadow on the ground
+                wpx = round((300 if sp["kind"] == "human" else 360) * scale_px)
+                sh = _shadow(wpx, max(2, round(wpx * 0.12)))
+                im.paste(sh, (round(fx - sh.width / 2), round(fy - sh.height / 2)), sh)
+            im.paste(spr, (round(fx - ax), round(fy - ay)), spr)
+
+        # slow camera drift inside the shot
+        a0, b0 = seg[0], seg[1]
+        u = min(1.0, max(0.0, (t - a0) / max(0.5, b0 - a0)))
+        u = u * u * (3 - 2 * u)
+        zoom = 1.0 + 0.045 * u
+        dirx = 1 if _h(round(a0, 2)) % 2 else -1
+        cw, ch = self.w / zoom, self.h / zoom
+        cx = self.w / 2 + dirx * 16 * k * u
+        cy = self.h * 0.56
+        box = (max(0, cx - cw / 2), max(0, cy - ch * 0.56), 0, 0)
+        box = (box[0], box[1], min(self.w, box[0] + cw), min(self.h, box[1] + ch))
+        return im.resize((self.w, self.h), Image.BILINEAR, box=box)
