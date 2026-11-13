@@ -94,6 +94,7 @@ def normalize(tl: dict) -> dict:
     if not any(sc["cast"] for sc in scenes):
         raise RenderError("Add at least one scene with a character in it.")
     return dict(title=str(tl.get("title") or "").strip(), characters=chars, scenes=scenes,
+                kit=bool(tl["kit"]) if "kit" in tl else None,
                 tts=tl.get("tts") or "auto", audio=audio, look3d=bool(tl.get("look3d", True)),
                 captions=bool(tl.get("captions", True)), language=str(tl.get("language") or "hi"),
                 hook=" ".join(str(tl.get("hook") or "").split())[:80], effects=bool(tl.get("effects", True)))
@@ -503,6 +504,61 @@ def build_audio(sched: list, total: float, path: Path):
         w.writeframes(buf.tobytes())
 
 
+# ------------------------------------------------------------------ parallel drawing
+_WCOMP = None
+
+
+def _init_worker(tl, sched, w, h, ss):
+    global _WCOMP
+    _WCOMP = Composer(tl, sched, w, h, ss)
+
+
+def _draw_frame(t: float) -> bytes:
+    return _WCOMP.frame(t).tobytes()
+
+
+def worker_count(frames: int) -> int:
+    """How many processes draw frames: one per spare CPU (FFmpeg needs one), only for longer videos.
+    Set SHORTS_WORKERS=1 to turn it off."""
+    import os
+    env = os.environ.get("SHORTS_WORKERS")
+    if env and env.isdigit():
+        return max(1, int(env))
+    cpus = os.cpu_count() or 1
+    # Measured on a 2-core / 4-thread laptop: no gain, because FFmpeg's encoder already uses every core.
+    # Machines with 6 or more threads have spare cores, so they draw in parallel.
+    return min(4, cpus // 2) if cpus >= 6 and frames >= 90 else 1
+
+
+def _draw_all(comp, tl, sched, w, h, ss, fps, frames, write, progress):
+    """Draw every frame (in parallel when it helps) and hand them to write() in order."""
+    n = worker_count(frames)
+    if n > 1:
+        import multiprocessing as mp
+        try:
+            with mp.get_context("spawn").Pool(n, initializer=_init_worker, initargs=(tl, sched, w, h, ss)) as pool:
+                batch = n * 6                      # a few frames per worker at a time keeps memory small
+                for b0 in range(0, frames, batch):
+                    ts = [i / fps for i in range(b0, min(frames, b0 + batch))]
+                    for buf in pool.map(_draw_frame, ts, chunksize=2):
+                        write(buf)
+                    progress("Drawing frames", min(frames, b0 + batch) / frames)
+            return
+        except BrokenPipeError:
+            raise
+        except Exception as e:                     # noqa: BLE001  fall back to one process
+            print("Parallel drawing failed, drawing in one process:", e)
+            return _draw_range(comp, fps, frames, write, progress, start=getattr(write, "count", 0))
+    _draw_range(comp, fps, frames, write, progress)
+
+
+def _draw_range(comp, fps, frames, write, progress, start=0):
+    for i in range(start, frames):
+        write(comp.frame(i / fps).tobytes())
+        if i % 5 == 0:
+            progress("Drawing frames", i / frames)
+
+
 # ------------------------------------------------------------------ render
 def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
     progress = progress or (lambda stage, frac: None)
@@ -643,14 +699,20 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
         log = open(work / "ffmpeg.log", "wb")
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=log, cwd=work)
         frames = int(math.ceil(total * fps))
+
+        def write(buf):
+            proc.stdin.write(buf)
+            write.count += 1
+        write.count = 0
         try:
-            for i in range(frames):
-                proc.stdin.write(comp.frame(i / fps).tobytes())
-                if i % 5 == 0:
-                    progress("Drawing frames", i / frames)
+            _draw_all(comp, tl, sched, w, h, q["ss"], fps, frames, write, progress)
             proc.stdin.close()
         except BrokenPipeError:
             pass
+        if any(LOOKS.get(c["look"], {}).get("style") == "3d" for c in tl["characters"]):
+            from . import three_d
+            if three_d.status() and three_d.status() not in comp.flat.warnings:
+                comp.flat.warnings.append(three_d.status())
         progress("Encoding", 0.99)
         for msg in comp.flat.warnings:
             if msg not in warnings:
@@ -660,8 +722,17 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
         if code != 0 or not out.exists():
             tail = (work / "ffmpeg.log").read_text(errors="ignore")[-600:]
             raise RenderError("FFmpeg failed: " + tail)
+        res = dict(file=out.name, seconds=round(total, 1), warnings=warnings, size=[w, h])
+        if tl.get("kit") if tl.get("kit") is not None else quality == "final":      # subtitles, thumbnails and YouTube text next to the video
+            progress("Making thumbnails and YouTube text", 0.995)
+            try:
+                from .publish import make_kit
+                big = comp if w == 1080 else Composer(tl, sched, 1080, 1920, 2)
+                res.update(make_kit(tl, sched, out, big.frame))
+            except Exception as e:  # noqa: BLE001  the video itself is fine
+                warnings.append(f"Could not make the thumbnails / YouTube text: {e}")
         progress("Done", 1.0)
-        return dict(file=out.name, seconds=round(total, 1), warnings=warnings, size=[w, h])
+        return res
     finally:
         shutil.rmtree(work, ignore_errors=True)
 

@@ -12,7 +12,10 @@
     <div class="brand">Shorts Studio</div>
     <nav id="nav" aria-label="Steps"></nav>
     <div class="proj">
+      <div class="undo-row"><button class="rail-btn" data-act="undo" title="Undo (Ctrl+Z)">↶ Undo</button><button class="rail-btn" data-act="redo" title="Redo (Ctrl+Y)">↷ Redo</button></div>
       <button class="rail-btn" data-act="save-project">Save project</button>
+      <button class="rail-btn" data-act="new-episode" title="Saves this episode and starts the next one with the same characters and style">New episode (same cast)</button>
+      <p class="hint" id="series-info"></p>
       <select id="proj-list" aria-label="Saved projects"><option value="">Open a saved project</option></select>
     </div>
   </aside>
@@ -32,6 +35,22 @@
           <select data-path="language"><option value="hi">Hindi (देवनागरी)</option><option value="hinglish">Hinglish (Roman letters)</option><option value="en">English</option></select></label>
         <label>Target length
           <select data-path="seconds"><option value="30">About 30 seconds</option><option value="45">About 45 seconds</option><option value="60">About 60 seconds</option></select></label>
+      </div>
+      <div class="oneclick">
+        <h2>Make it for me</h2>
+        <p class="hint">One click: Gemini writes the script and hook, the app picks backgrounds, emotions, actions and music, makes the voices and the video. Uses the characters in the Cast step. You can open the result as a project and change anything.</p>
+        <div class="row2">
+          <label>Quality<select id="ap-quality"><option value="preview">Quick preview</option><option value="final">Full quality (with thumbnails and YouTube text)</option></select></label>
+          <label>Music<select id="ap-music"><option value="auto">Pick for the story</option><option value="">No music</option></select></label>
+        </div>
+        <div class="actions" style="justify-content:flex-start"><button class="primary" data-act="autopilot">Make it for me</button></div>
+        <div id="ap-progress" hidden><div class="bar"><div id="ap-bar"></div></div><p class="hint" id="ap-stage"></p></div>
+        <div id="ap-result"></div>
+        <details><summary><b>Batch mode</b>: many ideas, one video each</summary>
+          <label>Ideas, one per line (up to 20)<textarea id="batch-ideas" rows="5" lang="hi" placeholder="दादाजी को मोबाइल चलाना सिखाना&#10;गोलू का होमवर्क कुत्ता खा गया&#10;आंटी और सब्ज़ीवाले की बहस"></textarea></label>
+          <div class="actions" style="justify-content:flex-start"><button class="secondary" data-act="batch">Make all videos</button></div>
+          <p class="hint">Runs one after another; leave the app open. Each finished video appears in the list in the Make video step.</p>
+        </details>
       </div>
       <div class="actions">
         <button class="ghost" data-act="example">Fill in an example</button>
@@ -110,6 +129,7 @@
             <option value="silent">Silent (fast test)</option>
           </select></label>
         <p class="hint">Gemini voices speak each line with its emotion (angry, crying, laughing...). Pick a "Gemini" voice for a character in the Cast step, or choose "Gemini voices for everyone" here. The free Gemini tier has a small daily limit; when it runs out, lines use the Microsoft voices. Each line is made once and saved, so changing one line only remakes that line.</p>
+        <p class="hint" id="voices-left"></p>
         <div class="actions"><button class="primary" data-act="voices">Generate voices</button></div>
         <div id="voice-out"></div>
       </div>
@@ -134,6 +154,8 @@
         <p class="hint" id="stage"></p>
       </div>
       <div id="result"></div>
+      <h2>Your recent videos</h2>
+      <div id="videos"></div>
     </section>
   </main>
 

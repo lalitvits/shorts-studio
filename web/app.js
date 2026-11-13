@@ -20,7 +20,34 @@ const fresh = () => ({
   hook: "", effects: true,
   audio: { mode: "tts", id: "", name: "", seconds: 0, url: "", pause: 0.45, musicId: "", musicName: "", musicUrl: "", musicVolume: 20, musicBuiltin: "" },
 });
-const save = () => localStorage.setItem(KEY, JSON.stringify(S));
+const HIST = { list: [], at: -1, last: 0, quiet: false };
+function record() {                               // undo history: one step per pause in editing
+  const snap = JSON.stringify({ ...S, step: undefined });
+  if (HIST.list[HIST.at] === snap) return;
+  const now = Date.now();
+  HIST.list.length = HIST.at + 1;                 // a new change drops the redo steps
+  if (now - HIST.last < 700 && HIST.at > 0) HIST.list[HIST.at] = snap;   // typing: merge into one step
+  else { HIST.list.push(snap); HIST.at++; if (HIST.list.length > 80) { HIST.list.shift(); HIST.at--; } }
+  HIST.last = now;
+}
+const save = () => { localStorage.setItem(KEY, JSON.stringify(S)); if (!HIST.quiet) record(); };
+function undoRedo(dir) {
+  const at = HIST.at + dir;
+  if (at < 0 || at >= HIST.list.length) return toast(dir < 0 ? "Nothing to undo." : "Nothing to redo.");
+  HIST.at = at; HIST.quiet = true;
+  const step = S.step;
+  S = { ...fresh(), ...JSON.parse(HIST.list[at]), step };
+  save(); init(true); HIST.quiet = false;
+  toast(dir < 0 ? "Undone." : "Redone.");
+}
+document.addEventListener("keydown", e => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "");
+  if (typing) return;                             // inside a text box the browser's own undo works
+  const k = e.key.toLowerCase();
+  if (k === "z" && !e.shiftKey) { e.preventDefault(); undoRedo(-1); }
+  else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); undoRedo(1); }
+});
 const timeline = () => ({ title: S.title, tts: S.tts, characters: S.characters, scenes: S.scenes, look3d: S.look3d !== false,
   captions: S.captions !== false, language: S.language,
   hook: S.hook || "", effects: S.effects !== false,
@@ -66,6 +93,12 @@ function showStep(n) {
   if (n === 3) { renderScenes(); renderAudio(); }
   window.scrollTo({ top: 0 });
   refreshPreview();
+}
+function renderSeries() {
+  const el = $("#series-info");
+  if (el) el.textContent = S.series ? `Series: ${S.series}, episode ${S.episode || 1}` : "";
+  const v = $("#voices-left");
+  if (v && A.system.gemini) v.textContent = `About ${A.system.gemini_voices_left} Gemini voice lines left today on the free tier (lines you made before cost nothing).`;
 }
 function renderBanners() {
   const b = [], s = A.system;
@@ -210,6 +243,8 @@ function renderAudio() {
   const a = S.audio, file = a.mode === "file";
   $("#audio-file").hidden = !file; $("#voices-tts").hidden = file; $("#voices-file").hidden = !file;
   $("#audio-info").innerHTML = a.id ? `<div class="fileline"><span>${esc(a.name)}, ${a.seconds} seconds</span><button class="hear" data-act="remove-audio">Remove</button></div><audio controls src="${esc(a.url)}"></audio>` : "";
+  const apm = $("#ap-music");
+  if (apm && apm.options.length <= 2) (A.music || []).forEach(m => apm.add(new Option(m.label, m.id)));
   const mb = $("#music-builtin");
   if (mb) mb.innerHTML = `<option value="">None</option>` + (A.music || []).map(m => `<option value="${m.id}"${m.id === a.musicBuiltin ? " selected" : ""}>${esc(m.label)}</option>`).join("");
   $("#music-info").innerHTML = a.musicId ? `<div class="fileline"><span>${esc(a.musicName)}</span><button class="hear" data-act="remove-music">Remove</button></div><audio controls src="${esc(a.musicUrl)}"></audio>` : "";
@@ -417,7 +452,56 @@ const ACTIONS = {
       await pollJob(job);
     } finally { el.disabled = false; }
   },
-  copy: async () => { await navigator.clipboard.writeText($("#share-text").textContent); toast("Copied."); },
+  autopilot: async el => {
+    const idea = (S.scenario || "").trim();
+    if (!idea) return toast("Write your idea in the Scenario box first.", true);
+    el.disabled = true;
+    try {
+      const { job } = await api("/api/autopilot", { idea, characters: S.characters, options: apOptions() });
+      const r = await watchJob(job, "#ap-progress", "#ap-bar", "#ap-stage");
+      if (!r) return;
+      $("#ap-result").innerHTML = (r.warnings || []).map(w => `<div class="banner">${esc(w)}</div>`).join("") + resultCard(r) +
+        `<div class="actions" style="justify-content:flex-start"><button class="secondary" data-act="open-auto">Open it as a project to edit</button></div>`;
+      LAST_AUTO = r.timeline; loadVideos();
+    } catch (e) { toast(e.message, true); } finally { el.disabled = false; }
+  },
+  undo: () => undoRedo(-1),
+  redo: () => undoRedo(1),
+  "new-episode": async () => {                    // series: same cast and style, a fresh story
+    let name = S.series;
+    if (!name) { name = prompt("Series name (for example: Dada ji aur Golu)", S.title || ""); if (!name) return; }
+    const ep = (S.episode || 1);
+    if (S.scenes.length) await api("/api/projects", { name: `${name} ep${ep}`, data: S });
+    const keep = { characters: S.characters, language: S.language, seconds: S.seconds, tts: S.tts, look3d: S.look3d,
+                   captions: S.captions, effects: S.effects, provider: S.provider, counter: S.counter };
+    const music = S.audio.musicBuiltin, vol = S.audio.musicVolume;
+    S = { ...fresh(), ...keep, series: name, episode: ep + 1 };
+    Object.assign(S.audio, { musicBuiltin: music, musicVolume: vol });
+    save(); init(true); showStep(1); loadProjects();
+    toast(`Episode ${ep} saved as a project. Episode ${ep + 1}: same cast and style, write the new story.`);
+  },
+  "open-auto": () => {
+    if (!LAST_AUTO) return;
+    const t = LAST_AUTO, au = t.audio || {};
+    Object.assign(S, { title: t.title, hook: t.hook || "", scenes: t.scenes.map(ensureScene), captions: t.captions, effects: t.effects });
+    Object.assign(S.audio, { mode: "tts", musicBuiltin: au.music_builtin || "" });
+    S.sel = { scene: 0, line: 0 }; save(); init(true); showStep(3); toast("Opened. Change anything, then make the video again.");
+  },
+  batch: async el => {
+    const ideas = $("#batch-ideas").value.split("\n").map(x => x.trim()).filter(Boolean);
+    if (!ideas.length) return toast("Write some ideas, one per line.", true);
+    el.disabled = true;
+    try {
+      const { job } = await api("/api/batch", { ideas, characters: S.characters, options: apOptions() });
+      const r = await watchJob(job, "#ap-progress", "#ap-bar", "#ap-stage");
+      if (!r) return;
+      $("#ap-result").innerHTML = `<p><b>${r.videos.length} videos made.</b></p>` +
+        r.failed.map(f => `<div class="banner">${esc(f.idea)}: ${esc(f.error)}</div>`).join("") +
+        r.videos.map(v => `<details><summary>${esc(v.idea)}</summary>${resultCard(v)}</details>`).join("");
+      loadVideos();
+    } catch (e) { toast(e.message, true); } finally { el.disabled = false; }
+  },
+  copy: async el => { await navigator.clipboard.writeText(el.closest(".share").querySelector(".share-text").textContent); toast("Copied."); },
   "save-project": async () => {
     const name = prompt("Project name", S.title || ""); if (!name) return;
     await api("/api/projects", { name, data: S }); toast("Project saved."); loadProjects();
@@ -433,18 +517,64 @@ function pollJob(id) {
         if (j.status === "running") return setTimeout(tick, 700);
         $("#progress").hidden = true;
         if (j.status === "error") { toast(j.error, true); return resolve(); }
-        const r = j.result, tag = `${S.title || "My short"} #shorts #hindi`;
-        $("#result").innerHTML =
-          (r.warnings || []).map(w => `<div class="banner">${esc(w)}</div>`).join("") +
-          `<video controls playsinline src="/video/${encodeURIComponent(r.file)}"></video>
-           <div class="actions" style="justify-content:flex-start"><a class="primary" style="text-decoration:none;display:inline-block" href="/download/${encodeURIComponent(r.file)}">Download MP4</a></div>
-           <div class="share"><p id="share-text">${esc(tag)}</p><button class="secondary" data-act="copy">Copy title and hashtags</button></div>
-           <p class="hint">${r.seconds} seconds, saved in the output folder as ${esc(r.file)}.</p>`;
+        const r = j.result;
+        $("#result").innerHTML = (r.warnings || []).map(w => `<div class="banner">${esc(w)}</div>`).join("") + resultCard(r) +
+          `<p class="hint">${r.seconds} seconds, saved in the output folder as ${esc(r.file)}.</p>`;
+        loadVideos();
         resolve();
       } catch (e) { reject(e); }
     };
     tick();
   });
+}
+let LAST_AUTO = null;
+function apOptions() {
+  return { language: S.language, seconds: +S.seconds || 30, quality: $("#ap-quality").value, music: $("#ap-music").value,
+           tts: S.tts, captions: S.captions !== false, effects: S.effects !== false, look3d: S.look3d !== false,
+           provider: S.provider === "basic" ? "basic" : undefined };
+}
+function watchJob(id, box, bar, stage) {          // progress bar for a background job; resolves with its result
+  $(box).hidden = false; $(bar).style.width = "0%";
+  return new Promise((resolve, reject) => {
+    const tick = async () => {
+      try {
+        const j = await api("/api/jobs/" + id);
+        $(bar).style.width = Math.round((j.progress || 0) * 100) + "%"; $(stage).textContent = j.stage || "";
+        if (j.status === "running") return setTimeout(tick, 800);
+        $(box).hidden = true;
+        if (j.status === "error") { toast(j.error, true); return resolve(null); }
+        resolve(j.result);
+      } catch (e) { reject(e); }
+    };
+    tick();
+  });
+}
+function ytText(r) {
+  if (r.youtube) return `${r.youtube.title}\n\n${r.youtube.description}\n\n${r.youtube.hashtags.join(" ")}`;
+  if (r.youtube_text) return r.youtube_text.replace(/^TITLE\n|DESCRIPTION\n/g, "");
+  return `${(r.timeline && r.timeline.title) || S.title || "My short"} #shorts #hindi`;
+}
+function resultCard(r) {                          // a video with its download links, thumbnails and YouTube text
+  const f = encodeURIComponent, link = (n, label) => n ? `<a class="secondary" href="/download/${f(n)}">${label}</a>` : "";
+  return `<div class="video-card">
+    <video controls playsinline preload="metadata" src="/video/${f(r.file)}"></video>
+    <div class="kit">
+      <div class="actions" style="justify-content:flex-start;flex-wrap:wrap">
+        <a class="primary" style="text-decoration:none;display:inline-block" href="/download/${f(r.file)}">Download MP4</a>
+        ${link(r.srt, "Subtitles (SRT)")} ${link(r.thumb, "Thumbnail 9:16")} ${link(r.thumb_wide, "Thumbnail 16:9")}
+      </div>
+      ${r.thumb ? `<div class="thumbs"><img src="/video/${f(r.thumb)}" alt="Thumbnail for Shorts"><img src="/video/${f(r.thumb_wide)}" alt="Wide thumbnail"></div>` : ""}
+      <div class="share"><p class="share-text">${esc(ytText(r))}</p><button class="secondary" data-act="copy">Copy title, description and hashtags</button></div>
+      ${r.thumb ? "" : `<p class="hint">Thumbnails, subtitles and YouTube text are made with every Full quality video.</p>`}
+    </div></div>`;
+}
+async function loadVideos() {
+  const box = $("#videos"); if (!box) return;
+  try {
+    const { videos } = await api("/api/videos");
+    box.innerHTML = videos.length ? videos.map(v => `<details><summary>${esc(v.file)} <span class="hint">${v.size_mb} MB</span></summary>${resultCard(v)}</details>`).join("")
+                                  : `<p class="hint">No videos yet.</p>`;
+  } catch { /* the list is optional */ }
 }
 async function loadProjects() {
   const { projects } = await api("/api/projects");
@@ -527,7 +657,8 @@ window.addEventListener("resize", () => drawWave());
 function init(reuse) {
   S.audio = { ...fresh().audio, ...(S.audio || {}) };
   S.scenes.forEach(ensureScene);
-  renderBanners(); renderStory(); renderCast(); renderScenes(); renderAudio(); showStep(S.step || 1);
+  renderBanners(); renderStory(); renderCast(); renderScenes(); renderAudio(); showStep(S.step || 1); loadVideos();
+  renderSeries(); if (!reuse) { HIST.list = []; HIST.at = -1; record(); }
 }
 (async () => {
   try {

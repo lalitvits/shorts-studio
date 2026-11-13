@@ -16,7 +16,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from .config import find_ffmpeg
+from .config import CACHE_DIR, find_ffmpeg
 from .script import _env
 
 MODELS = ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-3.1-flash-tts-preview",
@@ -40,7 +40,60 @@ class GeminiTTSError(Exception):
 
 
 _working_model: str | None = None
-_exhausted: dict = {}        # model -> time when its daily limit resets (free tier: about 10 lines per model per day)
+FREE_PER_MODEL = 10          # free tier, measured: about 10 lines per model per day (Google can change this)
+USAGE = CACHE_DIR / "gemini_voice_usage.json"
+
+
+def _today() -> str:
+    """The free-tier day (it resets at midnight Pacific time, about UTC-8)."""
+    return time.strftime("%Y-%m-%d", time.gmtime(time.time() - 8 * 3600))
+
+
+def _usage() -> dict:
+    try:
+        u = json.loads(USAGE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        u = {}
+    if u.get("day") != _today():
+        u = {"day": _today(), "count": {}, "exhausted": {}}
+    return u
+
+
+def _save_usage(u: dict):
+    try:
+        USAGE.write_text(json.dumps(u), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def lines_left() -> int:
+    """About how many Gemini voice lines are left today on the free tier."""
+    u = _usage()
+    now = time.time()
+    return sum(0 if u["exhausted"].get(m, 0) > now else max(0, FREE_PER_MODEL - u["count"].get(m, 0))
+               for m in MODELS[:3])
+
+
+class _Exhausted(dict):        # model -> time its daily limit resets; kept on disk so it survives a restart
+    def get(self, m, default=0):
+        return _usage()["exhausted"].get(m, default)
+
+    def __setitem__(self, m, until):
+        u = _usage()
+        u["exhausted"][m] = until
+        _save_usage(u)
+
+    def values(self):
+        return _usage()["exhausted"].values() or [time.time()]
+
+
+_exhausted = _Exhausted()
+
+
+def _count(model: str):
+    u = _usage()
+    u["count"][model] = u["count"].get(model, 0) + 1
+    _save_usage(u)
 
 
 def ready() -> bool:
@@ -115,6 +168,7 @@ def synthesize(text: str, voice: str, emotion: str, out_wav: Path, rate: int):
             try:
                 wav = _request(model, key, prompt, voice)
                 _working_model = model
+                _count(model)
                 tmp = out_wav.with_suffix(".gem.wav")
                 tmp.write_bytes(wav)
                 r = subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", str(tmp), "-ar", str(rate), "-ac", "1",

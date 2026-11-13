@@ -101,6 +101,11 @@ FLAT_BACKGROUNDS = {
     "flat_park": "Flat cartoon: park",
     "flat_swarg": "Flat cartoon: Swarg / heaven (clouds, sun rays, petals)",
     "flat_nark": "Flat cartoon: Nark / hell (fire, lava, embers)",
+    "flat_village": "Flat cartoon: village (huts, well, smoke)",
+    "flat_school": "Flat cartoon: school (flag, clock)",
+    "flat_kitchen": "Flat cartoon: kitchen (stove, steam, cooker)",
+    "flat_office": "Flat cartoon: office (computers, city window)",
+    "flat_market": "Flat cartoon: market (stalls, lights, shoppers)",
 }
 
 # Camera shot for a line (flat cartoon style). "auto" picks one like a cartoon editor would.

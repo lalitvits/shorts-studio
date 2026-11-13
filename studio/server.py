@@ -44,8 +44,32 @@ def assets_payload() -> dict:
         "emotions": EMOTIONS, "actions": [{"id": k, "label": v} for k, v in ACTION_LABELS.items()],
         "sounds": [{"id": k, "label": v} for k, v in SOUND_LABELS.items()], "sound_emotions": SOUND_EMOTIONS,
         "script_providers": script_mod.provider_status(),
-        "system": {"gemini": script_mod.provider_status()[0]["ready"], "ffmpeg": bool(find_ffmpeg()), "edge_tts": _has_edge(), "font": font.name if font else None},
+        "system": {"gemini_voices_left": __import__("studio.gemini_tts", fromlist=["x"]).lines_left(),
+                   "gemini": script_mod.provider_status()[0]["ready"], "ffmpeg": bool(find_ffmpeg()), "edge_tts": _has_edge(), "font": font.name if font else None},
     }
+
+
+def _start_job(fn, *args) -> str:
+    """Run fn(*args, progress) in the background; the app polls /api/jobs/<id>."""
+    job_id = uuid.uuid4().hex[:10]
+    with LOCK:
+        JOBS[job_id] = {"status": "running", "stage": "Starting", "progress": 0.0}
+
+    def progress(stage, frac):
+        with LOCK:
+            JOBS[job_id].update(stage=stage, progress=round(frac, 3))
+
+    def run():
+        try:
+            res = fn(*args, progress)
+            with LOCK:
+                JOBS[job_id].update(status="done", result=res, progress=1.0, stage="Done")
+        except Exception as e:  # shown in the UI
+            traceback.print_exc()
+            with LOCK:
+                JOBS[job_id].update(status="error", error=str(e))
+    threading.Thread(target=run, daemon=True).start()
+    return job_id
 
 
 def _run_job(job_id: str, tl: dict, quality: str):
@@ -121,6 +145,9 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK:
                     job = JOBS.get(path.rsplit("/", 1)[1])
                 return self._json(job or {"error": "Unknown job"}, 200 if job else 404)
+            if path == "/api/videos":                           # newest videos with their kit files
+                from .publish import list_videos
+                return self._json({"videos": list_videos()})
             if path == "/api/projects":
                 names = sorted(p.stem for p in PROJECTS_DIR.glob("*.json"))
                 return self._json({"projects": names})
@@ -191,6 +218,20 @@ class Handler(BaseHTTPRequestHandler):
                         rows.append({"scene": si, "line": li, "seconds": round(clip.duration, 1),
                                      "silent": clip.synthetic})
                 return self._json({"rows": rows, "total": round(total, 1), "warnings": warnings})
+            if path in ("/api/autopilot", "/api/batch"):          # idea(s) -> finished video(s)
+                from . import autopilot
+                chars = data.get("characters") or []
+                if not chars:
+                    return self._json({"error": "Add at least one character in the Cast step."}, 400)
+                opts = data.get("options") or {}
+                if path == "/api/autopilot":
+                    if not str(data.get("idea", "")).strip():
+                        return self._json({"error": "Write your idea first."}, 400)
+                    return self._json({"job": _start_job(autopilot.make_video, data["idea"], chars, opts)})
+                ideas = [i for i in data.get("ideas", []) if str(i).strip()]
+                if not ideas:
+                    return self._json({"error": "Write at least one idea, one per line."}, 400)
+                return self._json({"job": _start_job(autopilot.make_batch, ideas, chars, opts)})
             if path == "/api/render":
                 normalize(data["timeline"])  # fail fast with a readable message
                 job_id = uuid.uuid4().hex[:10]

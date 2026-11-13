@@ -20,6 +20,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 from .backgrounds import get_background
 from .catalog import FLAT_BACKGROUNDS, LOOKS
+from .places import PLACES, animate as animate_place, draw_static as draw_place
 from .realms import REALMS, animate as animate_realm, draw_static as draw_realm
 from .rig import KEEP_EMOTION, PERSISTENT, blink_amount
 
@@ -655,7 +656,15 @@ def render_sprite(sp, view, face_dir, scale_px, pose, emotion, mouth, blink, t, 
     if face_dir < 0:
         im = im.transpose(Image.FLIP_LEFT_RIGHT)
         ox = W - ox
-    return im, (ox, oy)
+    return _trim(im, ox, oy)
+
+
+def _trim(im, ox, oy):
+    """Cut away the empty border of a sprite (pasting transparent pixels costs time); keeps the feet anchor."""
+    bb = im.getbbox()
+    if not bb or bb == (0, 0, im.width, im.height):
+        return im, (ox, oy)
+    return im.crop(bb), (ox - bb[0], oy - bb[1])
 
 
 @lru_cache(maxsize=32)
@@ -693,6 +702,9 @@ def panorama(bid: str, k: float):
     im = Image.new("RGB", (W, H))
     if bid in REALMS:                      # Swarg / Nark: drawn in realms.py
         draw_realm(bid, im, ps, PW)
+        return im, ps, PW, GROUND["flat"]
+    if bid in PLACES:                      # village, school, kitchen, office, market: places.py
+        draw_place(bid, im, ps, PW)
         return im, ps, PW, GROUND["flat"]
     d = ImageDraw.Draw(im)
     top, bot = ((22, 30, 72), (66, 76, 130)) if night else ((96, 160, 214), (206, 228, 242))
@@ -987,8 +999,10 @@ class FlatComposer:
         below = (FH - a["g"]) * k if a["g"] > FH * 0.9 else None
         ck = ("3d", a["cid"], round(rot, 2), round(ppu, 1), action, emotion, mouth, round(blink, 1), tq,
               round(below) if below is not None else None)
-        return self.sprites.get(ck, lambda: three_d.sprite(sp["model"], action, emotion, tq, mouth, blink, rot,
-                                                           ppu, below))
+        def make():
+            r = three_d.sprite(sp["model"], action, emotion, tq, mouth, blink, rot, ppu, below)
+            return _trim(r[0], *r[1]) if r else r
+        return self.sprites.get(ck, make)
 
     # ------------------------------------------------------------- frame
     def frame(self, sc, t: float) -> Image.Image:
@@ -1012,6 +1026,8 @@ class FlatComposer:
 
         if bid in REALMS:
             animate_realm(im, bid, t, x0, y0, z, k, panorama(bid, k)[2], blur)
+        elif bid in PLACES:
+            animate_place(im, bid, t, x0, y0, z, k, panorama(bid, k)[2], blur)
         elif flat_bg:
             vw = FW / z
             # birds

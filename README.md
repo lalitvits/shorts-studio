@@ -4,6 +4,22 @@ Make vertical (1080x1920) Hindi or English short videos with cartoon characters 
 
 You write a scenario, pick characters and backgrounds from dropdowns, edit the script, generate voices, and get an MP4 with moving characters, lip movement and word-highlighted captions. Upload it to YouTube yourself.
 
+## Quick tour of the newest features
+
+- **Make it for me** (Story step): type an idea and press one button. Gemini writes the script and a hook, the app picks backgrounds, emotions, actions and fitting music, makes the voices and the video. "Open it as a project" lets you change anything. **Batch mode** (same box) makes one video per idea, up to 20, one after another.
+- **Hindi in Devanagari:** the script writer now always writes Hindi in Devanagari (it asks Gemini again if it answers in Roman letters). Choose "Hinglish (Roman letters)" if you want that instead.
+- **Hook:** a big title that pops in during the first two seconds (Story step; Gemini writes one for you).
+- **Effects** (Make video step, on by default): a zoom punch and whoosh between scenes, screen shake with a hit sound when a character punches or slaps, a pop for the hook. Effect sounds (punch, slap, whoosh, pop, ding, boing, thud) are also in each line's sound menu.
+- **Built-in music:** six loops made by the app (happy, comedy, suspense, emotional, heavenly, dark drums), free to use. Put your own `assets/music/<name>.mp3` (for example `happy.mp3`) or `assets/sounds/punch.mp3` to replace one.
+- **Walk in / walk out** actions: a character enters from the side of the frame, or leaves and stays gone for the rest of the scene.
+- **3D characters:** 13 more faces (worried, scared, crying with tears, embarrassed with blush, angry with an anger mark, in love, thinking, ...) and props in the hand (phone, tea cup, book, snack).
+- **Five more flat backgrounds:** village, school, kitchen, office and market, each with moving details.
+- **After a full-quality video:** subtitles (`.srt`), a 9:16 and a 16:9 thumbnail with the title, and YouTube title, description and hashtags (written by Gemini), all next to the MP4 in `output/` and shown under the video with copy and download buttons. "Your recent videos" lists earlier videos with a player.
+- **Undo / Redo** (left side, or Ctrl+Z / Ctrl+Y outside text boxes).
+- **Series:** "New episode (same cast)" saves the current episode as a project and starts the next one with the same characters, voices, music and settings.
+- **Gemini voice lines left today** is shown in the Voices step (free tier: about 10 lines per voice model per day).
+- **Speed:** drawing a full-quality frame is about 30% faster. On computers with 6 or more CPU threads, frames are drawn in parallel; set `SHORTS_WORKERS=1` to turn that off (on a 2-core laptop it did not help, so it stays off there).
+
 ## What you need
 
 - Python 3.10 or newer

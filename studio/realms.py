@@ -399,4 +399,7 @@ def animate(im: Image.Image, bid: str, t: float, x0: float, y0: float, z: float,
             d.ellipse([x - ws * 0.18, y - ws * 0.2, x + ws * 0.18, y + ws * 0.2], fill=col)
     if blur:
         ov = ov.filter(ImageFilter.GaussianBlur(max(1, 2.5 * s)))
-    im.paste(ov, (0, 0), ov)
+    bb = ov.getbbox()                       # paste only the part that has something on it
+    if bb:
+        part = ov.crop(bb)
+        im.paste(part, bb[:2], part)
