@@ -20,6 +20,7 @@ MODELS = ["gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
 HINT = {
     "hi": "The speech is most likely Hindi or Hinglish: write Hindi words in Devanagari script and English words "
           "in Latin script.",
+    "hinglish": "The speech is most likely Hindi or Hinglish: write every word in Latin (Roman) letters.",
     "en": "The speech is most likely English.",
 }
 

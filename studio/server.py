@@ -39,6 +39,7 @@ def assets_payload() -> dict:
         "looks": [{"id": k, "label": v["label"], "female": bool(v.get("female")), "flat": v.get("style") == "flat"}
                   for k, v in LOOKS.items()],
         "shots": [{"id": k, "label": v} for k, v in SHOT_LABELS.items()],
+        "music": [{"id": k, "label": v} for k, v in __import__("studio.fx", fromlist=["x"]).MUSIC_LABELS.items()],
         "voices": VOICES, "default_voice": DEFAULT_VOICE,
         "emotions": EMOTIONS, "actions": [{"id": k, "label": v} for k, v in ACTION_LABELS.items()],
         "sounds": [{"id": k, "label": v} for k, v in SOUND_LABELS.items()], "sound_emotions": SOUND_EMOTIONS,

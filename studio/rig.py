@@ -81,7 +81,7 @@ def pose_for(action: str | None, emotion: str, t: float, speaking: bool, phase: 
     p["arm_r"] -= 0.02 * math.sin(w * 1.9)
 
     act = action or "talk"
-    act = {"punch": "point", "slap": "wave"}.get(act, act)      # 3D-character actions, nearest gesture here
+    act = {"punch": "point", "slap": "wave", "walk_in": "walk", "walk_out": "walk"}.get(act, act)      # 3D-character actions, nearest gesture here
     if seated and act not in SEATED_OK:
         act = "talk"
     if act == "sit":

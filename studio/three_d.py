@@ -24,10 +24,11 @@ UNIT = 560          # flat-world units per 3D unit (a 3D character is about 1.75
 VIBRANCE = 1.2      # colour saturation of the 3D characters (1.0 = exactly the model's colours)
 
 # app emotion -> 3D mood
-MOODS = {"happy": "happy", "excited": "happy", "proud": "happy", "in_love": "happy", "relieved": "happy",
-         "laughing": "laughing", "sad": "sad", "crying": "sad", "worried": "sad", "bored": "sad",
-         "embarrassed": "sad", "sleepy": "sleepy", "angry": "angry", "disgusted": "angry",
-         "surprised": "surprised", "shocked": "surprised", "scared": "surprised"}
+MOODS = {"happy": "happy", "relieved": "happy", "laughing": "laughing", "sad": "sad", "sleepy": "sleepy",
+         "angry": "angry", "surprised": "surprised", "shocked": "surprised", "excited": "excited", "proud": "proud",
+         "in_love": "in_love", "crying": "crying", "worried": "worried", "bored": "bored", "embarrassed": "embarrassed",
+         "disgusted": "disgusted", "scared": "scared", "confused": "confused", "thinking": "thinking",
+         "neutral": "neutral"}
 
 
 class _Worker:

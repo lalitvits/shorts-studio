@@ -16,7 +16,7 @@ ACTION_LABELS = {
     "arms_crossed": "Arms crossed", "shrug": "Shrug", "look_around": "Look around", "walk": "Walk in place",
     "jump": "Jump", "cheer": "Cheer / celebrate", "clap": "Clap", "dance": "Dance", "facepalm": "Facepalm",
     "use_phone": "Use phone", "phone_call": "Talk on phone (phone at ear)", "drink_tea": "Drink tea", "read_book": "Read a book", "eat": "Eat a snack",
-    "punch": "Punch", "slap": "Slap",
+    "punch": "Punch", "slap": "Slap", "walk_in": "Walk in (enters the scene)", "walk_out": "Walk out (leaves the scene)",
     "sit": "Sit on sofa", "sit_phone": "Sit and use phone", "sit_tea": "Sit and drink tea",
     "sit_read": "Sit and read", "sit_eat": "Sit and eat a snack", "sit_sleep": "Sit and sleep",
 }
@@ -142,7 +142,11 @@ DEFAULT_VOICE = VOICES[0]["id"]
 SOUND_LABELS = {
     "laugh": "Laugh", "giggle": "Giggle", "cry": "Cry", "angry": "Angry growl", "frustrated": "Frustrated groan",
     "sigh": "Sigh", "gasp": "Gasp", "scream": "Scream", "yawn": "Yawn", "hmm": "Hmm (thinking)",
+    # sound effects (fx.py): not a voice, so the mouth does not move with them
+    "punch": "Punch hit (effect)", "slap": "Slap (effect)", "whoosh": "Whoosh (effect)", "pop": "Pop (effect)",
+    "ding": "Ding, idea! (effect)", "boing": "Boing, comedy (effect)", "thud": "Thud, fall (effect)",
 }
+FX_SOUNDS = {"punch", "slap", "whoosh", "pop", "ding", "boing", "thud"}
 # The emotion that usually goes with each sound (the app suggests it when the line is still "neutral").
 SOUND_EMOTIONS = {"laugh": "laughing", "giggle": "happy", "cry": "crying", "angry": "angry", "frustrated": "angry",
                   "sigh": "sad", "gasp": "surprised", "scream": "scared", "yawn": "sleepy", "hmm": "thinking"}

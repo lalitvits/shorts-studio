@@ -302,6 +302,56 @@
     }
     J.legL = leg(1); J.legR = leg(-1);
     if(woman) rig.SK = buildSkirt(root);
+
+    /* props held in the right hand (shown for phone, tea, book and snack actions) */
+    var handY = woman ? -0.255 : -0.275, P = {};
+    P.phone = new THREE.Group();
+    var ph = mesh(new THREE.BoxGeometry(0.062, 0.12, 0.012), mat(0x22252d, 0.35));
+    var scr = new THREE.Mesh(new THREE.PlaneGeometry(0.052, 0.1), new THREE.MeshBasicMaterial({color:col(0x7fc8f5)}));
+    scr.position.z = 0.0065; ph.add(scr); P.phone.add(ph);
+    P.cup = new THREE.Group();
+    var cup = mesh(new THREE.CylinderGeometry(0.032, 0.026, 0.07, 20), mat(0xf4f1ea, 0.4));
+    var tea = new THREE.Mesh(new THREE.CircleGeometry(0.029, 20), mat(0xa8683a, 0.5)); tea.rotation.x = -Math.PI/2; tea.position.y = 0.03;
+    var handle = mesh(new THREE.TorusGeometry(0.018, 0.005, 8, 16), mat(0xf4f1ea, 0.4)); handle.position.x = 0.035;
+    P.cup.add(cup, tea, handle);
+    P.book = new THREE.Group();
+    var cover = mesh(new THREE.BoxGeometry(0.17, 0.22, 0.025), mat(0xc0392b, 0.6));
+    var pages = mesh(new THREE.BoxGeometry(0.16, 0.21, 0.02), mat(0xfaf6ea, 0.8)); pages.position.z = 0.004;
+    P.book.add(cover, pages);
+    P.snack = mesh(new THREE.SphereGeometry(0.035, 16, 12), mat(0xe8b54a, 0.6));
+    for(var pk in P){
+      P[pk].position.set(0, handY - 0.03, 0.06); P[pk].visible = false; J.armR.el.add(P[pk]);
+    }
+    P.book.position.set(-0.06, handY - 0.02, 0.09); P.book.rotation.x = -Math.PI/2;
+    rig.props = P;
+
+    /* face effects: tears, sweat drop, anger mark, blush */
+    var FX = {tears:[], sweat:null, anger:null, blush:[]};
+    var tearM = new THREE.MeshStandardMaterial({color:col(0x6fc3f7), roughness:0.15, transparent:true, opacity:0.9});
+    [-1,1].forEach(function(s){
+      for(var i = 0; i < 2; i++){
+        var tdrop = new THREE.Mesh(new THREE.SphereGeometry(0.011, 12, 10), tearM); tdrop.scale.y = 1.4;
+        tdrop.userData = {side:s, i:i}; tdrop.visible = false; head.add(tdrop); FX.tears.push(tdrop);
+      }
+    });
+    FX.faceZ = faceZ; FX.eyeX = woman ? 0.06 : 0.058; FX.eyeY = woman ? 0.016 : 0.02;
+    var sw = new THREE.Group();
+    var swb = new THREE.Mesh(new THREE.SphereGeometry(0.02, 14, 12), tearM);
+    var swt = new THREE.Mesh(new THREE.ConeGeometry(0.0195, 0.035, 14), tearM); swt.position.y = 0.024;
+    sw.add(swb, swt); sw.position.set(RX*0.92, 0.1, 0.06); sw.visible = false; head.add(sw); FX.sweat = sw;
+    var ang = new THREE.Group(), angM = new THREE.MeshBasicMaterial({color:col(0xe53935)});
+    [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(function(q){
+      var bar = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.009, 0.004), angM);
+      bar.position.set(q[0]*0.016, q[1]*0.016, 0); bar.rotation.z = q[0]*q[1] > 0 ? 0.6 : -0.6; ang.add(bar);
+    });
+    ang.position.set(RX*0.5, 0.105, faceZ(RX*0.5, 0.105) + 0.025); ang.visible = false; head.add(ang); FX.anger = ang;
+    var blM = new THREE.MeshStandardMaterial({color:col(0xf06292), roughness:0.9, transparent:true, opacity:0.55});
+    [-1,1].forEach(function(s){
+      var bl = new THREE.Mesh(new THREE.SphereGeometry(0.027, 16, 10), blM);
+      bl.scale.set(1.1, 0.6, 0.2); bl.position.set(0.09*s, -0.045, faceZ(0.09*s, -0.045)); bl.rotation.y = 0.5*s;
+      bl.visible = false; head.add(bl); FX.blush.push(bl);
+    });
+    rig.fx = FX;
     return rig;
   }
 
@@ -362,10 +412,21 @@
     happy:{curve:1,browTilt:0,browY:0.004,eyeOpen:1,mouthOpen:0,headX:0},
     neutral:{curve:0.12,browTilt:0,browY:0,eyeOpen:1,mouthOpen:0,headX:0},
     sad:{curve:-0.85,browTilt:-0.38,browY:0.002,eyeOpen:0.78,mouthOpen:0,headX:0.16},
-    angry:{curve:-0.6,browTilt:0.48,browY:-0.012,eyeOpen:0.72,mouthOpen:0,headX:0.04},
     surprised:{curve:0.1,browTilt:0,browY:0.022,eyeOpen:1.28,mouthOpen:0.85,headX:-0.05},
     laughing:{curve:1,browTilt:-0.1,browY:0.008,eyeOpen:0.3,mouthOpen:0.5,headX:-0.06},
-    sleepy:{curve:0.12,browTilt:-0.15,browY:-0.004,eyeOpen:0.12,mouthOpen:0,headX:0.12}
+    sleepy:{curve:0.12,browTilt:-0.15,browY:-0.004,eyeOpen:0.12,mouthOpen:0,headX:0.12},
+    worried:{curve:-0.35,browTilt:-0.32,browY:0.006,eyeOpen:1,mouthOpen:0,headX:0.06,fx:['sweat']},
+    scared:{curve:-0.45,browTilt:-0.45,browY:0.016,eyeOpen:1.25,mouthOpen:0.35,headX:0.04,fx:['sweat']},
+    crying:{curve:-0.9,browTilt:-0.45,browY:0.004,eyeOpen:0.3,mouthOpen:0.25,headX:0.18,fx:['tears']},
+    embarrassed:{curve:0.45,browTilt:-0.2,browY:0.004,eyeOpen:0.75,mouthOpen:0,headX:0.14,fx:['blush','sweat']},
+    confused:{curve:-0.12,browTilt:0.22,browY:0.008,eyeOpen:1,mouthOpen:0,headX:0,headZ:0.16},
+    in_love:{curve:1,browTilt:-0.1,browY:0.01,eyeOpen:0.55,mouthOpen:0,headX:0.04,headZ:-0.08,fx:['blush']},
+    thinking:{curve:0,browTilt:0.15,browY:0.006,eyeOpen:0.9,mouthOpen:0,headX:-0.1,headZ:0.1},
+    disgusted:{curve:-0.7,browTilt:0.35,browY:-0.008,eyeOpen:0.6,mouthOpen:0.1,headX:0.02,headZ:-0.06},
+    excited:{curve:1,browTilt:0,browY:0.02,eyeOpen:1.2,mouthOpen:0.4,headX:-0.04},
+    proud:{curve:0.8,browTilt:0.05,browY:0.002,eyeOpen:0.7,mouthOpen:0,headX:-0.12},
+    bored:{curve:-0.1,browTilt:-0.05,browY:-0.004,eyeOpen:0.55,mouthOpen:0,headX:0.1},
+    angry:{curve:-0.6,browTilt:0.48,browY:-0.012,eyeOpen:0.72,mouthOpen:0,headX:0.04,fx:['anger']}
   };
   var KEYS = ['shLx','shLz','elLx','elLz','shRx','shRz','elRx','elRz','hipLx','kneeLx','hipRx','kneeRx',
               'headX','headY','headZ','bodyY','spineX','spineY','shRy','rootX','rootY','mouthOpen','curve','browTilt','browY','eyeOpen'];
@@ -375,7 +436,7 @@
     for(k = 0; k < KEYS.length; k++) tg[KEYS[k]] = 0;
     tg.shLz = 0.1; tg.shRz = -0.1;
     tg.curve = m.curve; tg.browTilt = m.browTilt; tg.browY = m.browY; tg.eyeOpen = m.eyeOpen;
-    tg.mouthOpen = m.mouthOpen; tg.headX = m.headX;
+    tg.mouthOpen = m.mouthOpen; tg.headX = m.headX; tg.headZ = m.headZ || 0;
     if(mood === 'laughing') tg.mouthOpen = 0.35 + 0.3*Math.abs(s(t*11));
     tg.bodyY = s(t*1.6)*0.004;
     tg.headY = s(t*0.5)*0.08;
@@ -476,6 +537,27 @@
     rig.open.scale.set(0.9 + o*0.25, Math.max(0.05, o*0.85), 0.3);
   }
 
+  var PROP_FOR = {use_phone:'phone', phone_call:'phone', sit_phone:'phone', drink_tea:'cup', sit_tea:'cup',
+                  read_book:'book', sit_read:'book', eat:'snack', sit_eat:'snack'};
+  function effects(rig, action, m, t){
+    var want = PROP_FOR[action];
+    for(var k in rig.props) rig.props[k].visible = (k === want);
+    rig.props.phone.rotation.x = (action === 'use_phone' || action === 'sit_phone') ? Math.PI/2 : 0;   // look at the screen
+    var on = {}; (m.fx || []).forEach(function(f){ on[f] = true; });
+    var F = rig.fx;
+    F.tears.forEach(function(d){
+      d.visible = !!on.tears;
+      if(!d.visible) return;
+      var u = (t*0.9 + d.userData.i*0.5 + (d.userData.side > 0 ? 0.25 : 0)) % 1;
+      var x = d.userData.side*(F.eyeX + 0.004 + 0.012*u), y = F.eyeY - 0.03 - 0.13*u;
+      d.position.set(x, y, F.faceZ(x, y) + 0.008);
+      d.material.opacity = 0.9*(1 - u*u);
+    });
+    F.sweat.visible = !!on.sweat; F.sweat.position.y = 0.1 - 0.012*((t*0.7) % 1);
+    F.anger.visible = !!on.anger; F.anger.scale.setScalar(1 + 0.15*Math.sin(t*12));
+    F.blush.forEach(function(b){ b.visible = !!on.blush; });
+  }
+
   /* ---------------------------------------------------------------- render one picture
      o = {kind, action, mood, t, mouth, blink (0 open .. 1 shut), rotY, ppu (pixels per unit), below (pixels from feet to
      frame bottom, or null)}. Returns {png, w, h, ax, ay}: a transparent PNG and the pixel position of the feet. */
@@ -487,6 +569,7 @@
     var rig = CH[o.kind];
     var cur = pose(o.t, o.action, o.mood, o.mouth);
     apply(rig, cur, 1 - 0.88*(o.blink || 0), o.rotY || 0);
+    effects(rig, o.action, MOODS[o.mood] || MOODS.neutral, o.t);
     stool.visible = o.action === 'sit' || (o.action.indexOf('sit_') === 0 && o.action !== 'sit_sleep');
 
     var target = new THREE.Vector3(0, TARGET_Y, 0);

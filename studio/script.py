@@ -53,12 +53,14 @@ def provider_status() -> list[dict]:
 def _prompt(scenario: str, chars: list[dict], language: str, seconds: int) -> str:
     bgs = ", ".join(b["id"] for b in list_backgrounds())
     cast = "\n".join(f'- id "{c["id"]}": {c["name"]}' for c in chars)
-    lang = ("Hindi, written in Devanagari script (natural spoken Hindi)" if language == "hi"
-            else "simple spoken English")
+    lang = LANG_RULES.get(language, LANG_RULES["en"])
     lines = max(4, round(seconds / 4))
     return f"""You write scripts for a vertical short video with cartoon characters.
 Write about {lines} dialogue lines in total, grouped into 2 to 4 scenes. Keep every line under 12 words.
 Dialogue language: {lang}.
+
+Also write "hook": a punchy opening line of at most 6 words, in the same language and script, that makes viewers
+want to keep watching (shown as a big title in the first two seconds).
 
 Characters (use only these ids as "speaker"):
 {cast}
@@ -73,7 +75,26 @@ calls for them, and sit_* actions for scenes on a sofa. Use "talk" otherwise. Ma
 Scenario: {scenario}
 
 Reply with JSON only, in this shape:
-{{"title": "short title", "scenes": [{{"background": "living_room", "lines": [{{"speaker": "<id>", "text": "...", "emotion": "happy", "action": "talk"}}]}}]}}"""
+{{"title": "short title", "hook": "...", "scenes": [{{"background": "living_room", "lines": [{{"speaker": "<id>", "text": "...", "emotion": "happy", "action": "talk"}}]}}]}}"""
+
+
+LANG_RULES = {
+    "hi": ("Hindi in DEVANAGARI script only (natural spoken Hindi). Every Hindi word must be written in Devanagari "
+           "letters, for example: \"दादा जी, ये क्या किया?\". Never write Hindi in Roman/Latin letters, even if the "
+           "scenario is written in English or Hinglish. Common English words (like \"sorry\", \"phone\") may be "
+           "written in Devanagari too (\"सॉरी\", \"फ़ोन\")"),
+    "hinglish": ("Hinglish: natural spoken Hindi mixed with English, written in Roman/Latin letters, for example: "
+                 "\"Dada ji, ye kya kiya?\""),
+    "en": "simple spoken English",
+}
+
+
+def _devanagari_share(data: dict) -> float:
+    """How much of the dialogue's letters are Devanagari (0..1)."""
+    text = " ".join(str(ln.get("text", "")) for sc in data.get("scenes", []) for ln in sc.get("lines", []))
+    dev = sum(1 for ch in text if "\u0900" <= ch <= "\u097f")
+    lat = sum(1 for ch in text if ch.isascii() and ch.isalpha())
+    return dev / max(1, dev + lat)
 
 
 def _http_json(url: str, body: dict, headers: dict | None = None, timeout: int = 90) -> dict:
@@ -190,6 +211,12 @@ def generate(scenario: str, chars: list[dict], language: str = "hi", seconds: in
         data = _basic(scenario, chars)
     else:
         prompt = _prompt(scenario, chars, language, seconds)
-        raw = _gemini(prompt) if provider == "gemini" else _ollama(prompt)
-        data = _parse_json(raw)
-    return {"title": str(data.get("title", "")).strip(), "scenes": normalize_scenes(data, chars)}
+        ask = _gemini if provider == "gemini" else _ollama
+        data = _parse_json(ask(prompt))
+        if language == "hi" and _devanagari_share(data) < 0.6:      # came back in Roman letters: ask once more
+            again = _parse_json(ask(prompt + "\n\nIMPORTANT: your last answer used Roman letters for Hindi. "
+                                             "Write ALL dialogue, the title and the hook in Devanagari script."))
+            if _devanagari_share(again) > _devanagari_share(data):
+                data = again
+    return {"title": str(data.get("title", "")).strip(), "hook": str(data.get("hook", "") or "").strip(),
+            "scenes": normalize_scenes(data, chars)}

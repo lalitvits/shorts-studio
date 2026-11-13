@@ -27,6 +27,7 @@ from .shading import shade_3d, soft_shadow
 from .visemes import build_track
 from .catalog import ACTIONS, DEFAULT_VOICE, EMOTIONS, LOOK_ALIASES, LOOKS, SHOT_LABELS, SOUND_LABELS
 from .flat import FlatComposer
+from . import fx as fx_mod
 from .config import GROUND_Y, OUTPUT_DIR, QUALITY, WORLD_W, find_devanagari_font, find_ffmpeg
 from .rig import (BOX_H, BOX_W, KEEP_EMOTION, ORG_X, ORG_Y, PERSISTENT, SIT_ACTIONS, blink_amount,
                   draw_character, draw_sofa, pose_for)
@@ -54,7 +55,8 @@ def normalize(tl: dict) -> dict:
     except (TypeError, ValueError):
         mv = 0.2
     audio = dict(mode="file" if au.get("mode") == "file" else "tts", id=au.get("id") or None,
-                 music_id=au.get("music_id") or None, music_volume=mv)
+                 music_id=au.get("music_id") or None, music_volume=mv,
+                 music_builtin=au.get("music_builtin") if au.get("music_builtin") in fx_mod.MUSIC_LABELS else None)
     chars = []
     for c in tl.get("characters", []):
         cid = str(c.get("id") or f"c{len(chars) + 1}")
@@ -93,7 +95,8 @@ def normalize(tl: dict) -> dict:
         raise RenderError("Add at least one scene with a character in it.")
     return dict(title=str(tl.get("title") or "").strip(), characters=chars, scenes=scenes,
                 tts=tl.get("tts") or "auto", audio=audio, look3d=bool(tl.get("look3d", True)),
-                captions=bool(tl.get("captions", True)), language=str(tl.get("language") or "hi"))
+                captions=bool(tl.get("captions", True)), language=str(tl.get("language") or "hi"),
+                hook=" ".join(str(tl.get("hook") or "").split())[:80], effects=bool(tl.get("effects", True)))
 
 
 @dataclass
@@ -301,6 +304,10 @@ class Composer:
         self.k = w / WORLD_W
         self.chars = {c["id"]: c for c in tl["characters"]}
         self.flat = FlatComposer(tl, sched, w, h)
+        fxon = tl.get("effects", True)
+        self.cuts = [sc.start for sc in sched[1:]] if fxon else []        # scene changes: zoom punch
+        self.hits = sorted(h for sc in sched for ln in sc.lines              # punch / slap: screen shake
+                           for h in fx_mod.hit_times(ln.action, ln.start, ln.end)) if fxon else []
 
     def scene_at(self, t: float) -> SceneT:
         for sc in self.sched:
@@ -309,6 +316,27 @@ class Composer:
         return self.sched[-1]
 
     def frame(self, t: float) -> Image.Image:
+        im = self._frame(t)
+        zoom, dx, dy = 1.0, 0.0, 0.0
+        for c in self.cuts:                                   # zoom punch into each new scene
+            u = (t - c) / 0.25
+            if 0 <= u < 1:
+                zoom = max(zoom, 1.0 + 0.14 * (1 - u) ** 2)
+        for hgt in self.hits:                                 # shake when a punch or slap lands
+            u = (t - hgt) / 0.22
+            if 0 <= u < 1:
+                amp = 16 * self.k * (1 - u)
+                dx += amp * math.sin(t * 97)
+                dy += amp * math.cos(t * 71)
+                zoom = max(zoom, 1.035)
+        if zoom == 1.0 and not dx and not dy:
+            return im
+        cw, ch = self.w / zoom, self.h / zoom
+        x0 = min(max(0.0, (self.w - cw) / 2 + dx), self.w - cw)
+        y0 = min(max(0.0, (self.h - ch) / 2 + dy), self.h - ch)
+        return im.resize((self.w, self.h), Image.BILINEAR, box=(x0, y0, x0 + cw, y0 + ch))
+
+    def _frame(self, t: float) -> Image.Image:
         sc = self.scene_at(t)
         if self.flat.handles(sc):                                 # flat cartoon style with its own camera
             return self.flat.frame(sc, t)
@@ -386,7 +414,8 @@ def _chunks(words: list) -> list:
     return out
 
 
-def make_ass(sched: list, w: int, h: int, font_family: str) -> str:
+def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = True, hook: str = "",
+             hook_end: float = 2.4) -> str:
     size, outline, margin_v = int(h * 0.05), max(2, int(h * 0.006)), int(h * 0.15)
     head = (
         "[Script Info]\nScriptType: v4.00+\n"
@@ -395,11 +424,18 @@ def make_ass(sched: list, w: int, h: int, font_family: str) -> str:
         "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, "
         "Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
         f"Style: Cap,{font_family},{size},&H0000D7FF,&H00FFFFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,"
-        f"{outline},1,8,{int(w * 0.06)},{int(w * 0.06)},{margin_v},1\n\n"
+        f"{outline},1,8,{int(w * 0.06)},{int(w * 0.06)},{margin_v},1\n"
+        f"Style: Hook,{font_family},{int(h * 0.068)},&H00FFFFFF,&H00FFFFFF,&H00141414,&H96000000,-1,0,0,0,100,100,0,0,1,"
+        f"{int(outline * 1.8)},3,8,{int(w * 0.07)},{int(w * 0.07)},{int(h * 0.27)},1\n\n"
         "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
     events = []
-    for sc in sched:
+    if hook:                                    # big opening title that pops in, then fades
+        txt = hook.replace("{", "").replace("}", "")
+        events.append(f"Dialogue: 1,{_ass_time(0.12)},{_ass_time(hook_end)},Hook,,0,0,0,,"
+                      "{\\fad(80,300)\\fscx40\\fscy40\\t(0,180,\\fscx112\\fscy112)\\t(180,320,\\fscx100\\fscy100)}"
+                      + txt)
+    for sc in (sched if captions else []):
         for ln in sc.lines:
             words = [x.replace("{", "").replace("}", "") for x in ln.text.split()]
             if not words:
@@ -515,6 +551,9 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
             music_path = str(get_audio(au["music_id"])["path"])
         except AudioError as e:
             raise RenderError("Background music: " + str(e))
+    elif au["music_builtin"]:
+        progress("Making music", 0.0)
+        music_path = str(fx_mod.music_wav(au["music_builtin"]))
     if total > 180:
         warnings.append("This video is longer than 3 minutes, so YouTube will not treat it as a Short.")
 
@@ -538,7 +577,18 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
         else:
             warnings.append("No Devanagari font found. Hindi captions may show empty boxes. "
                             "Put a font such as Noto Sans Devanagari in assets/fonts (see README).")
-        (work / "captions.ass").write_text(make_ass(sched, w, h, family), encoding="utf-8")
+        hook_end = min(2.4, total)
+        (work / "captions.ass").write_text(make_ass(sched, w, h, family, tl["captions"], tl["hook"], hook_end),
+                                           encoding="utf-8")
+        events = []                               # sound effects: hits, scene whooshes, the hook's pop
+        if tl["effects"]:
+            events += [(hgt, "punch" if any(ln.action == "punch" and ln.start <= hgt < ln.end
+                                            for sc in sched for ln in sc.lines) else "slap", 0.9)
+                       for hgt in comp.hits]
+            events += [(c - 0.15, "whoosh", 0.55) for c in comp.cuts]
+            if tl["hook"]:
+                events.append((0.1, "pop", 0.6))
+        fx_idx = None
 
         stamp = time.strftime("%Y%m%d-%H%M%S")
         slug = re.sub(r"[^a-z0-9]+", "-", tl["title"].lower()).strip("-")[:30] or "short"
@@ -551,8 +601,13 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
             build_sfx_track(sched, total, work / "sfx.wav")
             cmd += ["-i", "sfx.wav"]
             sfx_idx = 2
+        nxt = 2 + (1 if sfx_idx else 0)
+        if events:
+            fx_mod.build_track(events, total, work / "fx.wav")
+            cmd += ["-i", "fx.wav"]
+            fx_idx, nxt = nxt, nxt + 1
         if music_path:
-            music_idx = 2 + (1 if sfx_idx else 0)
+            music_idx = nxt
             cmd += ["-stream_loop", "-1", "-i", music_path]
         if au["mode"] == "file":      # cut each scene's part out of your audio and join the parts in scene order
             n = len(parts)
@@ -567,6 +622,9 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
         if sfx_idx:
             graph += f";[{sfx_idx}:a]{norm}[sfx]"
             streams.append(("sfx", 1.0))
+        if fx_idx:
+            graph += f";[{fx_idx}:a]{norm}[fxs]"
+            streams.append(("fxs", 0.9))
         if music_idx:
             graph += f";[{music_idx}:a]{norm}[mus]"
             streams.append(("mus", au["music_volume"]))
@@ -577,7 +635,7 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
             audio_graph = (graph + ";" + "".join(f"[{nm}]" for nm, _ in streams) +
                            f"amix=inputs={len(streams)}:duration=first:weights='{weights}',"
                            f"volume={sum(w for _, w in streams):.2f}[aout]")
-        vf = "ass=captions.ass:fontsdir=fonts" if tl["captions"] else "null"
+        vf = "ass=captions.ass:fontsdir=fonts" if (tl["captions"] or tl["hook"]) else "null"
         cmd += ["-filter_complex", f"[0:v]{vf}[vout];{audio_graph}",
                 "-map", "[vout]", "-map", "[aout]", "-t", f"{total:.3f}",
                 "-c:v", "libx264", "-preset", q["preset"], "-crf", str(q["crf"]), "-pix_fmt", "yuv420p",

@@ -300,6 +300,12 @@ def _convert(user: Path) -> Path:
 def get_sound(sound_id: str, voice: str) -> Clip:
     if sound_id not in SOUND_LABELS:
         raise SoundError("Unknown sound.")
+    from .catalog import FX_SOUNDS
+    if sound_id in FX_SOUNDS:                     # a sound effect, not a voice: the mouth stays still
+        from .fx import fx_wav
+        wav = fx_wav(sound_id)
+        s = read_samples(wav)
+        return Clip(wav, len(s) / RATE, [0.0] * (len(s) * 50 // RATE + 1))
     gender = gender_of(voice)
     user = _user_file(sound_id, gender)
     wav = _convert(user) if user else _synth_cached(sound_id, gender)

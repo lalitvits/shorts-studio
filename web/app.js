@@ -17,12 +17,15 @@ const fresh = () => ({
     { id: "c2", name: "Priya", look: "priya", voice: "hi-IN-SwaraNeural" },
   ],
   scenes: [], sel: { scene: 0, line: 0 },
-  audio: { mode: "tts", id: "", name: "", seconds: 0, url: "", pause: 0.45, musicId: "", musicName: "", musicUrl: "", musicVolume: 20 },
+  hook: "", effects: true,
+  audio: { mode: "tts", id: "", name: "", seconds: 0, url: "", pause: 0.45, musicId: "", musicName: "", musicUrl: "", musicVolume: 20, musicBuiltin: "" },
 });
 const save = () => localStorage.setItem(KEY, JSON.stringify(S));
 const timeline = () => ({ title: S.title, tts: S.tts, characters: S.characters, scenes: S.scenes, look3d: S.look3d !== false,
   captions: S.captions !== false, language: S.language,
-  audio: { mode: S.audio.mode, id: S.audio.id, music_id: S.audio.musicId, music_volume: S.audio.musicVolume } });
+  hook: S.hook || "", effects: S.effects !== false,
+  audio: { mode: S.audio.mode, id: S.audio.id, music_id: S.audio.musicId, music_volume: S.audio.musicVolume,
+           music_builtin: S.audio.musicBuiltin || "" } });
 
 async function api(path, body) {
   const r = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
@@ -207,6 +210,8 @@ function renderAudio() {
   const a = S.audio, file = a.mode === "file";
   $("#audio-file").hidden = !file; $("#voices-tts").hidden = file; $("#voices-file").hidden = !file;
   $("#audio-info").innerHTML = a.id ? `<div class="fileline"><span>${esc(a.name)}, ${a.seconds} seconds</span><button class="hear" data-act="remove-audio">Remove</button></div><audio controls src="${esc(a.url)}"></audio>` : "";
+  const mb = $("#music-builtin");
+  if (mb) mb.innerHTML = `<option value="">None</option>` + (A.music || []).map(m => `<option value="${m.id}"${m.id === a.musicBuiltin ? " selected" : ""}>${esc(m.label)}</option>`).join("");
   $("#music-info").innerHTML = a.musicId ? `<div class="fileline"><span>${esc(a.musicName)}</span><button class="hear" data-act="remove-music">Remove</button></div><audio controls src="${esc(a.musicUrl)}"></audio>` : "";
   $("#pause-out").textContent = a.pause; $("#vol-out").textContent = a.musicVolume + "%";
   $("#wave").hidden = !(file && a.id);
@@ -389,6 +394,7 @@ const ACTIONS = {
     try {
       const r = await api("/api/script", { scenario: S.scenario, characters: S.characters, language: S.language, seconds: +S.seconds, provider: S.provider });
       S.scenes = r.scenes.map(ensureScene); if (!S.title && r.title) S.title = r.title;
+      if (!S.hook && r.hook) S.hook = r.hook;
       S.sel = { scene: 0, line: 0 }; save(); renderScenes(); renderStory(); refreshPreview();
       toast("Draft ready. Edit anything you like.");
     } finally { el.disabled = false; el.textContent = "Write script"; }

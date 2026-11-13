@@ -168,6 +168,16 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
         p["R"] = ("fk", 96 + 5 * s(t * 5), -6 + 6 * s(t * 3))
     elif action == "point":
         p["R"] = ("fk", 96 + 5 * s(t * 5), -6 + 6 * s(t * 3))
+    elif action == "punch":                 # same rhythm as the 3D punch and its hit sound
+        out = (t * 2.4) % 1 < 0.4
+        p["R"] = ("fk", 92, -4) if out else ("fk", 50, -118)
+        p["L"] = ("fk", 45, -122)
+        p["dx"] = 22.0 if out else 0.0
+    elif action == "slap":
+        swung = (t * 1.3) % 1 >= 0.45
+        p["R"] = ("fk", 72, -25) if swung else ("fk", 140, 15)
+        p["L"] = HIP_T
+        p["dx"] = 12.0 if swung else 0.0
     elif action == "explain":
         w = 12 * s(t * 4.5)
         p["L"] = ("fk", 40, 62 + w)
@@ -938,6 +948,28 @@ class FlatComposer:
         self.bgs[key] = (out, x0, y0, z)
         return self.bgs[key]
 
+    WALK_S = 1.6     # seconds a walk in / walk out takes
+
+    def _walk(self, sc, cid, a, t):
+        """None (not walking), "hidden" (not in the frame yet / any more) or (x, direction) while walking."""
+        mine = [l for l in sc.lines if l.char == cid]
+        off = -330 if a["x"] < FW / 2 else FW + 330           # leave / enter on the nearer side of the frame
+        for l in mine:
+            u = (t - l.start) / self.WALK_S
+            if l.action == "walk_in":
+                if u < 0 and l is mine[0]:
+                    return "hidden"
+                if 0 <= u < 1:
+                    e = 1 - (1 - u) ** 2                          # slow down when arriving
+                    return (off + (a["x"] - off) * e, 1 if a["x"] > off else -1)
+            elif l.action == "walk_out":
+                if u >= 1:
+                    return "hidden"
+                if u >= 0:
+                    e = u * u                                     # speed up when leaving
+                    return (a["x"] + (off - a["x"]) * e, 1 if off > a["x"] else -1)
+        return None
+
     def _sprite_3d(self, a, sp, action, emotion, speaking, still, mq, blink, tq, k):
         """A 3D character's picture for this frame, or None (then a flat stand-in is drawn)."""
         from . import three_d
@@ -947,7 +979,7 @@ class FlatComposer:
                 self.warnings.append(msg)
             return None
         back = a["view"] == "back"
-        rot = math.pi + 0.25 if back else 0.42 * a["face"]
+        rot = math.pi + 0.25 if back else (1.3 * a["travel"] if a.get("travel") else 0.42 * a["face"])
         if back:
             action, tq, mq, blink = ("idle" if action in ("idle", "talk") else action), 0.0, 0.0, 0.0
         mouth = mq if speaking and not still else 0.0
@@ -1021,6 +1053,14 @@ class FlatComposer:
                 action = recent.action if recent.action in PERSISTENT else "idle"
                 emotion = recent.emotion if recent.emotion in KEEP_EMOTION else "neutral"
                 t_act, key = t - sc.start, cid
+            walk = self._walk(sc, cid, a, t)          # walking in or out of the frame
+            if walk == "hidden":
+                continue
+            if walk:
+                a = dict(a, x=walk[0], face=walk[1], travel=walk[1])
+                action, t_act = "walk", t - sc.start
+            elif action in ("walk_in", "walk_out"):
+                action = "talk" if speaking else "idle"
             still = speaking and line.action == "idle"
             mouth = line.clip.mouth_at(t - line.start) if speaking and not still else 0.0
             phase = (_h(cid) % 100) / 30
@@ -1036,7 +1076,7 @@ class FlatComposer:
                     continue
                 sp = sp["fallback"]
             if sp["kind"] == "human":
-                pose = pose_for({"punch": "point", "slap": "wave"}.get(action, action), emotion, tq, speaking, key)
+                pose = pose_for(action, emotion, tq, speaking, key)
             else:
                 pose = dict(dy=0.0, walk=tq if action == "walk" else 0.0)
             if a.get("back"):                    # big foreground back: hardly moves, so it is drawn once
