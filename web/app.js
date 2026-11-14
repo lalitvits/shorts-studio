@@ -11,7 +11,7 @@ let A = null;   // menus from the server
 let S = null;   // project state
 
 const fresh = () => ({
-  title: "", scenario: "", language: "hi", seconds: 30, look3d: true, captions: true, provider: "gemini", tts: "auto", step: 1, counter: 2,
+  title: "", scenario: "", language: "hi", seconds: 30, look3d: true, captions: true, tts: "best", provider: "gemini", step: 1, counter: 2,
   characters: [
     { id: "c1", name: "Rahul", look: "rahul", voice: "hi-IN-MadhurNeural" },
     { id: "c2", name: "Priya", look: "priya", voice: "hi-IN-SwaraNeural" },
@@ -115,6 +115,10 @@ function renderStory() {
     else el.value = v ?? "";
   });
 }
+function tune(c) {                                 // the character's voice pitch / speed, or the look's default
+  const d = (A.voice_tune || {})[c.look] || [0, 0];
+  return [c.voice_pitch ?? d[0], c.voice_rate ?? d[1]];
+}
 function renderCast() {
   $("#cast").innerHTML = S.characters.map((c, i) => `
     <div class="char">
@@ -123,6 +127,9 @@ function renderCast() {
       <div class="full">
         <label>Voice<select data-path="characters.${i}.voice">${opts(A.voices, c.voice)}</select></label>
         <button class="secondary" data-act="sample-char" data-i="${i}">Hear voice</button>
+        ${String(c.voice).startsWith("gemini:") ? "" : `
+        <label class="tune">Pitch <b>${tune(c)[0] > 0 ? "+" : ""}${tune(c)[0]}</b><input type="range" min="-40" max="50" step="2" data-path="characters.${i}.voice_pitch" value="${tune(c)[0]}"></label>
+        <label class="tune">Speed <b>${tune(c)[1] > 0 ? "+" : ""}${tune(c)[1]}%</b><input type="range" min="-30" max="40" step="2" data-path="characters.${i}.voice_rate" value="${tune(c)[1]}"></label>`}
         ${S.characters.length > 1 ? `<button class="icon" data-act="del-char" data-i="${i}" aria-label="Remove ${esc(c.name)}">✕</button>` : ""}
       </div>
     </div>`).join("");
@@ -301,8 +308,9 @@ async function playSound(ln) {
   await a.play();
   await new Promise(res => { a.onended = res; a.onerror = res; });
 }
-async function playSample(text, voice, emotion) {
-  const r = await api("/api/sample", { text, voice, engine: S.tts, emotion: emotion || "neutral" });
+async function playSample(text, voice, emotion, ch) {
+  const t = ch ? tune(ch) : [0, 0];
+  const r = await api("/api/sample", { text, voice, engine: S.tts, emotion: emotion || "neutral", pitch: t[0], rate: t[1] });
   const warn = r.headers.get("X-Warning");
   if (warn) toast(warn, true);
   const url = URL.createObjectURL(await r.blob());
@@ -325,7 +333,7 @@ const ACTIONS = {
     S.scenes.forEach(sc => { sc.cast = (sc.cast || []).filter(id => id !== ch.id); sc.lines = sc.lines.filter(l => l.speaker !== ch.id); });
     save(); renderCast(); renderScenes(); refreshPreview();
   },
-  "sample-char": el => { const c = S.characters[+el.dataset.i]; return playSample("नमस्ते, मेरा नाम " + c.name + " है।", c.voice); },
+  "sample-char": el => { const c = S.characters[+el.dataset.i]; return playSample("नमस्ते, मेरा नाम " + c.name + " है।", c.voice, "happy", c); },
   "add-scene": () => {
     const last = S.scenes[S.scenes.length - 1], cast = last?.cast?.length ? [...last.cast] : S.characters.map(c => c.id);
     S.scenes.push({ background: last?.background || defaultBg(), cast, lines: [{ speaker: cast[0], text: "", emotion: "neutral", action: "talk" }] });
@@ -422,7 +430,7 @@ const ACTIONS = {
     }
     if (!ln.text.trim()) { if (ln.sound) return playSound(ln); return toast("Type the dialogue or choose a sound first.", true); }
     if (ln.sound) await playSound(ln);                      // the sound comes first, then the words
-    return playSample(ln.text, ch.voice, ln.emotion);
+    return playSample(ln.text, ch.voice, ln.emotion, ch);
   },
   draft: async el => {
     el.disabled = true; el.textContent = "Writing...";
@@ -602,6 +610,7 @@ document.addEventListener("input", e => {
     const c = S.characters[+lm[1]], fem = !!(A.looks.find(l => l.id === t.value) || {}).female;
     if (fem && c.voice === "hi-IN-MadhurNeural") c.voice = "hi-IN-SwaraNeural";
     else if (!fem && c.voice === "hi-IN-SwaraNeural") c.voice = "hi-IN-MadhurNeural";
+    delete c.voice_pitch; delete c.voice_rate;   // the new look's own voice tuning
     save(); renderCast();
   }
   if (p === "audio.mode") { renderAudio(); renderScenes(); }

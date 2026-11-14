@@ -99,7 +99,7 @@ def _synthetic_env(text: str, seconds: float) -> list:
     return env
 
 
-def _edge_to_wav(text: str, voice: str, rate: str, out_wav: Path):
+def _edge_to_wav(text: str, voice: str, rate: str, out_wav: Path, pitch: str = "+0Hz", volume: str = "+0%"):
     import edge_tts  # imported here so the app still starts without it
 
     ffmpeg = find_ffmpeg()
@@ -108,7 +108,7 @@ def _edge_to_wav(text: str, voice: str, rate: str, out_wav: Path):
     mp3 = out_wav.with_suffix(".mp3")
 
     async def run():
-        await edge_tts.Communicate(text, voice, rate=rate).save(str(mp3))
+        await edge_tts.Communicate(text, voice, rate=rate, pitch=pitch, volume=volume).save(str(mp3))
 
     asyncio.run(run())
     if not mp3.exists() or mp3.stat().st_size == 0:
@@ -140,7 +140,49 @@ def _gemini_clip(text: str, voice: str, emotion: str) -> Clip:
     return Clip(wav, len(s) / RATE, compute_env(s))
 
 
-def get_clip(text: str, voice: str, engine: str = "auto", rate: str = "+0%", emotion: str = "neutral") -> Clip:
+# How each emotion changes the Microsoft voices (they have no acting styles, so the delivery is shaped with
+# speed %, pitch Hz and volume %, plus pauses and exclamation marks in the text). Checked by ear-tests with Gemini:
+# the sad and excited versions were clearly picked over the flat one; anger is only a subtle change with these
+# voices (raised pitch, faster, louder). For real acting use the Gemini voices.
+PROSODY = {
+    "neutral": (0, 0, 0), "happy": (8, 12, 5), "excited": (18, 22, 15), "angry": (14, 8, 25), "sad": (-20, -14, -20),
+    "crying": (-22, -10, -22), "scared": (16, 18, -5), "surprised": (6, 25, 10), "shocked": (4, 28, 15),
+    "worried": (-6, 6, -8), "laughing": (12, 18, 10), "sleepy": (-25, -12, -18), "bored": (-18, -10, -12),
+    "thinking": (-12, -4, -6), "proud": (-4, -6, 10), "embarrassed": (-8, 8, -15), "in_love": (-10, 6, -10),
+    "disgusted": (-6, -8, 5), "confused": (-8, 10, 0), "relieved": (-8, 4, 0),
+}
+LOUD = {"angry", "excited", "surprised", "shocked", "laughing", "scared"}
+SOFT = {"sad", "crying", "worried", "thinking", "sleepy", "bored", "embarrassed", "in_love"}
+
+
+def shape_text(text: str, emotion: str) -> str:
+    """Punctuation that makes the voice act: pauses for soft emotions, exclamations for loud ones."""
+    t = text.rstrip()
+    if not t:
+        return t
+    if emotion in SOFT:
+        t = t.replace(",", "...").replace("،", "...")
+        if t[-1] in ".!?।":
+            t = t.rstrip(".!?।") + ("...?" if t[-1] == "?" else "...")
+        else:
+            t += "..."
+    elif emotion in LOUD:
+        if t[-1] in ".।":
+            t = t[:-1] + "!"
+        elif t[-1] not in "!?":
+            t += "!"
+    return t
+
+
+def prosody(emotion: str, pitch_hz: int = 0, rate_pct: int = 0) -> tuple[str, str, str]:
+    r, p, v = PROSODY.get(emotion, (0, 0, 0))
+    r = max(-50, min(80, r + int(rate_pct)))
+    p = max(-60, min(80, p + int(pitch_hz)))
+    return f"{r:+d}%", f"{p:+d}Hz", f"{v:+d}%"
+
+
+def get_clip(text: str, voice: str, engine: str = "auto", rate: str = "+0%", emotion: str = "neutral",
+             voice_pitch: int = 0, voice_rate: int = 0) -> Clip:
     text = " ".join(text.split())
     warning = ""
     from .catalog import EDGE_FOR_GENDER, GEMINI_FOR_GENDER
@@ -165,10 +207,12 @@ def get_clip(text: str, voice: str, engine: str = "auto", rate: str = "+0%", emo
             warning = "edge-tts is not installed, so voices are silent. Run: pip install edge-tts"
             engine = "silent"
     if engine in ("auto", "edge"):
-        wav = CACHE_DIR / "tts" / f"{_key('edge', text, voice, rate)}.wav"
+        r, p, v = prosody(emotion, voice_pitch, voice_rate)
+        said = shape_text(text, emotion)
+        wav = CACHE_DIR / "tts" / f"{_key('edge2', said, voice, r, p, v)}.wav"
         if not wav.exists():
             try:
-                _edge_to_wav(text, voice, rate, wav)
+                _edge_to_wav(said, voice, r, wav, pitch=p, volume=v)
             except Exception as e:  # network down, service change, ...
                 if engine == "edge":
                     raise TTSError(f"Voice generation failed: {e}")

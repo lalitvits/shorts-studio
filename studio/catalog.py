@@ -144,6 +144,16 @@ for _n, _g, _d in _GEMINI:
 # Edge voice used when a Gemini voice fails or its daily limit is used up, and the Gemini voice used for an
 # Edge voice when the engine is "Gemini for everyone".
 EDGE_FOR_GENDER = {"male": "hi-IN-MadhurNeural", "female": "hi-IN-SwaraNeural"}
+# (pitch Hz, speed %) that suits each look's age and build; the Cast step fills these in when you pick a look
+VOICE_TUNE = {"3d_oldman": (-10, -10), "flat_uncle": (-6, -4), "flat_police": (-8, -6), "maa": (-4, -10),
+              "flat_aunty": (-2, -4), "flat_boy": (28, 8), "3d_boy": (20, 6), "flat_girl": (12, 4),
+              "3d_woman": (6, 2), "flat_man": (0, 2), "3d_youngman": (0, 2), "flat_dog": (8, 10), "flat_cat": (24, 6),
+              "clay": (14, 4)}
+# Gemini voice for each look when the engine picks Gemini for a character that has a Microsoft voice
+GEMINI_FOR_LOOK = {"3d_oldman": "Algenib", "flat_uncle": "Algenib", "flat_police": "Orus", "flat_boy": "Sadachbia",
+                   "3d_boy": "Sadachbia", "3d_youngman": "Puck", "flat_man": "Achird", "3d_woman": "Leda",
+                   "flat_girl": "Leda", "flat_aunty": "Sulafat", "maa": "Gacrux", "priya": "Kore", "rahul": "Charon",
+                   "aman": "Puck"}
 GEMINI_FOR_GENDER = {"male": "Charon", "female": "Kore"}
 DEFAULT_VOICE = VOICES[0]["id"]
 

@@ -25,7 +25,8 @@ from .audio import AudioError, env_segments, fit_segments, get_audio, load_env
 from .backgrounds import get_background, get_background_3d
 from .shading import shade_3d, soft_shadow
 from .visemes import build_track
-from .catalog import ACTIONS, DEFAULT_VOICE, EMOTIONS, LOOK_ALIASES, LOOKS, SHOT_LABELS, SOUND_LABELS
+from .catalog import (ACTIONS, DEFAULT_VOICE, EMOTIONS, GEMINI_FOR_LOOK, LOOK_ALIASES, LOOKS, SHOT_LABELS,
+                      SOUND_LABELS, VOICE_TUNE)
 from .flat import FlatComposer
 from . import fx as fx_mod
 from .config import GROUND_Y, OUTPUT_DIR, QUALITY, WORLD_W, find_devanagari_font, find_ffmpeg
@@ -48,6 +49,13 @@ def _num(v):
     return v if v >= 0 else None
 
 
+def _clampi(v, default, lo, hi):
+    try:
+        return max(lo, min(hi, int(round(float(v)))))
+    except (TypeError, ValueError):
+        return default
+
+
 def normalize(tl: dict) -> dict:
     au = tl.get("audio") or {}
     try:
@@ -63,7 +71,9 @@ def normalize(tl: dict) -> dict:
         look = LOOK_ALIASES.get(c.get("look"), c.get("look"))
         chars.append(dict(id=cid, name=str(c.get("name") or cid),
                           look=look if look in LOOKS else "rahul",
-                          voice=c.get("voice") or DEFAULT_VOICE))
+                          voice=c.get("voice") or DEFAULT_VOICE,
+                          voice_pitch=_clampi(c.get("voice_pitch"), VOICE_TUNE.get(look, (0, 0))[0], -60, 80),
+                          voice_rate=_clampi(c.get("voice_rate"), VOICE_TUNE.get(look, (0, 0))[1], -40, 60)))
     if not chars:
         raise RenderError("Add at least one character.")
     ids = [c["id"] for c in chars]
@@ -129,10 +139,45 @@ def make_clip(ln: dict, ch: dict, engine: str, warnings: list | None = None) -> 
     sound = get_sound(ln["sound"], ch["voice"]) if ln["sound"] else None
     if not ln["text"]:                              # a reaction: only the emotional sound
         return sound
-    c = get_clip(ln["text"], ch["voice"], engine, emotion=ln["emotion"])
+    voice = ch["voice"]
+    if engine == "gemini" and not voice.startswith("gemini:"):        # the Gemini voice that suits this look
+        g = GEMINI_FOR_LOOK.get(ch["look"])
+        voice = f"gemini:{g}" if g else voice
+    c = get_clip(ln["text"], voice, engine, emotion=ln["emotion"], voice_pitch=ch.get("voice_pitch", 0),
+                 voice_rate=ch.get("voice_rate", 0))
     if warnings is not None and c.warning and c.warning not in warnings:
         warnings.append(c.warning)
     return join_clips(sound, c) if sound else c     # the sound first, then the words
+
+
+def choose_engine(tl: dict, warnings: list | None = None) -> str:
+    """'best': Gemini's acting voices for the whole video when today's free Gemini lines cover every line that is
+    not made yet; otherwise the Microsoft voices with emotion (never a mix, so nobody's voice changes mid-video)."""
+    eng = tl.get("tts") or "auto"
+    if eng != "best":
+        return eng
+    from . import gemini_tts
+    from .tts import CACHE_DIR as _C, _key
+    if not gemini_tts.ready():
+        return "auto"
+    by_id = {c["id"]: c for c in tl["characters"]}
+    need = 0
+    for sc in tl["scenes"]:
+        for ln in sc["lines"]:
+            if not ln["text"]:
+                continue
+            ch = by_id[ln["speaker"]]
+            name = ch["voice"].split(":", 1)[1] if ch["voice"].startswith("gemini:") else GEMINI_FOR_LOOK.get(ch["look"], "Charon")
+            if not (_C / "tts" / f"{_key('gemini-tag', ' '.join(ln['text'].split()), name, ln['emotion'])}.wav").exists():
+                need += 1
+    left = gemini_tts.lines_left()
+    if need <= left:
+        return "gemini"
+    if warnings is not None:
+        warnings.append(f"Voices: this video needs {need} new Gemini voice lines but only about {left} are left today "
+                        "(free tier), so the Microsoft voices with emotion were used. Lines already made with Gemini "
+                        "are kept for next time.")
+    return "auto"
 
 
 def build_schedule(tl: dict, clip_for) -> tuple[list, float]:
@@ -592,9 +637,10 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
                     warnings.append("Captions: " + warn + " Type the caption text of those lines yourself.")
     else:
         progress("Making voices", 0.0)
+        engine = choose_engine(tl, warnings)
 
         def clip_for(ln, ch):
-            return make_clip(ln, ch, tl["tts"], warnings)
+            return make_clip(ln, ch, engine, warnings)
 
         try:
             sched, total = build_schedule(tl, clip_for)

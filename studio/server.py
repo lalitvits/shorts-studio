@@ -41,6 +41,7 @@ def assets_payload() -> dict:
         "shots": [{"id": k, "label": v} for k, v in SHOT_LABELS.items()],
         "music": [{"id": k, "label": v} for k, v in __import__("studio.fx", fromlist=["x"]).MUSIC_LABELS.items()],
         "voices": VOICES, "default_voice": DEFAULT_VOICE,
+        "voice_tune": {k: list(v) for k, v in __import__("studio.catalog", fromlist=["x"]).VOICE_TUNE.items()},
         "emotions": EMOTIONS, "actions": [{"id": k, "label": v} for k, v in ACTION_LABELS.items()],
         "sounds": [{"id": k, "label": v} for k, v in SOUND_LABELS.items()], "sound_emotions": SOUND_EMOTIONS,
         "script_providers": script_mod.provider_status(),
@@ -199,7 +200,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, png, "image/png")
             if path == "/api/sample":
                 clip = get_clip(data.get("text", "") or "नमस्ते", data.get("voice", DEFAULT_VOICE),
-                                data.get("engine", "auto"), emotion=data.get("emotion") or "neutral")
+                                "auto" if data.get("engine") == "best" else data.get("engine", "auto"),
+                                emotion=data.get("emotion") or "neutral",
+                                voice_pitch=int(data.get("pitch") or 0), voice_rate=int(data.get("rate") or 0))
                 headers = {"X-Warning": clip.warning.encode("ascii", "ignore").decode()} if clip.warning else {}
                 return self._send(200, clip.wav.read_bytes(), "audio/wav", headers)
             if path == "/api/sound":                              # hear one emotional sound
