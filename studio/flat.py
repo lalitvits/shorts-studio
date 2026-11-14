@@ -411,6 +411,82 @@ def _cap(pen, sp, hx, hy, r, back):
         pen.circle(hx, hy - r * 1.18, r * 0.08, dark, 3)
 
 
+def _police_cap(pen, sp, hx, hy, r, back):
+    """Peaked police cap: crown, coloured band, black visor and a badge."""
+    c = sp.get("hat_color", (196, 170, 112))
+    band = sp.get("band_color", (196, 40, 40))
+    pen.ellipse(hx - r * 1.18, hy - r * 1.42, hx + r * 1.18, hy - r * 0.86, c)            # crown (top)
+    pen.poly([(hx - r * 1.02, hy - r * 1.12), (hx + r * 1.02, hy - r * 1.12), (hx + r * 0.98, hy - r * 0.62),
+              (hx - r * 0.98, hy - r * 0.62)], c)
+    pen.ellipse(hx - r * 1.16, hy - r * 1.4, hx + r * 1.16, hy - r * 0.94, _mix(c, 1.06), 0)
+    pen.poly([(hx - r * 1.0, hy - r * 0.9), (hx + r * 1.0, hy - r * 0.9), (hx + r * 0.99, hy - r * 0.62),
+              (hx - r * 0.99, hy - r * 0.62)], band)                                          # band
+    if not back:
+        pen.pie(hx - r * 1.04, hy - r * 0.86, hx + r * 1.04, hy - r * 0.34, 0, 180, (34, 32, 36))   # visor
+        pen.circle(hx, hy - r * 0.96, r * 0.17, (236, 196, 70), 4)                                # badge
+        pen.circle(hx, hy - r * 0.96, r * 0.07, (196, 40, 40), 0)
+
+
+def _beret(pen, sp, hx, hy, r, back):
+    c = sp.get("hat_color", (40, 70, 150))
+    pen.poly([(hx - r * 1.0, hy - r * 0.72), (hx - r * 0.9, hy - r * 1.18), (hx - r * 0.4, hy - r * 1.42),
+              (hx + r * 0.3, hy - r * 1.44), (hx + r * 0.95, hy - r * 1.22), (hx + r * 1.42, hy - r * 0.9),
+              (hx + r * 1.5, hy - r * 0.55), (hx + r * 1.2, hy - r * 0.5), (hx + r * 0.95, hy - r * 0.7)], c)  # floppy top
+    pen.arc(hx - r * 0.2, hy - r * 1.3, hx + r * 1.3, hy - r * 0.6, 290, 20, 4, _mix(c, 0.7))            # fold
+    pen.poly([(hx - r * 1.0, hy - r * 0.86), (hx + r * 1.0, hy - r * 0.86), (hx + r * 0.98, hy - r * 0.6),
+              (hx - r * 0.98, hy - r * 0.6)], _mix(c, 0.65))                                  # leather rim
+    if not back:
+        pen.circle(hx - r * 0.5, hy - r * 0.86, r * 0.16, (236, 196, 70), 4)
+
+
+def _uniform(pen, sp, back, t):
+    """Khaki police shirt (tucked in), belt, pockets, badge, name tag, whistle cord; belly 0..1."""
+    tc, belly = sp["top_color"], sp.get("belly", 0.0)
+    slim = sp.get("slim", 0.0)                         # 0..1: narrower shirt
+    a, b, cy = 135 + 62 * belly - 18 * slim, 168 + 22 * belly, -615 + 18 * belly
+    body = _sup(0, cy, a, b, n=2.6 - 0.5 * belly)      # rounder with a belly
+    pen.poly(body, tc)
+    dark = _mix(tc, 0.78)
+    if belly:                                          # the shirt stretches over the belly
+        pen.arc(-a * 0.7, cy - 20, a * 0.7, cy + b * 0.98, 20, 160, 4, dark)
+    if not back:
+        pen.line([(0, -770), (0, -485)], dark, 6)                                           # button placket
+        for y in (-730, -670, -610, -550):
+            pen.circle(4 * belly * (y + 600) / 100, y, 7, (236, 196, 70), 2.5)
+        for side in (-1, 1):                                                                 # collar
+            pen.poly([(side * 6, -770), (side * 62, -792), (side * 52, -728)], tc, 4)
+            px_ = side * 72                                                                  # chest pockets
+            pen.d.rounded_rectangle(pen.box(px_ - 34, -700, px_ + 34, -628), radius=6 * pen.s, fill=tc,
+                                    outline=OUT, width=pen.wd(3.5))
+            pen.poly([(px_ - 36, -706), (px_ + 36, -706), (px_ + 36, -684), (px_, -676), (px_ - 36, -684)], dark, 3.5)
+        pen.poly([(-86, -748), (-60, -760), (-34, -748), (-38, -724), (-60, -714), (-82, -724)], (236, 196, 70), 3)  # badge
+        pen.circle(-60, -737, 6, (196, 40, 40), 0)
+        pen.d.rounded_rectangle(pen.box(40, -738, 108, -718), radius=3 * pen.s, fill=(30, 30, 34),
+                                outline=OUT, width=pen.wd(2))                                 # name tag
+        pen.line([(48, -728), (98, -728)], (240, 240, 240), 4)
+        pen.line([(-104, -744), (-94, -700), (-72, -666)], (200, 40, 40), 5)                   # whistle cord
+        pen.line([(-104, -744), (-90, -704), (-70, -670)], (245, 245, 245), 2.5)
+    yb = -484 + 6 * belly                                                                     # belt
+    w = a * (1 - min(1.0, abs((yb - cy) / b)) ** 2.6) ** (1 / 2.6) + 2
+    pen.poly([(-w, yb - 16), (w, yb - 16), (w * 0.98, yb + 14), (-w * 0.98, yb + 14)], (110, 70, 40), 4)
+    if not back:
+        pen.d.rounded_rectangle(pen.box(-24, yb - 20, 24, yb + 18), radius=4 * pen.s, fill=(236, 196, 70),
+                                outline=OUT, width=pen.wd(3.5))
+
+
+def _lathi(pen, elbow, hand):
+    """The constable's bamboo stick, held in the hand and pointing along the forearm."""
+    dx, dy = hand[0] - elbow[0], hand[1] - elbow[1]
+    n = math.hypot(dx, dy) or 1.0
+    ux, uy = dx / n, dy / n
+    a = (hand[0] - ux * 60, hand[1] - uy * 60)
+    b = (hand[0] + ux * 330, hand[1] + uy * 330)
+    pen.limb([a, b], 18, (176, 124, 64), 4)
+    for k in (0.2, 0.45, 0.7, 0.92):                                                          # bamboo rings
+        x, y = a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k
+        pen.line([(x - uy * 10, y + ux * 10), (x + uy * 10, y - ux * 10)], (120, 80, 40), 4)
+
+
 def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
     pen = Pen(im, ox + pose["dx"] * s, oy + pose["dy"] * s, s)
     skin, sk_d = sp["skin"], _mix(sp["skin"], 0.85)
@@ -446,6 +522,8 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         if not back:
             pen.poly([(-88, -770), (-50, -770), (150, -330), (122, -300)], sp.get("accent", _mix(tc, 0.7)), 4)
             pen.line([(-150, -262), (150, -262)], sp.get("accent", _mix(tc, 0.7)), 14)
+    elif sp["top"] == "uniform":
+        _uniform(pen, sp, back, t)
     else:
         pen.poly(_sup(0, -615, 135, 168), tc)
         if sp["top"] == "vest" and not back:
@@ -465,6 +543,10 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         _hair_front(pen, sp, hx, hy, r, back)
     if sp.get("hat") == "cap":
         _cap(pen, sp, hx, hy, r, back)
+    elif sp.get("hat") == "police_cap":
+        _police_cap(pen, sp, hx, hy, r, back)
+    elif sp.get("hat") == "beret":
+        _beret(pen, sp, hx, hy, r, back)
 
     if not back:
         cfg = _face_cfg(emotion)
@@ -487,7 +569,7 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         _effects(pen, cfg["fx"], fx_, hy, r, t)
 
     # arms
-    sleeve = sp["top"] in ("tshirt", "kurta")
+    sleeve = sp["top"] in ("tshirt", "kurta", "uniform")
     for side, key in ((-1, "L"), (1, "R")):
         spec = pose[key]
         sx, sy = side * 110, -742
@@ -497,9 +579,15 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
             elbow, hand = _fk(sx, sy, spec[1], spec[2], 150, 142, side)
         pen.limb([(sx, sy), elbow, hand], 30, skin)
         if sleeve:
-            k = 0.42 if sp["top"] == "tshirt" else 0.95
+            k = {"tshirt": 0.42, "uniform": 0.55}.get(sp["top"], 0.95)
             mid = (sx + (elbow[0] - sx) * k, sy + (elbow[1] - sy) * k)
             pen.limb([(sx, sy), mid], 44, tc)
+            if sp["top"] == "uniform":                     # folded cuff and shoulder strap
+                pen.limb([(sx + (mid[0] - sx) * 0.82, sy + (mid[1] - sy) * 0.82), mid], 46, _mix(tc, 0.85))
+                pen.d.rounded_rectangle(pen.box(sx - 30, sy - 18, sx + 30, sy + 4), radius=5 * pen.s,
+                                        fill=_mix(tc, 0.78), outline=OUT, width=pen.wd(3))
+        if key == "R" and sp.get("holds") == "lathi" and not pose["prop"]:
+            _lathi(pen, elbow, hand)
             if sp["top"] == "kurta":
                 pen.limb([elbow, (elbow[0] + (hand[0] - elbow[0]) * 0.55, elbow[1] + (hand[1] - elbow[1]) * 0.55)], 40, tc)
         if female:

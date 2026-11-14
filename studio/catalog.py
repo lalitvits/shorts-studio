@@ -63,6 +63,11 @@ _FLAT = {
         kind="human", skin=(206, 150, 106), top="kurta", top_color=(70, 170, 120), accent=(240, 240, 230),
         bottom="dress", bottom_color=(240, 236, 226), hat=None, hair="long", hair_color=(36, 28, 28),
         mustache=False, female=True, height=0.9, bindi=False)),
+    "flat_police": ("Flat: Police havaldar (khaki uniform, lathi)", False, dict(
+        kind="human", skin=(176, 116, 74), top="uniform", top_color=(196, 168, 110), bottom="pants",
+        bottom_color=(196, 168, 110), hat="police_cap", hat_color=(196, 168, 110), band_color=(196, 40, 40),
+        hair="none", hair_color=(40, 30, 28), mustache=True, female=False, height=1.0, belly=1.0, holds="lathi",
+        shoe=(30, 28, 30))),
     "flat_dog": ("Flat: Dog (brown)", False, dict(kind="dog", color=(146, 94, 58), light=(196, 150, 104), height=1.0)),
     "flat_cat": ("Flat: Cat (grey)", False, dict(kind="cat", color=(150, 150, 160), light=(220, 220, 226), height=0.9)),
 }
