@@ -69,7 +69,7 @@ If something is missing, a yellow banner at the top of the app tells you what to
 1. Open the repository on GitHub (https://github.com/lalitvits/shorts-studio).
 2. Click Code, then Codespaces, then Create codespace on main. The first start takes a few minutes: it installs FFmpeg, Hindi fonts, the Python packages and a Chromium browser for the 3D characters.
 3. For Gemini (script writing, Gemini voices, captions from your audio): on GitHub open Settings, Codespaces, New secret, name it `GEMINI_API_KEY`, paste your key and allow this repository. Restart the codespace after adding it. Never put the key in the code: the repository is public.
-4. In the terminal run `python run.py --no-browser` and open the forwarded port 8000 (click "Open in Browser").
+4. The app starts by itself each time the codespace starts. Open the Ports tab and click the globe next to port 8000 (or "Open in Browser"). On a phone, keep that `...-8000.app.github.dev` link: it opens the app straight away while the codespace is running and you are signed in to GitHub in that browser. If the app is not running, look at `/tmp/shorts-studio.log`, or run `python run.py --no-browser` in the terminal.
 5. Download the MP4 from the app, and stop the codespace when you finish. Free monthly hours are limited, and a 2-core machine renders slowly, so use quick previews.
 
 ## Maa
