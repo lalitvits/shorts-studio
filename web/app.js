@@ -226,7 +226,7 @@ function renderScenes() {
 
 // ------------------------------------------------------------------ audio
 let AUDIO = null, playToken = 0, PEAKS = null;
-function stopAudio() { playToken++; if (AUDIO) AUDIO.pause(); }
+function stopAudio() { playToken++; if (AUDIO) AUDIO.pause(); if (SAMPLE) SAMPLE.pause(); }
 async function playRanges(ranges) {
   if (!S.audio.url) return toast("Upload your audio first.", true);
   if (!ranges.length) return toast("Set the From and To times first.", true);
@@ -333,7 +333,31 @@ async function playSample(text, voice, emotion, ch) {
   const warn = r.headers.get("X-Warning");
   if (warn) toast(warn, true);
   const url = URL.createObjectURL(await r.blob());
-  await new Audio(url).play();
+  if (SAMPLE) SAMPLE.pause();
+  const a = SAMPLE = new Audio(url);
+  await a.play();
+  await new Promise(res => { a.onended = res; a.onerror = res; a.onpause = res; });   // done (or stopped)
+}
+let SAMPLE = null;
+async function playLines(list, btn) {        // play lines one after another; pressing again stops
+  if (btn && btn.dataset.playing) { stopAudio(); return; }
+  stopAudio(); const my = playToken, label = btn?.textContent;
+  if (btn) { btn.dataset.playing = "1"; btn.textContent = "■ Stop"; }
+  try {
+    for (const [si, li] of list) {
+      if (my !== playToken) break;
+      const ln = S.scenes[si].lines[li];
+      const ch = S.characters.find(c => c.id === ln.speaker) || S.characters[0];
+      if (ln.sound) await playSound(ln);
+      if (my !== playToken) break;
+      if (ln.text.trim()) await playSample(ln.text, ch.voice, ln.emotion, ch);
+    }
+  } finally { if (btn) { delete btn.dataset.playing; btn.textContent = label; } }
+}
+function allLines() {
+  const out = [];
+  S.scenes.forEach((sc, si) => (sc.lines || []).forEach((ln, li) => { if (ln.text.trim() || ln.sound) out.push([si, li]); }));
+  return out;
 }
 const ACTIONS = {
   go: el => showStep(+el.dataset.step),
@@ -478,13 +502,19 @@ const ACTIONS = {
       toast("Draft ready. Edit anything you like.");
     } finally { el.disabled = false; el.textContent = "Write script"; }
   },
+  "voice-row": el => playLines([[+el.dataset.si, +el.dataset.li]]),
+  "play-voices": el => {
+    const list = allLines();
+    if (!list.length) return toast("There are no lines to play yet. Add dialogue in the Scenes step.", true);
+    return playLines(list, el);
+  },
   voices: async el => {
     el.disabled = true; el.textContent = "Generating...";
     try {
       const r = await api("/api/voices", { timeline: timeline() });
       const warn = r.warnings.map(w => `<div class="banner">${esc(w)}</div>`).join("");
-      $("#voice-out").innerHTML = warn + `<table><tr><th>Scene</th><th>Line</th><th>Length</th></tr>` +
-        r.rows.map(x => `<tr><td>${x.scene + 1}</td><td>${esc(voiceLabel(S.scenes[x.scene]?.lines[x.line]))}</td><td>${x.seconds} s${x.silent ? " (silent)" : ""}</td></tr>`).join("") +
+      $("#voice-out").innerHTML = warn + `<table><tr><th></th><th>Scene</th><th>Line</th><th>Length</th></tr>` +
+        r.rows.map(x => `<tr><td><button class="icon" data-act="voice-row" data-si="${x.scene}" data-li="${x.line}" aria-label="Play this line">▶</button></td><td>${x.scene + 1}</td><td>${esc(voiceLabel(S.scenes[x.scene]?.lines[x.line]))}</td><td>${x.seconds} s${x.silent ? " (silent)" : ""}</td></tr>`).join("") +
         `</table><p class="hint">Total speaking time: ${r.total} seconds.</p>`;
     } finally { el.disabled = false; el.textContent = "Generate voices"; }
   },
