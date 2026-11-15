@@ -17,6 +17,9 @@ ACTION_LABELS = {
     "jump": "Jump", "cheer": "Cheer / celebrate", "clap": "Clap", "dance": "Dance", "facepalm": "Facepalm",
     "use_phone": "Use phone", "phone_call": "Talk on phone (phone at ear)", "drink_tea": "Drink tea", "read_book": "Read a book", "eat": "Eat a snack",
     "punch": "Punch", "slap": "Slap", "walk_in": "Walk in (enters the scene)", "walk_out": "Walk out (leaves the scene)",
+    "appear": "Appear (hidden until this line)",
+    "wipe_tears": "Wipe tears", "hold_parcel": "Hold a food parcel", "hide_behind": "Hide something behind the back",
+    "throw": "Throw a chappal (at the camera)",
     "sit": "Sit on sofa", "sit_phone": "Sit and use phone", "sit_tea": "Sit and drink tea",
     "sit_read": "Sit and read", "sit_eat": "Sit and eat a snack", "sit_sleep": "Sit and sleep",
 }
@@ -42,6 +45,7 @@ LOOKS["clay"] = dict(label="Golu (clay 3D toy)", skin=(240, 190, 150), shirt=(15
                      hair=(78, 50, 36), hair_style="none", dress=None, style="clay", female=False, scale=1.0,
                      sprite=False, shoe=(226, 72, 62))
 # Flat cartoon characters (drawn from shapes, see flat.py). They act in the flat style with an automatic camera.
+HIDDEN_LOOKS: set[str] = set()   # looks kept out of the Cast menu (still usable by script import and tests)
 _FLAT = {
     "flat_uncle": ("Flat: Uncle (red cap, vest)", False, dict(
         kind="human", skin=(186, 122, 78), top="vest", top_color=(240, 238, 230), bottom="pants",
@@ -68,11 +72,14 @@ _FLAT = {
         bottom_color=(196, 168, 110), hat="police_cap", hat_color=(196, 168, 110), band_color=(196, 40, 40),
         hair="none", hair_color=(40, 30, 28), mustache=True, female=False, height=1.0, belly=1.0, holds="lathi",
         shoe=(30, 28, 30))),
+    "flat_brain": ("Flat: My brain (inner voice, little devil)", False, dict(
+        kind="brain", color=(244, 150, 172), glow=(255, 110, 140), horns=True, height=1.0)),
     "flat_dog": ("Flat: Dog (brown)", False, dict(kind="dog", color=(146, 94, 58), light=(196, 150, 104), height=1.0)),
     "flat_cat": ("Flat: Cat (grey)", False, dict(kind="cat", color=(150, 150, 160), light=(220, 220, 226), height=0.9)),
 }
 for _k, (_label, _fem, _spec) in _FLAT.items():
     LOOKS[_k] = dict(label=_label, style="flat", flat=_spec, female=_fem, sprite=False, scale=1.0,
+                     hidden=_k in HIDDEN_LOOKS,
                      skin=_spec.get("skin", (200, 140, 95)), shirt=_spec.get("top_color", _spec.get("color")),
                      pants=_spec.get("bottom_color", (60, 60, 60)), hair=_spec.get("hair_color", (40, 30, 30)))
 # 3D characters: real Three.js models (studio/web3d/chars.js) rendered by a hidden browser, see three_d.py.
@@ -111,6 +118,7 @@ FLAT_BACKGROUNDS = {
     "flat_kitchen": "Flat cartoon: kitchen (stove, steam, cooker)",
     "flat_office": "Flat cartoon: office (computers, city window)",
     "flat_market": "Flat cartoon: market (stalls, lights, shoppers)",
+    "flat_bedroom": "Flat cartoon: bedroom at night (bed, window, fan)",
 }
 
 # Camera shot for a line (flat cartoon style). "auto" picks one like a cartoon editor would.
@@ -149,8 +157,13 @@ VOICE_TUNE = {"3d_oldman": (-10, -10), "flat_uncle": (-6, -4), "flat_police": (-
               "flat_aunty": (-2, -4), "flat_boy": (28, 8), "3d_boy": (20, 6), "flat_girl": (12, 4),
               "3d_woman": (6, 2), "flat_man": (0, 2), "3d_youngman": (0, 2), "flat_dog": (8, 10), "flat_cat": (24, 6),
               "clay": (14, 4)}
+# Voice effects (tts.VOICE_FX) and the look that gets one by default
+VOICE_FX_LABELS = {"": "No effect", "echo": "Echo", "devil": "Devil (deep, with echo)",
+                   "devil_whisper": "Devil whisper (inner voice)", "chipmunk": "Chipmunk (high)",
+                   "phone": "Phone call"}
+VOICE_FX_FOR_LOOK = {"flat_brain": "devil_whisper"}
 # Gemini voice for each look when the engine picks Gemini for a character that has a Microsoft voice
-GEMINI_FOR_LOOK = {"3d_oldman": "Algenib", "flat_uncle": "Algenib", "flat_police": "Orus", "flat_boy": "Sadachbia",
+GEMINI_FOR_LOOK = {"flat_brain": "Fenrir", "3d_oldman": "Algenib", "flat_uncle": "Algenib", "flat_police": "Orus", "flat_boy": "Sadachbia",
                    "3d_boy": "Sadachbia", "3d_youngman": "Puck", "flat_man": "Achird", "3d_woman": "Leda",
                    "flat_girl": "Leda", "flat_aunty": "Sulafat", "maa": "Gacrux", "priya": "Kore", "rahul": "Charon",
                    "aman": "Puck"}
@@ -165,8 +178,13 @@ SOUND_LABELS = {
     # sound effects (fx.py): not a voice, so the mouth does not move with them
     "punch": "Punch hit (effect)", "slap": "Slap (effect)", "whoosh": "Whoosh (effect)", "pop": "Pop (effect)",
     "ding": "Ding, idea! (effect)", "boing": "Boing, comedy (effect)", "thud": "Thud, fall (effect)",
+    "growl": "Stomach growl (effect)", "ping": "Phone notification (effect)", "doorbell": "Doorbell ting-tong (effect)",
+    "chappal": "Chappal smack (effect)", "laugh_track": "Audience laughing (effect)", "boom": "Meme boom (effect)",
+    "dun_dun": "Dun dun duuun (effect)", "click": "Light switch click (effect)", "tick": "Clock ticking (effect)",
+    "scratch": "Record scratch (effect)",
 }
-FX_SOUNDS = {"punch", "slap", "whoosh", "pop", "ding", "boing", "thud"}
+FX_SOUNDS = {"punch", "slap", "whoosh", "pop", "ding", "boing", "thud", "growl", "ping", "doorbell", "chappal",
+             "laugh_track", "boom", "dun_dun", "click", "tick", "scratch"}
 # The emotion that usually goes with each sound (the app suggests it when the line is still "neutral").
 SOUND_EMOTIONS = {"laugh": "laughing", "giggle": "happy", "cry": "crying", "angry": "angry", "frustrated": "angry",
                   "sigh": "sad", "gasp": "surprised", "scream": "scared", "yawn": "sleepy", "hmm": "thinking"}

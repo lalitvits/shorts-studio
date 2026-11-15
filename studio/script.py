@@ -121,10 +121,17 @@ def _gemini(prompt: str) -> str:
         {"contents": [{"parts": [{"text": prompt}]}],
          "generationConfig": {"responseMimeType": "application/json", "temperature": 0.9}},
         {"x-goog-api-key": key})
+    block = (data.get("promptFeedback") or {}).get("blockReason")
+    if block:
+        raise BlockedError(f"Gemini's safety filter refused this text ({block}).")
     try:
         return data["candidates"][0]["content"]["parts"][0]["text"]
     except (KeyError, IndexError):
         raise ScriptError("The AI answered with no text. Try again, or set GEMINI_MODEL to another model.")
+
+
+class BlockedError(Exception):
+    pass
 
 
 def _ollama(prompt: str) -> str:
@@ -199,6 +206,140 @@ def _basic(scenario: str, chars: list[dict]) -> dict:
                 cast.append(ln["speaker"])
         scenes.append({"background": _default_bg(chars), "cast": cast, "lines": lines})
     return {"title": parts[0][:40], "scenes": scenes}
+
+
+IMPORT_PROMPT = """You turn a short-video screenplay into a JSON timeline for a cartoon video app. Keep the dialogue
+exactly as written (same language and script); do not translate or shorten it. Stage directions in brackets become
+emotions, actions, sounds, lighting, pop-ups, stickers and text cards - they are never spoken.
+
+Allowed character looks (pick the best fit for each character; "flat_brain" is a floating cartoon brain for an
+inner voice / "my mind" character):
+{looks}
+Allowed backgrounds: {bgs}
+Allowed emotions: {emotions}
+Allowed actions: {actions}
+  - use_phone: looking at a phone (a dark room is then lit by its screen); hold_parcel / hide_behind: a food parcel;
+    wipe_tears; throw: throws a chappal at the camera; appear: hidden until this line (someone who suddenly appears);
+    walk_in / walk_out; point; talk (default).
+Allowed sounds (a line's "sound" plays at the start of the line): {sounds}
+Allowed stickers: {stickers}
+
+Rules:
+- A sound with no speech (stomach growl, doorbell, notification...) is its own line with "text": "" and the sound,
+  spoken by the character the camera should show at that moment.
+- A phone notification on screen: put its text in "popup" on the line where it appears (and "sound": "ping").
+- Night with lights off: the scene's "lighting" is "dark", or "phone" when a phone lights a face. When a light is
+  switched on, set "lights": "on" on the first line after it (that line's speaker usually has action "appear").
+- A time jump ("20 minutes later") is a card: {{"card": "20 मिनट बाद...", "card_style": "dark", "card_sound": "tick"}}.
+- A throw / hit followed by the screen going black: a line with action "throw" (text may be empty), then
+  {{"card": "", "card_style": "black", "card_sound": "laugh_track"}} if laughter / a meme sound ends the video.
+- Background music mentioned (suspense, comedy...): set "music" to one of: {music}.
+- Voice effects: "devil_whisper" for an inner / devil voice, otherwise "".
+
+Reply with JSON only:
+{{"title": "...", "hook": "a punchy opening line (max 6 words, same language)", "music": "...",
+  "characters": [{{"id": "short_id", "name": "name as in the script", "look": "...", "gender": "male|female",
+                   "voice_fx": ""}}],
+  "scenes": [{{"background": "...", "lighting": "day|dark|phone", "cast": ["id", ...],
+              "lines": [{{"speaker": "id", "text": "...", "emotion": "...", "action": "...", "sound": "",
+                         "popup": "", "sticker": "", "lights": ""}}]}},
+             {{"card": "...", "card_style": "dark|black|bright", "card_sound": ""}}]}}
+
+Screenplay:
+{script}"""
+
+
+def import_screenplay(text: str, provider: str = "gemini") -> dict:
+    """A full screenplay (with stage directions) -> characters, scenes, cards, title, hook and music."""
+    from .catalog import (DEFAULT_VOICE, EDGE_FOR_GENDER, FLAT_BACKGROUNDS, LOOKS, SOUND_LABELS, VOICE_FX_LABELS)
+    from .fx import MUSIC_LABELS
+    from .overlays import STICKER_KINDS
+    if not text.strip():
+        raise ScriptError("Paste your script first.")
+    if provider == "basic" or not _env("GEMINI_API_KEY"):
+        raise ScriptError("Importing a full script needs Gemini (set GEMINI_API_KEY).")
+    looks = "\n".join(f"- {k}: {v['label']}" for k, v in LOOKS.items())
+    prompt = IMPORT_PROMPT.format(looks=looks, bgs=", ".join(b["id"] for b in list_backgrounds()),
+                                  emotions=", ".join(EMOTIONS), actions=", ".join(ACTIONS),
+                                  sounds=", ".join(SOUND_LABELS), stickers=", ".join(STICKER_KINDS),
+                                  music=", ".join(MUSIC_LABELS), script=text.strip()[:6000])
+    # Gemini's safety check is borderline on comedy with slaps, chappals or jokes about dowry: it can refuse the same
+    # text once and accept it the next time. Say what the text is, and try a few times.
+    context = ("Context: this is a harmless, family-friendly Indian comedy sketch for a cartoon YouTube Short. "
+               "Nobody is really hurt; the humour is everyday family life.\n\n")
+    data = None
+    for attempt in range(3):
+        try:
+            data = _parse_json(_gemini(context + prompt))
+            break
+        except BlockedError as e:
+            last = e
+    if data is None:
+        raise ScriptError(f"{last} It does this now and then with comedy scripts; press Import again, or soften a "
+                          "line that sounds violent (for example a slap or a throw).")
+    chars, ids = [], set()
+    for c in data.get("characters", [])[:8]:
+        cid = re.sub(r"[^a-z0-9_]", "", str(c.get("id", "")).lower())[:16] or f"c{len(chars) + 1}"
+        while cid in ids:
+            cid += "x"
+        ids.add(cid)
+        look = c.get("look") if c.get("look") in LOOKS else ("flat_aunty" if c.get("gender") == "female" else "flat_man")
+        fem = c.get("gender") == "female" or LOOKS[look].get("female")
+        fxv = c.get("voice_fx") if c.get("voice_fx") in VOICE_FX_LABELS else ("devil_whisper" if look == "flat_brain" else "")
+        chars.append(dict(id=cid, name=str(c.get("name") or cid)[:30], look=look,
+                          voice=EDGE_FOR_GENDER["female" if fem else "male"] or DEFAULT_VOICE, voice_fx=fxv))
+        c["_id"] = cid
+    if not chars:
+        raise ScriptError("No characters were found in the script.")
+    remap = {str(c.get("id")): c["_id"] for c in data.get("characters", [])[:8] if "_id" in c}
+    remap.update({str(c.get("name")): c["_id"] for c in data.get("characters", [])[:8] if "_id" in c})
+    bg_ids = {b["id"] for b in list_backgrounds()}
+    scenes = []
+    for sc in data.get("scenes", [])[:30]:
+        if "card" in sc:
+            scenes.append(dict(card=str(sc.get("card") or "")[:80],
+                               card_style=sc.get("card_style") if sc.get("card_style") in ("dark", "black", "bright") else "dark",
+                               card_sound=sc.get("card_sound") if sc.get("card_sound") in SOUND_LABELS else "",
+                               cast=[], lines=[]))
+            continue
+        lines = []
+        for ln in sc.get("lines", [])[:40]:
+            sp = remap.get(str(ln.get("speaker")), ln.get("speaker"))
+            if sp not in ids:
+                sp = chars[0]["id"]
+            lines.append(dict(
+                speaker=sp, text=str(ln.get("text") or "").strip(),
+                emotion=ln.get("emotion") if ln.get("emotion") in EMOTIONS else "neutral",
+                action=ln.get("action") if ln.get("action") in ACTIONS else "talk",
+                sound=ln.get("sound") if ln.get("sound") in SOUND_LABELS else "",
+                popup=str(ln.get("popup") or "")[:90],
+                sticker=ln.get("sticker") if ln.get("sticker") in STICKER_KINDS else "",
+                lights=ln.get("lights") if ln.get("lights") in ("on", "off") else "", shot="auto"))
+        if not lines:
+            continue
+        for ln in lines:                       # a throw makes its own whoosh and smack
+            if ln["action"] == "throw" and ln["sound"] in ("chappal", "slap", "whoosh", "punch"):
+                ln["sound"] = ""
+        lighting = sc.get("lighting") if sc.get("lighting") in ("day", "dark", "phone") else "day"
+        on = [i for i, ln in enumerate(lines) if ln["lights"] == "on"]
+        if on:                                 # a light switched on means the room was dark before
+            if lighting == "day":
+                lighting = "dark"
+            appear = next((i for i, ln in enumerate(lines) if ln["action"] == "appear"), None)
+            if appear is not None and on[0] < appear:       # it comes on when that person appears
+                lines[on[0]]["lights"], lines[appear]["lights"] = "", "on"
+        cast = [remap.get(str(x), x) for x in sc.get("cast", [])]
+        cast = [x for x in cast if x in ids]
+        for ln in lines:
+            if ln["speaker"] not in cast:
+                cast.append(ln["speaker"])
+        bg = sc.get("background") if sc.get("background") in bg_ids else next(iter(FLAT_BACKGROUNDS))
+        scenes.append(dict(background=bg, lighting=lighting, cast=cast, lines=lines))
+    if not any(s.get("lines") for s in scenes):
+        raise ScriptError("No dialogue was found in the script.")
+    music = data.get("music") if data.get("music") in MUSIC_LABELS else ""
+    return dict(title=str(data.get("title") or "")[:60], hook=str(data.get("hook") or "")[:60], music=music,
+                characters=chars, scenes=scenes)
 
 
 def generate(scenario: str, chars: list[dict], language: str = "hi", seconds: int = 45,

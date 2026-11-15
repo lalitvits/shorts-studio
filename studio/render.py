@@ -26,9 +26,10 @@ from .backgrounds import get_background, get_background_3d
 from .shading import shade_3d, soft_shadow
 from .visemes import build_track
 from .catalog import (ACTIONS, DEFAULT_VOICE, EMOTIONS, GEMINI_FOR_LOOK, LOOK_ALIASES, LOOKS, SHOT_LABELS,
-                      SOUND_LABELS, VOICE_TUNE)
+                      SOUND_LABELS, VOICE_FX_FOR_LOOK, VOICE_FX_LABELS, VOICE_TUNE)
 from .flat import FlatComposer
 from . import fx as fx_mod
+from . import overlays
 from .config import GROUND_Y, OUTPUT_DIR, QUALITY, WORLD_W, find_devanagari_font, find_ffmpeg
 from .rig import (BOX_H, BOX_W, KEEP_EMOTION, ORG_X, ORG_Y, PERSISTENT, SIT_ACTIONS, blink_amount,
                   draw_character, draw_sofa, pose_for)
@@ -47,6 +48,11 @@ def _num(v):
     except (TypeError, ValueError):
         return None
     return v if v >= 0 else None
+
+
+CARD_STYLES = ("dark", "black", "bright")
+LIGHTING = ("day", "dark", "phone")
+STICKERS = ("pizza", "burger", "money", "heart", "idea", "angry", "laugh", "question", "exclaim", "sleep", "fire")
 
 
 def _clampi(v, default, lo, hi):
@@ -73,7 +79,9 @@ def normalize(tl: dict) -> dict:
                           look=look if look in LOOKS else "rahul",
                           voice=c.get("voice") or DEFAULT_VOICE,
                           voice_pitch=_clampi(c.get("voice_pitch"), VOICE_TUNE.get(look, (0, 0))[0], -60, 80),
-                          voice_rate=_clampi(c.get("voice_rate"), VOICE_TUNE.get(look, (0, 0))[1], -40, 60)))
+                          voice_rate=_clampi(c.get("voice_rate"), VOICE_TUNE.get(look, (0, 0))[1], -40, 60),
+                          voice_fx=c["voice_fx"] if c.get("voice_fx") in VOICE_FX_LABELS
+                          else VOICE_FX_FOR_LOOK.get(look, "")))
     if not chars:
         raise RenderError("Add at least one character.")
     ids = [c["id"] for c in chars]
@@ -89,6 +97,9 @@ def normalize(tl: dict) -> dict:
                               emotion=ln.get("emotion") if ln.get("emotion") in EMOTIONS else "neutral",
                               action=ln.get("action") if ln.get("action") in ACTIONS else "talk",
                               shot=ln.get("shot") if ln.get("shot") in SHOT_LABELS else "auto",
+                              lights=ln.get("lights") if ln.get("lights") in ("on", "off") else "",
+                              popup=" ".join(str(ln.get("popup") or "").split())[:90],
+                              sticker=str(ln.get("sticker") or "") if str(ln.get("sticker") or "") in STICKERS else "",
                               start=_num(ln.get("start")), end=_num(ln.get("end"))))
         # who is in the scene: the characters the user added (they stay in frame even with no dialogue)
         speakers = []
@@ -98,9 +109,17 @@ def normalize(tl: dict) -> dict:
         given = sc.get("cast")
         cast = [c for c in given if c in ids] if isinstance(given, list) else []
         cast = cast + [x for x in speakers if x not in cast]
-        if lines or cast:
+        if sc.get("card") is not None:          # a text card (or a black screen) between scenes
+            snd = sc.get("card_sound") if sc.get("card_sound") in SOUND_LABELS else ""
+            scenes.append(dict(background="", cast=[], lines=[], audio_from=None, audio_to=None, lighting="day",
+                               card=" ".join(str(sc.get("card") or "").split())[:80],
+                               card_style=sc.get("card_style") if sc.get("card_style") in CARD_STYLES else "dark",
+                               card_sound=snd, card_seconds=_num(sc.get("card_seconds")) or 0.0))
+        elif lines or cast:
             scenes.append(dict(background=sc.get("background") or "living_room", cast=cast, lines=lines,
-                               audio_from=_num(sc.get("audio_from")), audio_to=_num(sc.get("audio_to"))))
+                               audio_from=_num(sc.get("audio_from")), audio_to=_num(sc.get("audio_to")),
+                               lighting=sc.get("lighting") if sc.get("lighting") in LIGHTING else "day",
+                               card=None))
     if not any(sc["cast"] for sc in scenes):
         raise RenderError("Add at least one scene with a character in it.")
     return dict(title=str(tl.get("title") or "").strip(), characters=chars, scenes=scenes,
@@ -122,6 +141,9 @@ class LineT:
     sfx: object = None      # an emotional sound to mix in on top (own-audio mode)
     reaction: bool = False  # a sound with no words: the sprite's own mouth is kept (no lip-sync)
     shot: str = "auto"      # camera shot (flat cartoon style)
+    lights: str = ""        # "on" / "off": the room light switches when this line starts
+    popup: str = ""         # a phone-notification banner shown during this line
+    sticker: str = ""       # a sticker that pops up next to the speaker
     src: tuple = None       # own-audio mode: (start, end) of this line in your audio file
 
 
@@ -132,6 +154,29 @@ class SceneT:
     start: float
     end: float
     lines: list = field(default_factory=list)
+    card: str | None = None        # a text card / black screen instead of a scene
+    card_style: str = "dark"
+    card_sound: str = ""
+    lighting: str = "day"          # day, dark (night, lights off) or phone (dark, lit by a phone screen)
+
+
+def _card_seconds(sc: dict) -> float:
+    if sc["card_seconds"]:
+        return max(0.6, min(8.0, sc["card_seconds"]))
+    if sc["card_sound"]:
+        import wave as _w
+        from .fx import fx_wav
+        try:
+            with _w.open(str(fx_wav(sc["card_sound"]))) as w:
+                return max(1.6, min(6.0, w.getnframes() / w.getframerate() + 0.3))
+        except Exception:  # noqa: BLE001
+            pass
+    return 2.0 if sc["card"] else 1.2
+
+
+def _line_extras(lt, ln: dict):
+    lt.lights, lt.popup, lt.sticker = ln.get("lights", ""), ln.get("popup", ""), ln.get("sticker", "")
+    return lt
 
 
 def make_clip(ln: dict, ch: dict, engine: str, warnings: list | None = None) -> Clip:
@@ -144,7 +189,7 @@ def make_clip(ln: dict, ch: dict, engine: str, warnings: list | None = None) -> 
         g = GEMINI_FOR_LOOK.get(ch["look"])
         voice = f"gemini:{g}" if g else voice
     c = get_clip(ln["text"], voice, engine, emotion=ln["emotion"], voice_pitch=ch.get("voice_pitch", 0),
-                 voice_rate=ch.get("voice_rate", 0))
+                 voice_rate=ch.get("voice_rate", 0), voice_fx=ch.get("voice_fx", ""))
     if warnings is not None and c.warning and c.warning not in warnings:
         warnings.append(c.warning)
     return join_clips(sound, c) if sound else c     # the sound first, then the words
@@ -184,12 +229,18 @@ def build_schedule(tl: dict, clip_for) -> tuple[list, float]:
     by_id = {c["id"]: c for c in tl["characters"]}
     t, out = 0.5, []
     for sc in tl["scenes"]:
-        st = SceneT(sc["background"], list(sc["cast"]), t, t)
+        if sc.get("card") is not None:
+            secs = _card_seconds(sc)
+            out.append(SceneT("", [], t, t + secs, [], sc["card"], sc["card_style"], sc["card_sound"]))
+            t += secs
+            continue
+        st = SceneT(sc["background"], list(sc["cast"]), t, t, lighting=sc.get("lighting", "day"))
         t += 0.25
         for ln in sc["lines"]:
             clip = clip_for(ln, by_id[ln["speaker"]])
-            st.lines.append(LineT(ln["speaker"], ln["text"], ln["emotion"], ln["action"],
-                                  t, t + clip.duration, clip, None, not ln["text"] and bool(ln["sound"]), ln["shot"]))
+            st.lines.append(_line_extras(LineT(ln["speaker"], ln["text"], ln["emotion"], ln["action"],
+                                  t, t + clip.duration, clip, None, not ln["text"] and bool(ln["sound"]), ln["shot"]),
+                                  ln))
             t += clip.duration + 0.18
         if not sc["lines"]:                      # a scene with only silent characters holds for a moment
             t += 2.0
@@ -226,6 +277,12 @@ def build_schedule_file(tl: dict, env: list, audio_seconds: float) -> tuple[list
         return max(1, len([ln for ln in sc["lines"] if not is_tail(ln)]))
 
     for si, sc in enumerate(tl["scenes"]):
+        if sc.get("card") is not None:         # a card plays no part of your audio: a short silence instead
+            secs = _card_seconds(sc)
+            out.append(SceneT("", [], t, t + secs, [], sc["card"], sc["card_style"], sc["card_sound"]))
+            parts.append((cursor, cursor + 0.02, secs - 0.02))
+            t += secs
+            continue
         speech = [ln for ln in sc["lines"] if not is_tail(ln)]
         tails = [ln for ln in sc["lines"] if is_tail(ln)]
         spans = [(ln["start"], ln["end"]) for ln in speech if timed(ln)]
@@ -295,9 +352,9 @@ def build_schedule_file(tl: dict, env: list, audio_seconds: float) -> tuple[list
             e = env[int(ls * ENV_HZ): int(le * ENV_HZ)]
             clip = Clip(Path(""), max(0.1, le - ls), _union(e, sfx.env) if sfx else e, synthetic=False)
             ln = dict(ln, _src=(ls, le))
-            st.lines.append(LineT(ln["speaker"], ln["text"], ln["emotion"], ln["action"],
+            st.lines.append(_line_extras(LineT(ln["speaker"], ln["text"], ln["emotion"], ln["action"],
                                   t + (ls - a), t + (ls - a) + clip.duration, clip, sfx,
-                                  not ln["text"] and bool(ln["sound"]), ln["shot"], ln["_src"]))
+                                  not ln["text"] and bool(ln["sound"]), ln["shot"], ln["_src"]), ln))
         extra = 0.0
         for ln in tails:
             sfx = get_sound(ln["sound"], by_id[ln["speaker"]]["voice"])
@@ -351,9 +408,12 @@ class Composer:
         self.chars = {c["id"]: c for c in tl["characters"]}
         self.flat = FlatComposer(tl, sched, w, h)
         fxon = tl.get("effects", True)
-        self.cuts = [sc.start for sc in sched[1:]] if fxon else []        # scene changes: zoom punch
-        self.hits = sorted(h for sc in sched for ln in sc.lines              # punch / slap: screen shake
-                           for h in fx_mod.hit_times(ln.action, ln.start, ln.end)) if fxon else []
+        self.cuts = [sc.start for i, sc in enumerate(sched[1:], 1)            # scene changes: zoom punch
+                     if sc.card_style != "black" and sched[i - 1].card_style != "black"
+                     and not (sc.card is not None and sched[i - 1].card is not None)] if fxon else []
+        self.hits = sorted([h for sc in sched for ln in sc.lines              # punch / slap / thrown chappal: shake
+                            for h in fx_mod.hit_times(ln.action, ln.start, ln.end)] + overlays.throw_hits(sched)) \
+            if fxon else []
 
     def scene_at(self, t: float) -> SceneT:
         for sc in self.sched:
@@ -363,6 +423,14 @@ class Composer:
 
     def frame(self, t: float) -> Image.Image:
         im = self._frame(t)
+        sc = self.scene_at(t)
+        for ln in sc.lines:                                   # notification banners and stickers
+            if ln.popup:
+                overlays.draw_popup(im, t, ln, self.w, self.h)
+            if ln.sticker:
+                overlays.draw_sticker(im, t, ln, self.w, self.h)
+            if ln.action == "throw":
+                overlays.draw_throw(im, t, ln, self.w, self.h)
         zoom, dx, dy = 1.0, 0.0, 0.0
         for c in self.cuts:                                   # zoom punch into each new scene
             u = (t - c) / 0.25
@@ -382,8 +450,41 @@ class Composer:
         y0 = min(max(0.0, (self.h - ch) / 2 + dy), self.h - ch)
         return im.resize((self.w, self.h), Image.BILINEAR, box=(x0, y0, x0 + cw, y0 + ch))
 
+    def _card(self, sc, t: float) -> Image.Image:
+        """A text card's picture (the words themselves are drawn by the subtitle renderer, for Hindi shaping)."""
+        w, h = self.w, self.h
+        if sc.card_style == "black":
+            return Image.new("RGB", (w, h), (0, 0, 0))
+        key = ("card", sc.card_style, w)
+        if key not in self._sofa:
+            im = Image.new("RGB", (w, h))
+            d = ImageDraw.Draw(im)
+            top, bot = ((24, 28, 52), (8, 10, 22)) if sc.card_style == "dark" else ((255, 214, 64), (255, 150, 40))
+            for y in range(h):
+                u = y / h
+                d.line([(0, y), (w, y)], fill=tuple(int(a + (b - a) * u) for a, b in zip(top, bot)))
+            if sc.card_style == "bright":                 # comic burst
+                cx, cy = w / 2, h * 0.45
+                for i in range(24):
+                    a0, a1 = i * math.pi / 12, (i + 0.5) * math.pi / 12
+                    d.polygon([(cx, cy), (cx + math.cos(a0) * h, cy + math.sin(a0) * h),
+                               (cx + math.cos(a1) * h, cy + math.sin(a1) * h)], fill=(255, 236, 120))
+            self._sofa[key] = im
+        im = self._sofa[key].copy()
+        if sc.card_style == "dark":                       # a small clock whose hand turns
+            d = ImageDraw.Draw(im)
+            cx, cy, r = w / 2, h * 0.36, w * 0.09
+            d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=(230, 230, 240), width=max(2, int(w * 0.008)))
+            ang = -math.pi / 2 + (t - sc.start) * 4
+            d.line([(cx, cy), (cx + math.cos(ang) * r * 0.75, cy + math.sin(ang) * r * 0.75)], fill=(255, 200, 80),
+                   width=max(2, int(w * 0.01)))
+            d.line([(cx, cy), (cx, cy - r * 0.5)], fill=(230, 230, 240), width=max(2, int(w * 0.012)))
+        return im
+
     def _frame(self, t: float) -> Image.Image:
         sc = self.scene_at(t)
+        if sc.card is not None:
+            return self._card(sc, t)
         if self.flat.handles(sc):                                 # flat cartoon style with its own camera
             return self.flat.frame(sc, t)
         im = (get_background_3d if self.look3d else get_background)(sc.bg, self.w, self.h).copy()
@@ -462,6 +563,7 @@ def _chunks(words: list) -> list:
 
 def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = True, hook: str = "",
              hook_end: float = 2.4) -> str:
+    """Captions, the hook title and text-card titles, in one ASS subtitle file."""
     size, outline, margin_v = int(h * 0.05), max(2, int(h * 0.006)), int(h * 0.15)
     head = (
         "[Script Info]\nScriptType: v4.00+\n"
@@ -472,7 +574,10 @@ def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = Tru
         f"Style: Cap,{font_family},{size},&H0000D7FF,&H00FFFFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,"
         f"{outline},1,8,{int(w * 0.06)},{int(w * 0.06)},{margin_v},1\n"
         f"Style: Hook,{font_family},{int(h * 0.068)},&H00FFFFFF,&H00FFFFFF,&H00141414,&H96000000,-1,0,0,0,100,100,0,0,1,"
-        f"{int(outline * 1.8)},3,8,{int(w * 0.07)},{int(w * 0.07)},{int(h * 0.27)},1\n\n"
+        f"{int(outline * 1.8)},3,8,{int(w * 0.07)},{int(w * 0.07)},{int(h * 0.27)},1\n"
+        f"Style: Card,{font_family},{int(h * 0.072)},&H00FFFFFF,&H00FFFFFF,&H00202020,&H96000000,-1,0,0,0,100,100,0,0,1,"
+        f"{int(outline * 1.5)},2,5,{int(w * 0.08)},{int(w * 0.08)},0,1\n"
+        + overlays.popup_ass_styles(w, h, font_family) + "\n"
         "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
     events = []
@@ -481,6 +586,14 @@ def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = Tru
         events.append(f"Dialogue: 1,{_ass_time(0.12)},{_ass_time(hook_end)},Hook,,0,0,0,,"
                       "{\\fad(80,300)\\fscx40\\fscy40\\t(0,180,\\fscx112\\fscy112)\\t(180,320,\\fscx100\\fscy100)}"
                       + txt)
+    events += overlays.popup_ass_events(sched, w, h, _ass_time)
+    for sc in sched:                            # text cards
+        if sc.card:
+            txt = sc.card.replace("{", "").replace("}", "")
+            col = "{\\c&H202020&\\3c&HFFFFFF&}" if sc.card_style == "bright" else ""
+            events.append(f"Dialogue: 2,{_ass_time(sc.start + 0.05)},{_ass_time(sc.end - 0.05)},Card,,0,0,0,,"
+                          "{\\fad(120,150)\\fscx60\\fscy60\\t(0,200,\\fscx106\\fscy106)\\t(200,320,\\fscx100\\fscy100)}"
+                          + col + txt)
     for sc in (sched if captions else []):
         for ln in sc.lines:
             words = [x.replace("{", "").replace("}", "") for x in ln.text.split()]
@@ -684,12 +797,20 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
                                            encoding="utf-8")
         events = []                               # sound effects: hits, scene whooshes, the hook's pop
         if tl["effects"]:
-            events += [(hgt, "punch" if any(ln.action == "punch" and ln.start <= hgt < ln.end
-                                            for sc in sched for ln in sc.lines) else "slap", 0.9)
+            thrown = set(round(x, 3) for x in overlays.throw_hits(sched))
+            events += [(hgt, "chappal" if round(hgt, 3) in thrown else
+                        "punch" if any(ln.action == "punch" and ln.start <= hgt < ln.end
+                                       for sc in sched for ln in sc.lines) else "slap", 1.0)
                        for hgt in comp.hits]
+            events += [(h - 0.42, "whoosh", 0.6) for h in thrown]
             events += [(c - 0.15, "whoosh", 0.55) for c in comp.cuts]
             if tl["hook"]:
                 events.append((0.1, "pop", 0.6))
+        events += [(sc.start + 0.05, sc.card_sound, 1.0) for sc in sched if sc.card is not None and sc.card_sound]
+        events += [(ln.start, "click", 0.9) for sc in sched for ln in sc.lines if getattr(ln, "lights", "")]
+        events += [(ln.start + 0.05, "ping", 0.9) for sc in sched for ln in sc.lines if ln.popup]
+        events += [(ln.start + 0.02, "pop", 0.6) for sc in sched for ln in sc.lines if ln.sticker]
+        events += [(ln.start, ln.sound_fx, 0.9) for sc in sched for ln in sc.lines if getattr(ln, "sound_fx", "")]
         fx_idx = None
 
         stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -737,7 +858,8 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
             audio_graph = (graph + ";" + "".join(f"[{nm}]" for nm, _ in streams) +
                            f"amix=inputs={len(streams)}:duration=first:weights='{weights}',"
                            f"volume={sum(w for _, w in streams):.2f}[aout]")
-        vf = "ass=captions.ass:fontsdir=fonts" if (tl["captions"] or tl["hook"]) else "null"
+        vf = "ass=captions.ass:fontsdir=fonts" if (tl["captions"] or tl["hook"] or any(sc.card for sc in sched) or
+                                                   any(ln.popup for sc in sched for ln in sc.lines)) else "null"
         cmd += ["-filter_complex", f"[0:v]{vf}[vout];{audio_graph}",
                 "-map", "[vout]", "-map", "[aout]", "-t", f"{total:.3f}",
                 "-c:v", "libx264", "-preset", q["preset"], "-crf", str(q["crf"]), "-pix_fmt", "yuv420p",

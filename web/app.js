@@ -127,6 +127,7 @@ function renderCast() {
       <div class="full">
         <label>Voice<select data-path="characters.${i}.voice">${opts(A.voices, c.voice)}</select></label>
         <button class="secondary" data-act="sample-char" data-i="${i}">Hear voice</button>
+        <label class="tune">Voice effect<select data-path="characters.${i}.voice_fx">${opts(A.voice_fx || [], c.voice_fx ?? (c.look === "flat_brain" ? "devil_whisper" : ""))}</select></label>
         ${String(c.voice).startsWith("gemini:") ? "" : `
         <label class="tune">Pitch <b>${tune(c)[0] > 0 ? "+" : ""}${tune(c)[0]}</b><input type="range" min="-40" max="50" step="2" data-path="characters.${i}.voice_pitch" value="${tune(c)[0]}"></label>
         <label class="tune">Speed <b>${tune(c)[1] > 0 ? "+" : ""}${tune(c)[1]}%</b><input type="range" min="-30" max="40" step="2" data-path="characters.${i}.voice_rate" value="${tune(c)[1]}"></label>`}
@@ -161,11 +162,23 @@ function renderScenes() {
   }
   const file = S.audio.mode === "file";
   $("#scenes").innerHTML = S.scenes.map((sc, si) => {
+    if (sc.card !== undefined) return `
+    <div class="scene card-scene">
+      <div class="scene-head"><h2>${sc.card_style === "black" ? "Black screen" : "Text card"} ${si + 1}</h2>
+        <button class="icon" data-act="del-scene" data-si="${si}" aria-label="Delete card ${si + 1}">✕</button></div>
+      <div class="line-sub four">
+        <input aria-label="Card text" lang="hi" placeholder="${sc.card_style === "black" ? "(no text)" : "20 मिनट बाद..."}" data-path="scenes.${si}.card" value="${esc(sc.card)}">
+        <select aria-label="Card style" data-path="scenes.${si}.card_style">${opts([{ id: "dark", label: "Dark with clock" }, { id: "black", label: "Black screen" }, { id: "bright", label: "Bright comic" }], sc.card_style || "dark")}</select>
+        <select aria-label="Card sound" data-path="scenes.${si}.card_sound"><option value="">No sound</option>${opts(A.sounds, sc.card_sound || "")}</select>
+        <input type="number" min="0" step="0.5" aria-label="Seconds (empty: automatic)" placeholder="Seconds (auto)" data-path="scenes.${si}.card_seconds" value="${sc.card_seconds ?? ""}">
+      </div>
+    </div>`;
     const rest = S.characters.filter(c => !sc.cast.includes(c.id)), rng = sceneRange(sc);
     return `
     <div class="scene">
       <div class="scene-head"><h2>Scene ${si + 1}</h2>
         <label>Background<select data-path="scenes.${si}.background">${opts(A.backgrounds, sc.background)}</select></label>
+        <label>Lighting<select data-path="scenes.${si}.lighting">${opts([{ id: "day", label: "Normal" }, { id: "dark", label: "Night, lights off" }, { id: "phone", label: "Dark, lit by a phone" }], sc.lighting || "day")}</select></label>
         <button class="icon" data-act="del-scene" data-si="${si}" aria-label="Delete scene ${si + 1}">✕</button></div>
       <div class="cast-row"><span class="cast-label">Characters in this scene</span>
         ${sc.cast.map(id => `<span class="chip">${esc(nameOf(id))}<button class="chip-x" data-act="remove-cast" data-si="${si}" data-id="${esc(id)}" aria-label="Take ${esc(nameOf(id))} out of scene ${si + 1}">✕</button></span>`).join("") || `<span class="hint">No one is in this scene.</span>`}
@@ -195,6 +208,11 @@ function renderScenes() {
               <button class="icon" data-act="hear-sound" data-si="${si}" data-li="${li}" aria-label="Hear this sound">▶</button>
             </div>
             <select aria-label="Camera shot (flat cartoon style)" title="Camera shot, used by flat cartoon scenes" data-path="scenes.${si}.lines.${li}.shot">${opts(A.shots || [], ln.shot || "auto")}</select>
+          </div>
+          <div class="line-sub four extras">
+            <input aria-label="Phone notification on screen (optional)" lang="hi" placeholder="Notification pop-up (optional)" data-path="scenes.${si}.lines.${li}.popup" value="${esc(ln.popup || "")}">
+            <select aria-label="Sticker" data-path="scenes.${si}.lines.${li}.sticker"><option value="">No sticker</option>${opts((A.stickers || []).map(x => ({ id: x, label: "Sticker: " + x })), ln.sticker || "")}</select>
+            <select aria-label="Room light" data-path="scenes.${si}.lines.${li}.lights">${opts([{ id: "", label: "Light: no change" }, { id: "on", label: "Light switches ON" }, { id: "off", label: "Light switches OFF" }], ln.lights || "")}</select>
           </div>
           ${file ? `<div class="line-time">
             <label>Spoken from (seconds in the audio)<input type="number" min="0" step="0.05" data-path="scenes.${si}.lines.${li}.start" value="${ln.start ?? ""}"></label>
@@ -310,7 +328,8 @@ async function playSound(ln) {
 }
 async function playSample(text, voice, emotion, ch) {
   const t = ch ? tune(ch) : [0, 0];
-  const r = await api("/api/sample", { text, voice, engine: S.tts, emotion: emotion || "neutral", pitch: t[0], rate: t[1] });
+  const fx = ch ? (ch.voice_fx ?? (ch.look === "flat_brain" ? "devil_whisper" : "")) : "";
+  const r = await api("/api/sample", { text, voice, engine: S.tts, emotion: emotion || "neutral", pitch: t[0], rate: t[1], fx });
   const warn = r.headers.get("X-Warning");
   if (warn) toast(warn, true);
   const url = URL.createObjectURL(await r.blob());
@@ -334,6 +353,23 @@ const ACTIONS = {
     save(); renderCast(); renderScenes(); refreshPreview();
   },
   "sample-char": el => { const c = S.characters[+el.dataset.i]; return playSample("नमस्ते, मेरा नाम " + c.name + " है।", c.voice, "happy", c); },
+  "add-card": () => { S.scenes.push({ card: "20 मिनट बाद...", card_style: "dark", card_sound: "tick", cast: [], lines: [] }); save(); renderScenes(); },
+  "add-black": () => { S.scenes.push({ card: "", card_style: "black", card_sound: "laugh_track", cast: [], lines: [] }); save(); renderScenes(); },
+  "import-script": async el => {
+    const text = $("#import-text").value.trim();
+    if (!text) return toast("Paste your script first.", true);
+    if (S.scenes.length && !confirm("Replace your current characters and scenes with the imported script?")) return;
+    el.disabled = true; const label = el.textContent; el.textContent = "Reading your script...";
+    try {
+      const r = await api("/api/import_script", { text, provider: S.provider });
+      Object.assign(S, { title: r.title || S.title, hook: r.hook || "", scenario: text.slice(0, 500),
+                         characters: r.characters, scenes: r.scenes.map(ensureScene), sel: { scene: 0, line: 0 } });
+      S.audio.musicBuiltin = r.music || S.audio.musicBuiltin;
+      S.counter = r.characters.length + 1;
+      save(); init(true); showStep(3);
+      toast(`Imported: ${r.characters.length} characters, ${r.scenes.length} scenes. Check them, then make the video.`);
+    } catch (e) { toast(e.message, true); } finally { el.disabled = false; el.textContent = label; }
+  },
   "add-scene": () => {
     const last = S.scenes[S.scenes.length - 1], cast = last?.cast?.length ? [...last.cast] : S.characters.map(c => c.id);
     S.scenes.push({ background: last?.background || defaultBg(), cast, lines: [{ speaker: cast[0], text: "", emotion: "neutral", action: "talk" }] });

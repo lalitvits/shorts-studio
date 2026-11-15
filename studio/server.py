@@ -37,8 +37,10 @@ def assets_payload() -> dict:
     return {
         "backgrounds": list_backgrounds(),
         "looks": [{"id": k, "label": v["label"], "female": bool(v.get("female")), "flat": v.get("style") == "flat"}
-                  for k, v in LOOKS.items()],
+                  for k, v in LOOKS.items() if not v.get("hidden")],
+        "voice_fx": [{"id": k, "label": v} for k, v in __import__("studio.catalog", fromlist=["x"]).VOICE_FX_LABELS.items()],
         "shots": [{"id": k, "label": v} for k, v in SHOT_LABELS.items()],
+        "stickers": list(__import__("studio.overlays", fromlist=["x"]).STICKER_KINDS),
         "music": [{"id": k, "label": v} for k, v in __import__("studio.fx", fromlist=["x"]).MUSIC_LABELS.items()],
         "voices": VOICES, "default_voice": DEFAULT_VOICE,
         "voice_tune": {k: list(v) for k, v in __import__("studio.catalog", fromlist=["x"]).VOICE_TUNE.items()},
@@ -189,6 +191,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"texts": texts, "warning": warn})
             if path == "/api/audio/segments":
                 return self._json({"segments": audio_mod.speech_segments(data.get("id", ""), float(data.get("pause", 0.45)))})
+            if path == "/api/import_script":                    # a full screenplay -> scenes
+                return self._json(script_mod.import_screenplay(data.get("text", ""), data.get("provider", "gemini")))
             if path == "/api/script":
                 res = script_mod.generate(data.get("scenario", ""), data.get("characters", []),
                                           data.get("language", "hi"), int(data.get("seconds", 45)),
@@ -202,7 +206,8 @@ class Handler(BaseHTTPRequestHandler):
                 clip = get_clip(data.get("text", "") or "नमस्ते", data.get("voice", DEFAULT_VOICE),
                                 "auto" if data.get("engine") == "best" else data.get("engine", "auto"),
                                 emotion=data.get("emotion") or "neutral",
-                                voice_pitch=int(data.get("pitch") or 0), voice_rate=int(data.get("rate") or 0))
+                                voice_pitch=int(data.get("pitch") or 0), voice_rate=int(data.get("rate") or 0),
+                                voice_fx=data.get("fx") or "")
                 headers = {"X-Warning": clip.warning.encode("ascii", "ignore").decode()} if clip.warning else {}
                 return self._send(200, clip.wav.read_bytes(), "audio/wav", headers)
             if path == "/api/sound":                              # hear one emotional sound

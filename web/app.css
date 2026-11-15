@@ -144,6 +144,9 @@ select.add-cast{width:auto;min-height:34px;margin:0;padding:4px 10px;border-radi
 .video-card{display:grid;gap:10px;margin:10px 0}
 .thumbs{display:flex;gap:8px;flex-wrap:wrap}.thumbs img{height:150px;border-radius:8px;border:1px solid #ccd}
 .share-text{white-space:pre-wrap}
+.card-scene{background:#1d2235;color:#eef}.card-scene h2{color:#eef}
+.extras input{min-width:0}
+details.import summary{cursor:pointer}
 .tune{font-size:.85rem;min-width:150px}.tune input{width:100%}
 .undo-row{display:flex;gap:6px}.undo-row .rail-btn{flex:1}
 .oneclick{border:2px solid #f7c24a;border-radius:14px;padding:12px 16px;margin:14px 0;background:#fffaf0}

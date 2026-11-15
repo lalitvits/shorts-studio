@@ -29,6 +29,12 @@ OL = 5.5                    # outline width (world units)
 FW, FH = 1080, 1920         # frame in world units
 STRONG = {"angry", "shocked", "surprised", "crying", "laughing", "scared", "excited"}
 SHOTS = ("auto", "wide", "single", "ots", "close")
+PHONE_ACTIONS = {"use_phone", "sit_phone", "phone_call"}
+
+
+def three_d_unit():
+    from .three_d import UNIT
+    return UNIT
 
 
 def _h(*parts) -> int:
@@ -237,6 +243,27 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
         p["L"] = ("ik", -10, -690)
         p["prop"] = "phone"
         p["head_dy"] = 10
+    elif action == "wipe_tears":            # rubbing an eye with the back of the hand
+        p["R"] = ("ik", 40 + 10 * s(t * 9), -900)
+        p["L"] = ("fk", 14, -8)
+        p["head_dy"] = 8
+    elif action == "hold_parcel":
+        p["L"] = ("ik", -48, -610)
+        p["R"] = ("ik", 48, -610)
+        p["prop"] = "parcel"
+    elif action == "hide_behind":           # hands (and the parcel) hidden behind the back
+        p["L"] = ("fk", 28, -55)
+        p["R"] = ("fk", 28, -55)
+        p["arms_behind"] = True
+        p["prop"] = "parcel_behind"
+        p["dx"] = 4 * s(t * 3)
+    elif action == "throw":                 # wind up with a chappal, then throw it at the camera
+        if t < 0.5:
+            p["R"] = ("fk", 165, 35)
+            p["prop"] = "chappal"
+        else:
+            p["R"] = ("fk", 82, -8)
+        p["L"] = HIP_T
     elif action == "phone_call":
         p["R"] = ("ik", 104, -878)
         p["L"] = HIP_T
@@ -514,7 +541,49 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
             pen.limb([top, foot], 36 if dress else 40, sp["bottom_color"] if not dress else _mix(sp["bottom_color"], 1.1))
         pen.ellipse(side * 50 + sw - 42 + side * 8, -46, side * 50 + sw + 42 + side * 8, -6, sp.get("shoe", (44, 40, 42)))
 
-    # body
+    def _arms():
+        sleeve = sp["top"] in ("tshirt", "kurta", "uniform")
+        hands = {}
+        for side, key in ((-1, "L"), (1, "R")):
+            spec = pose[key]
+            sx, sy = side * 110, -742
+            if spec[0] == "ik":
+                elbow, hand = _ik(sx, sy, side * spec[1], spec[2], 150, 142, side)
+            else:
+                elbow, hand = _fk(sx, sy, spec[1], spec[2], 150, 142, side)
+            pen.limb([(sx, sy), elbow, hand], 30, skin)
+            if sleeve:
+                k = {"tshirt": 0.42, "uniform": 0.55}.get(sp["top"], 0.95)
+                mid = (sx + (elbow[0] - sx) * k, sy + (elbow[1] - sy) * k)
+                pen.limb([(sx, sy), mid], 44, tc)
+                if sp["top"] == "uniform":                     # folded cuff and shoulder strap
+                    pen.limb([(sx + (mid[0] - sx) * 0.82, sy + (mid[1] - sy) * 0.82), mid], 46, _mix(tc, 0.85))
+                    pen.d.rounded_rectangle(pen.box(sx - 30, sy - 18, sx + 30, sy + 4), radius=5 * pen.s,
+                                            fill=_mix(tc, 0.78), outline=OUT, width=pen.wd(3))
+                if sp["top"] == "kurta":
+                    pen.limb([elbow, (elbow[0] + (hand[0] - elbow[0]) * 0.55, elbow[1] + (hand[1] - elbow[1]) * 0.55)], 40, tc)
+            if key == "R" and sp.get("holds") == "lathi" and not pose["prop"]:
+                _lathi(pen, elbow, hand)
+            if key == "R" and not back and pose["prop"] == "phone_ear":      # the phone goes behind the hand
+                _prop(pen, "phone_ear", hand)
+            hands[key] = hand
+            if female:
+                bx, by = elbow[0] + (hand[0] - elbow[0]) * 0.8, elbow[1] + (hand[1] - elbow[1]) * 0.8
+                pen.circle(bx, by, 14, (226, 180, 60), 3)
+            pen.circle(hand[0], hand[1], 24, skin)
+            if key == "R" and spec[0] == "fk" and 80 < spec[1] < 120 and spec[2] < 20 and not back:   # pointing finger
+                ang = math.atan2(hand[1] - elbow[1], hand[0] - elbow[0])
+                pen.limb([hand, (hand[0] + 40 * math.cos(ang), hand[1] + 40 * math.sin(ang))], 11, skin, 4)
+            if key == "R" and not back and pose["prop"] and pose["prop"] != "phone_ear":
+                _prop(pen, pose["prop"], hand, hands.get("L"), skin)
+
+
+    # body (arms hidden behind the back are drawn first)
+    tc = sp["top_color"]
+    if pose.get("arms_behind"):
+        _arms()
+        if pose.get("prop") == "parcel_behind" and not back:
+            _parcel(pen, 150, -560, 0.9)
     tc = sp["top_color"]
     if sp["top"] == "kurta":
         body = [(-92, -772), (92, -772), (110, -650), (118, -520), (160, -250), (-160, -250), (-118, -520), (-110, -650)]
@@ -568,46 +637,75 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
             pass
         _effects(pen, cfg["fx"], fx_, hy, r, t)
 
-    # arms
-    sleeve = sp["top"] in ("tshirt", "kurta", "uniform")
-    for side, key in ((-1, "L"), (1, "R")):
-        spec = pose[key]
-        sx, sy = side * 110, -742
-        if spec[0] == "ik":
-            elbow, hand = _ik(sx, sy, side * spec[1], spec[2], 150, 142, side)
-        else:
-            elbow, hand = _fk(sx, sy, spec[1], spec[2], 150, 142, side)
-        pen.limb([(sx, sy), elbow, hand], 30, skin)
-        if sleeve:
-            k = {"tshirt": 0.42, "uniform": 0.55}.get(sp["top"], 0.95)
-            mid = (sx + (elbow[0] - sx) * k, sy + (elbow[1] - sy) * k)
-            pen.limb([(sx, sy), mid], 44, tc)
-            if sp["top"] == "uniform":                     # folded cuff and shoulder strap
-                pen.limb([(sx + (mid[0] - sx) * 0.82, sy + (mid[1] - sy) * 0.82), mid], 46, _mix(tc, 0.85))
-                pen.d.rounded_rectangle(pen.box(sx - 30, sy - 18, sx + 30, sy + 4), radius=5 * pen.s,
-                                        fill=_mix(tc, 0.78), outline=OUT, width=pen.wd(3))
-        if key == "R" and sp.get("holds") == "lathi" and not pose["prop"]:
-            _lathi(pen, elbow, hand)
-            if sp["top"] == "kurta":
-                pen.limb([elbow, (elbow[0] + (hand[0] - elbow[0]) * 0.55, elbow[1] + (hand[1] - elbow[1]) * 0.55)], 40, tc)
-        if female:
-            bx, by = elbow[0] + (hand[0] - elbow[0]) * 0.8, elbow[1] + (hand[1] - elbow[1]) * 0.8
-            pen.circle(bx, by, 14, (226, 180, 60), 3)
-        pen.circle(hand[0], hand[1], 24, skin)
-        if key == "R" and spec[0] == "fk" and 80 < spec[1] < 120 and spec[2] < 20 and not back:   # pointing finger
-            ang = math.atan2(hand[1] - elbow[1], hand[0] - elbow[0])
-            pen.limb([hand, (hand[0] + 40 * math.cos(ang), hand[1] + 40 * math.sin(ang))], 11, skin, 4)
-        if key == "R" and not back and pose["prop"]:
-            _prop(pen, pose["prop"], hand)
+    if not pose.get("arms_behind"):
+        _arms()
+
+def _phone_back(pen, cx, cy, w, h, skin=None):
+    """A real-sized smartphone seen from the back (what you see when someone looks at their phone):
+    dark body, camera module with three lenses and a flash, and the screen's light spilling around the edges."""
+    pen.d.rounded_rectangle(pen.box(cx - w / 2 - 7, cy - h / 2 - 7, cx + w / 2 + 7, cy + h / 2 + 7),
+                            radius=22 * pen.s, fill=(150, 200, 255))                      # screen light spill
+    pen.d.rounded_rectangle(pen.box(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2), radius=16 * pen.s,
+                            fill=(46, 50, 62), outline=OUT, width=pen.wd(4))
+    pen.d.rounded_rectangle(pen.box(cx - w / 2 + 6, cy - h / 2 + 6, cx + w / 2 - 6, cy + h / 2 - 6),
+                            radius=12 * pen.s, outline=(78, 84, 100), width=pen.wd(2.5))  # edge highlight
+    mx, my = cx - w / 2 + 10, cy - h / 2 + 10                                            # camera module
+    pen.d.rounded_rectangle(pen.box(mx, my, mx + 40, my + 46), radius=9 * pen.s, fill=(30, 32, 40),
+                            outline=(90, 96, 110), width=pen.wd(2))
+    for lx, ly in ((mx + 12, my + 13), (mx + 12, my + 33), (mx + 29, my + 23)):
+        pen.circle(lx, ly, 7.5, (14, 16, 22), 2, (120, 126, 140))
+        pen.circle(lx - 2, ly - 2, 2, (180, 200, 240), 0)
+    pen.circle(mx + 30, my + 9, 3, (250, 240, 200), 0)                                  # flash
+    pen.circle(cx, cy + 6, 9, (70, 76, 90), 0)                                          # logo
+    if skin:                                                                            # fingers around the sides
+        for side in (-1, 1):
+            for k in range(3):
+                fy = cy + h * 0.05 + k * 22
+                pen.ellipse(cx + side * (w / 2) - 13, fy - 9, cx + side * (w / 2) + 13, fy + 9, skin, 3)
 
 
-def _prop(pen, kind, hand):
+def _parcel(pen, x, y, k=1.0):
+    """A food-delivery parcel: brown box with tape and an orange label."""
+    w, h = 150 * k, 110 * k
+    pen.d.rounded_rectangle(pen.box(x - w / 2, y - h / 2, x + w / 2, y + h / 2), radius=8 * pen.s,
+                            fill=(196, 150, 96), outline=OUT, width=pen.wd(4))
+    pen.d.rectangle(pen.box(x - 10 * k, y - h / 2, x + 10 * k, y + h / 2), fill=(222, 196, 140))   # tape
+    pen.d.rounded_rectangle(pen.box(x + 22 * k, y - 10 * k, x + 64 * k, y + 26 * k), radius=4 * pen.s,
+                            fill=(252, 98, 44), outline=OUT, width=pen.wd(2))                   # label
+
+
+def _chappal(pen, x, y, ang=0.0, k=1.0):
+    """A blue rubber chappal (flip-flop) seen from above."""
+    ca, sa = math.cos(ang), math.sin(ang)
+    rot = lambda px, py: (x + (px * ca - py * sa) * k, y + (px * sa + py * ca) * k)   # noqa: E731
+    sole = [rot(28 * math.cos(u) * (1 + 0.15 * math.sin(u)), 70 * math.sin(u)) for u in
+            [i * 2 * math.pi / 24 for i in range(24)]]
+    q = [pen.p(*pt) for pt in sole]
+    pen.d.polygon(q, fill=(60, 120, 210))
+    pen.d.line(q + [q[0]], fill=OUT, width=pen.wd(4), joint="curve")
+    pen.line([rot(0, -40), rot(-24, 10)], (240, 240, 240), 9)                            # strap
+    pen.line([rot(0, -40), rot(24, 10)], (240, 240, 240), 9)
+
+
+def _prop(pen, kind, hand, other=None, skin=None):
     x, y = hand
-    if kind in ("phone", "phone_ear"):
-        pen.ellipse(x - 2, y - 2, x + 2, y + 2, OUT, 0)
-        pen.d.rounded_rectangle(pen.box(x - 20, y - 46, x + 20, y + 22), radius=6 * pen.s, fill=(40, 44, 54),
+    if kind == "parcel":
+        if other is not None:
+            x, y = (hand[0] + other[0]) / 2, (hand[1] + other[1]) / 2
+        _parcel(pen, x, y - 20)
+        return
+    if kind == "chappal":
+        _chappal(pen, x, y - 40, 0.3)
+        return
+    if kind == "phone":                     # looking at it: held in front, about two-thirds of a head tall
+        if other is not None:
+            x, y = (hand[0] + other[0]) / 2, (hand[1] + other[1]) / 2
+        _phone_back(pen, x, y + 6, 82, 160, skin)          # top of the phone just under the chin
+    elif kind == "phone_ear":               # a call: pressed to the ear, the hand holds it there
+        pen.d.rounded_rectangle(pen.box(x - 30, y - 92, x + 30, y + 60), radius=13 * pen.s, fill=(46, 50, 62),
                                 outline=OUT, width=pen.wd(4))
-        pen.d.rectangle(pen.box(x - 13, y - 38, x + 13, y + 10), fill=(120, 190, 240))
+        pen.d.rounded_rectangle(pen.box(x - 24, y - 86, x + 24, y + 54), radius=10 * pen.s, outline=(78, 84, 100),
+                                width=pen.wd(2.5))
     elif kind == "cup":
         pen.poly([(x - 26, y - 34), (x + 26, y - 34), (x + 20, y + 22), (x - 20, y + 22)], (245, 245, 240), 4)
         pen.line([(x - 22, y - 26), (x + 22, y - 26)], (170, 110, 60), 6)
@@ -692,6 +790,68 @@ def draw_animal(im, ox, oy, s, sp, pose, emotion, mouth, blink, t, speaking):
 
 # ===================================================================== sprites
 HUMAN_BOX = (-470, -1110, 470, 40)
+BRAIN_BOX = (-330, -1130, 330, 40)
+
+
+def draw_brain(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t, speaking):
+    """'My brain': a floating pink cartoon brain with a face, little devil horns, tiny arms and a soft glow."""
+    bob = 18 * math.sin(t * 2.4) + (6 * math.sin(t * 9) if speaking else 0)
+    pen = Pen(im, ox, oy + bob * s, s)
+    col, dark = sp.get("color", (244, 150, 172)), _mix(sp.get("color", (244, 150, 172)), 0.8)
+    cx, cy, rx, ry = 0, -830, 205, 160               # floats at head height
+    # soft glow and a faint shadow far below (it floats)
+    glow = Image.new("L", im.size, 0)
+    gd = ImageDraw.Draw(glow)
+    gr = 290 * s
+    gx, gy = ox + cx * s, oy + (cy + bob) * s
+    gd.ellipse([gx - gr, gy - gr * 0.85, gx + gr, gy + gr * 0.85], fill=70)
+    glow = glow.filter(ImageFilter.GaussianBlur(40 * s))
+    tint = Image.new("RGBA", im.size, sp.get("glow", (255, 110, 140)) + (255,))
+    tint.putalpha(glow)
+    im.alpha_composite(tint)
+    # horns (devil)
+    if sp.get("horns", True):
+        for side in (-1, 1):
+            pen.poly([(side * 70, cy - ry * 0.82), (side * 140, cy - ry * 0.62), (side * 150, cy - ry * 1.45)],
+                     (214, 40, 40), 4.5)
+    # tiny arms
+    for side, key in ((-1, "L"), (1, "R")):
+        spec = pose.get(key, ("fk", 20, -10))
+        sx, sy = side * (rx - 10), cy + 40
+        if spec[0] == "ik":
+            spec = ("fk", 35, 60) if speaking else ("fk", 20, -10)
+        a, e = spec[1], spec[2]
+        elbow, hand = _fk(sx, sy, min(150, a), e, 70, 62, side)
+        pen.limb([(sx, sy), elbow, hand], 16, col, 4)
+        pen.circle(hand[0], hand[1], 15, col, 4)
+    # brain body: two hemispheres made of lobes
+    lobes = [(-120, -40, 95), (-60, -95, 100), (40, -100, 100), (120, -45, 95), (-150, 40, 80), (150, 40, 80),
+             (-70, 70, 95), (70, 70, 95), (0, 10, 120)]
+    for lx, ly, r in lobes:
+        pen.ellipse(cx + lx - r, cy + ly - r * 0.85, cx + lx + r, cy + ly + r * 0.85, col)
+    for lx, ly, r in lobes:                                   # cover inner outlines, keep the outer edge
+        r2 = r - 8
+        pen.ellipse(cx + lx - r2, cy + ly - r2 * 0.85, cx + lx + r2, cy + ly + r2 * 0.85, col, 0)
+    pen.line([(cx, cy - ry * 0.95), (cx + 6, cy - 60)], dark, 6)                             # middle groove
+    for fx_, fy, a0, a1 in ((-130, -70, 200, 320), (-90, 20, 160, 300), (120, -60, 220, 340), (95, 30, 240, 20),
+                            (-40, -120, 180, 300), (60, -125, 220, 340)):
+        pen.arc(cx + fx_ - 45, cy + fy - 30, cx + fx_ + 45, cy + fy + 30, a0, a1, 5, dark)  # folds
+    if view == "back":
+        return
+    # face
+    cfg = _face_cfg(emotion)
+    fy0 = cy + 30
+    _eye(pen, cx - 52, fy0, cfg["eyes"], blink, pose.get("eyes_dir", 0.0) or 0.3 * math.sin(t * 0.7))
+    _eye(pen, cx + 52, fy0, cfg["eyes"], blink, pose.get("eyes_dir", 0.0) or 0.3 * math.sin(t * 0.7))
+    brow = cfg["brow"] if cfg["brow"] != 0 else (0.9 if sp.get("horns", True) else 0)        # sly look
+    _brows(pen, cx, fy0 - 40, brow)
+    mk = cfg["mouth"] if (cfg["mouth"] != "smile_s" or not sp.get("horns", True)) else "smirk"
+    if mk == "smirk" and mouth <= 0.08:
+        pen.arc(cx - 40, fy0 + 40, cx + 50, fy0 + 90, 10, 150, 6)
+        pen.line([(cx + 40, fy0 + 66), (cx + 56, fy0 + 52)], OUT, 6)
+    else:
+        _mouth(pen, cx + 4, fy0 + 70, mk if mk != "smirk" else "smile", mouth, t)
+    _effects(pen, cfg["fx"], cx, fy0 - 20, ry, t)
 ANIMAL_BOX = (-270, -470, 330, 30)
 
 
@@ -722,14 +882,16 @@ def render_sprite(sp, view, face_dir, scale_px, pose, emotion, mouth, blink, t, 
     the part of the character outside the frame is not drawn."""
     ss = 2
     s = scale_px * ss * sp.get("height", 1.0)
-    animal = sp["kind"] != "human"
-    x0, y0, x1, y1 = ANIMAL_BOX if animal else HUMAN_BOX
+    animal = sp["kind"] not in ("human", "brain")
+    x0, y0, x1, y1 = ANIMAL_BOX if animal else BRAIN_BOX if sp["kind"] == "brain" else HUMAN_BOX
     if below_px is not None:
         y1 = min(y1, below_px * ss / s + 8)
     W, H = max(4, int((x1 - x0) * s) // 2 * 2), max(4, int((y1 - y0) * s) // 2 * 2)
     im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ox, oy = -x0 * s, -y0 * s
-    if animal:
+    if sp["kind"] == "brain":
+        draw_brain(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t, speaking)
+    elif animal:
         draw_animal(im, ox, oy, s, sp, pose, emotion, mouth, blink, t, speaking)
     else:
         draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t)
@@ -962,7 +1124,7 @@ class FlatComposer:
                     kind = "wide"
                 elif ln.emotion in STRONG and last_close.get(subj, -9) < i - 2:
                     kind = "close"
-                elif partner and len(cast) == 2 and not self._animal(partner):
+                elif partner and len(cast) == 2 and not self._animal(partner) and self.specs[partner]["kind"] != "brain":
                     kind = "ots"
                 else:
                     kind = "single"
@@ -1050,12 +1212,46 @@ class FlatComposer:
 
     WALK_S = 1.6     # seconds a walk in / walk out takes
 
+    def lighting_at(self, sc, t):
+        """The room's light at time t: the scene's lighting, changed by lines that switch the lights on / off.
+        Returns (mode, seconds since the last switch)."""
+        mode, since = getattr(sc, "lighting", "day") or "day", 99.0
+        for ln in sc.lines:
+            sw = getattr(ln, "lights", "")
+            if sw and ln.start <= t:
+                mode = "day" if sw == "on" else ("phone" if getattr(sc, "lighting", "") == "phone" else "dark")
+                since = t - ln.start
+        return mode, since
+
+    def _light(self, sc, t, im, glows):
+        mode, since = self.lighting_at(sc, t)
+        if mode == "day":
+            if since < 0.18:                               # the light just came on: a short flash
+                return Image.blend(im, Image.new("RGB", im.size, (255, 255, 245)), 0.45 * (1 - since / 0.18))
+            return im
+        w, h = im.size
+        q = 4                                              # light map at quarter size, smoothed when enlarged
+        lm = Image.new("RGB", (w // q + 1, h // q + 1), (52, 58, 96))       # dark blue night
+        d = ImageDraw.Draw(lm)
+        for gx, gy, sc_, kind in glows:
+            if kind == "phone" and mode != "phone":
+                continue
+            flick = 1 + 0.04 * math.sin(t * 13)
+            rings = ((520, (96, 112, 170)), (380, (150, 170, 230)), (240, (210, 225, 255)), (130, (255, 255, 255)))                 if kind == "phone" else ((380, (150, 110, 150)), (270, (230, 190, 220)), (190, (255, 255, 255)))
+            for r, col in rings:
+                rr = r * sc_ * flick / q
+                d.ellipse([gx / q - rr, gy / q - rr, gx / q + rr, gy / q + rr], fill=col)
+        lm = lm.filter(ImageFilter.GaussianBlur(28 * self.k / q * 4)).resize((w, h), Image.BILINEAR)
+        return ImageChops.multiply(im, lm)
+
     def _walk(self, sc, cid, a, t):
         """None (not walking), "hidden" (not in the frame yet / any more) or (x, direction) while walking."""
         mine = [l for l in sc.lines if l.char == cid]
         off = -330 if a["x"] < FW / 2 else FW + 330           # leave / enter on the nearer side of the frame
         for l in mine:
             u = (t - l.start) / self.WALK_S
+            if l.action == "appear" and u < 0 and l is mine[0]:      # not there yet, then simply there
+                return "hidden"
             if l.action == "walk_in":
                 if u < 0 and l is mine[0]:
                     return "hidden"
@@ -1141,6 +1337,7 @@ class FlatComposer:
                     im.paste(spr, (round(px), round(py)), spr)
 
         line = next((l for l in sc.lines if l.start <= t < l.end), None)
+        glows = []                               # faces lit by a phone screen (for the dark lighting)
         for a in lay["actors"]:
             cid = a["cid"]
             sp = self.specs[cid]
@@ -1163,7 +1360,7 @@ class FlatComposer:
             if walk:
                 a = dict(a, x=walk[0], face=walk[1], travel=walk[1])
                 action, t_act = "walk", t - sc.start
-            elif action in ("walk_in", "walk_out"):
+            elif action in ("walk_in", "walk_out", "appear"):
                 action = "talk" if speaking else "idle"
             still = speaking and line.action == "idle"
             mouth = line.clip.mouth_at(t - line.start) if speaking and not still else 0.0
@@ -1177,9 +1374,11 @@ class FlatComposer:
                 if spr3 is not None:
                     spr, (ax, ay) = spr3
                     im.paste(spr, (round(a["x"] * k - ax), round(a["g"] * k - ay)), spr)
+                    if action in PHONE_ACTIONS:
+                        glows.append((a["x"] * k, (a["g"] - 1.45 * three_d_unit()) * k, a["scale"] * k, "phone"))
                     continue
                 sp = sp["fallback"]
-            if sp["kind"] == "human":
+            if sp["kind"] in ("human", "brain"):
                 pose = pose_for(action, emotion, tq, speaking, key)
             else:
                 pose = dict(dy=0.0, walk=tq if action == "walk" else 0.0)
@@ -1199,6 +1398,12 @@ class FlatComposer:
                 sh = _shadow(wpx, max(2, round(wpx * 0.12)))
                 im.paste(sh, (round(fx - sh.width / 2), round(fy - sh.height / 2)), sh)
             im.paste(spr, (round(fx - ax), round(fy - ay)), spr)
+            if action in PHONE_ACTIONS and sp.get("kind") == "human":
+                glows.append((fx, fy - (900 - 120) * a["scale"] * k * sp.get("height", 1.0), a["scale"] * k, "phone"))
+            if sp.get("kind") == "brain":                   # the inner voice glows on its own in the dark
+                glows.append((fx, fy - 830 * a["scale"] * k, a["scale"] * k, "self"))
+
+        im = self._light(sc, t, im, glows)
 
         # slow camera drift inside the shot
         a0, b0 = seg[0], seg[1]

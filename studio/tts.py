@@ -113,7 +113,7 @@ def _edge_to_wav(text: str, voice: str, rate: str, out_wav: Path, pitch: str = "
     asyncio.run(run())
     if not mp3.exists() or mp3.stat().st_size == 0:
         raise TTSError("The voice service returned no audio.")
-    r = subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", str(mp3), "-ar", str(RATE), "-ac", "1",
+    r = subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", str(mp3), "-af", TIGHTEN, "-ar", str(RATE), "-ac", "1",
                         "-c:a", "pcm_s16le", str(out_wav)], capture_output=True)
     mp3.unlink(missing_ok=True)
     if r.returncode != 0:
@@ -174,15 +174,49 @@ def shape_text(text: str, emotion: str) -> str:
     return t
 
 
+# Shorts need snappy pacing: the Microsoft voices are a little faster, and their ~1 second pauses between
+# sentences are cut to about a quarter second (silence at the start and end is trimmed too).
+PACE = 10
+TIGHTEN = ("silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05:stop_periods=-1:"
+           "stop_duration=0.3:stop_threshold=-45dB:stop_silence=0.22")
+
+
 def prosody(emotion: str, pitch_hz: int = 0, rate_pct: int = 0) -> tuple[str, str, str]:
     r, p, v = PROSODY.get(emotion, (0, 0, 0))
+    r += PACE
     r = max(-50, min(80, r + int(rate_pct)))
     p = max(-60, min(80, p + int(pitch_hz)))
     return f"{r:+d}%", f"{p:+d}Hz", f"{v:+d}%"
 
 
+# Voice effects for a character (FFmpeg audio filters on the finished line). Pitch changes keep the length.
+VOICE_FX = {
+    "echo": "aecho=0.8:0.6:70|140:0.35|0.2",
+    "devil": f"asetrate={RATE}*0.8,aresample={RATE},atempo=1.25,aecho=0.8:0.55:55|110:0.35|0.2",
+    "devil_whisper": f"asetrate={RATE}*0.84,aresample={RATE},atempo=1.19,highpass=f=260,"
+                     "aecho=0.8:0.6:45|95:0.4|0.25,volume=0.85",
+    "chipmunk": f"asetrate={RATE}*1.35,aresample={RATE},atempo=0.7407",
+    "phone": "highpass=f=380,lowpass=f=3300,acompressor=threshold=0.1:ratio=4,volume=1.6",
+}
+
+
+def apply_voice_fx(clip: "Clip", fx: str) -> "Clip":
+    if fx not in VOICE_FX or clip.synthetic:
+        return clip
+    out = CACHE_DIR / "tts" / f"{_key('vfx', clip.wav.name, clip.wav.stat().st_size, fx)}.wav"
+    if not out.exists():
+        r = subprocess.run([find_ffmpeg(), "-y", "-loglevel", "error", "-i", str(clip.wav), "-af", VOICE_FX[fx],
+                            "-ar", str(RATE), "-ac", "1", "-c:a", "pcm_s16le", str(out)], capture_output=True)
+        if r.returncode != 0 or not out.exists():
+            return clip
+    s = read_samples(out)
+    return Clip(out, len(s) / RATE, compute_env(s), warning=clip.warning)
+
+
 def get_clip(text: str, voice: str, engine: str = "auto", rate: str = "+0%", emotion: str = "neutral",
-             voice_pitch: int = 0, voice_rate: int = 0) -> Clip:
+             voice_pitch: int = 0, voice_rate: int = 0, voice_fx: str = "") -> Clip:
+    if voice_fx in VOICE_FX:
+        return apply_voice_fx(get_clip(text, voice, engine, rate, emotion, voice_pitch, voice_rate), voice_fx)
     text = " ".join(text.split())
     warning = ""
     from .catalog import EDGE_FOR_GENDER, GEMINI_FOR_GENDER
@@ -209,7 +243,7 @@ def get_clip(text: str, voice: str, engine: str = "auto", rate: str = "+0%", emo
     if engine in ("auto", "edge"):
         r, p, v = prosody(emotion, voice_pitch, voice_rate)
         said = shape_text(text, emotion)
-        wav = CACHE_DIR / "tts" / f"{_key('edge2', said, voice, r, p, v)}.wav"
+        wav = CACHE_DIR / "tts" / f"{_key('edge3', said, voice, r, p, v)}.wav"
         if not wav.exists():
             try:
                 _edge_to_wav(said, voice, r, wav, pitch=p, volume=v)

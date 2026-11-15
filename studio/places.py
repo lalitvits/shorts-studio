@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from .realms import OUT, _glow, _h, _sky
 
-PLACES = ("flat_village", "flat_school", "flat_kitchen", "flat_office", "flat_market")
+PLACES = ("flat_village", "flat_school", "flat_kitchen", "flat_office", "flat_market", "flat_bedroom")
 
 
 def _mix(c, k):
@@ -30,7 +30,69 @@ def draw_static(bid: str, im: Image.Image, ps: float, PW: int):
     L = lambda w: max(1, round(w * ps))     # noqa: E731
     rnd = random.Random(_h(bid))
     {"flat_village": _village, "flat_school": _school, "flat_kitchen": _kitchen,
-     "flat_office": _office, "flat_market": _market}[bid](im, d, P, L, PW, ps, rnd)
+     "flat_office": _office, "flat_market": _market, "flat_bedroom": _bedroom}[bid](im, d, P, L, PW, ps, rnd)
+
+
+def _bedroom(im, d, P, L, PW, ps, rnd):
+    """A young man's bedroom at night: bed, study table with laptop, wardrobe, door, night window, fan, clock."""
+    d.rectangle(P(0, 0, PW, 1920), fill=(176, 196, 224))                                        # wall
+    d.rectangle(P(0, 1180, PW, 1200), fill=(150, 168, 196))                                     # skirting
+    _ground(d, im, ps, 1200, (176, 132, 92), (146, 104, 70))                                    # wooden floor
+    for x in range(-300, PW + 300, 170):
+        d.line(P(x, 1200, x - 260, 1920), fill=(156, 112, 76), width=L(3))
+    d.line(P(0, 1200, PW, 1200), fill=OUT, width=L(5))
+    wx = 1150                                                                                    # night window
+    d.rectangle(P(wx, 380, wx + 520, 860), fill=(24, 32, 72), outline=OUT, width=L(8))
+    for _ in range(26):
+        x, y = rnd.uniform(wx + 20, wx + 500), rnd.uniform(400, 840)
+        d.ellipse(P(x - 3, y - 3, x + 3, y + 3), fill=(240, 240, 220))
+    d.ellipse(P(wx + 330, 430, wx + 440, 540), fill=(246, 242, 214))
+    d.ellipse(P(wx + 352, 418, wx + 462, 528), fill=(24, 32, 72))
+    for xx in (wx + 260,):
+        d.line(P(xx, 380, xx, 860), fill=OUT, width=L(6))
+    d.line(P(wx, 620, wx + 520, 620), fill=OUT, width=L(6))
+    for cx, sgn in ((wx - 40, 1), (wx + 560, -1)):                                              # curtains
+        d.polygon([tuple(P(cx - 70, 340)), tuple(P(cx + 70, 340)), tuple(P(cx + 70 + 30 * sgn, 900)),
+                   tuple(P(cx - 70 + 30 * sgn, 900))], fill=(196, 72, 72), outline=OUT)
+    d.rectangle(P(wx - 140, 330, wx + 660, 350), fill=(120, 80, 50), outline=OUT, width=L(4))
+    bx = 120                                                                                      # bed
+    d.rectangle(P(bx, 900, bx + 70, 1330), fill=(130, 84, 54), outline=OUT, width=L(5))          # headboard post
+    d.rounded_rectangle(P(bx, 960, bx + 700, 1100), radius=L(30), fill=(140, 92, 60), outline=OUT, width=L(6))
+    d.rectangle(P(bx + 40, 1100, bx + 760, 1250), fill=(226, 230, 240), outline=OUT, width=L(6))   # mattress
+    d.rounded_rectangle(P(bx + 300, 1060, bx + 780, 1260), radius=L(40), fill=(70, 120, 190), outline=OUT, width=L(6))
+    d.rounded_rectangle(P(bx + 80, 1040, bx + 290, 1130), radius=L(40), fill=(250, 250, 250), outline=OUT, width=L(5))
+    d.rectangle(P(bx + 40, 1250, bx + 760, 1300), fill=(130, 84, 54), outline=OUT, width=L(5))
+    tx = 1850                                                                                     # study table
+    d.rectangle(P(tx, 1060, tx + 420, 1090), fill=(160, 110, 70), outline=OUT, width=L(5))
+    for lx in (tx + 20, tx + 380):
+        d.rectangle(P(lx, 1090, lx + 22, 1260), fill=(130, 88, 56), outline=OUT, width=L(3))
+    d.polygon([tuple(P(tx + 120, 1060)), tuple(P(tx + 300, 1060)), tuple(P(tx + 320, 1052)), tuple(P(tx + 100, 1052))],
+              fill=(60, 64, 74), outline=OUT)                                                     # laptop base
+    d.polygon([tuple(P(tx + 130, 1052)), tuple(P(tx + 290, 1052)), tuple(P(tx + 300, 940)), tuple(P(tx + 120, 940))],
+              fill=(50, 54, 64), outline=OUT)
+    d.polygon([tuple(P(tx + 142, 1040)), tuple(P(tx + 278, 1040)), tuple(P(tx + 286, 952)), tuple(P(tx + 134, 952))],
+              fill=(80, 140, 210))
+    d.rectangle(P(tx + 340, 960, tx + 352, 1060), fill=(60, 60, 66))                            # desk lamp
+    d.polygon([tuple(P(tx + 320, 960)), tuple(P(tx + 380, 960)), tuple(P(tx + 360, 920)), tuple(P(tx + 336, 920))],
+              fill=(240, 200, 80), outline=OUT)
+    d.rectangle(P(2350, 520, 2580, 1200), fill=(170, 120, 80), outline=OUT, width=L(6))         # wardrobe / door
+    d.line(P(2465, 520, 2465, 1200), fill=OUT, width=L(5))
+    for hx in (2445, 2485):
+        d.ellipse(P(hx - 8, 850, hx + 8, 866), fill=(230, 200, 100))
+    d.rectangle(P(820, 480, 1020, 760), fill=(240, 120, 60), outline=OUT, width=L(5))           # poster
+    d.ellipse(P(860, 520, 980, 640), fill=(255, 220, 90))
+    d.rectangle(P(860, 660, 980, 700), fill=(40, 40, 60))
+    d.ellipse(P(560, 440, 700, 580), fill=(255, 255, 250), outline=OUT, width=L(6))             # wall clock
+
+
+def _fan(d, cx, cy, t, s, ang0=0.0):
+    """Ceiling fan seen from the side-ish: three blades turning."""
+    for i in range(3):
+        a = ang0 + t * 9 + i * 2 * math.pi / 3
+        dx, dy = math.cos(a) * 230 * s, math.sin(a) * 34 * s
+        d.polygon([(cx, cy), (cx + dx - dy * 0.3, cy + dy - 12 * s), (cx + dx + dy * 0.3, cy + dy + 12 * s)],
+                  fill=(120, 90, 70, 255))
+    d.ellipse([cx - 30 * s, cy - 20 * s, cx + 30 * s, cy + 20 * s], fill=(90, 70, 56, 255))
 
 
 def _ground(d, im, ps, y0, top, bottom):
@@ -338,6 +400,20 @@ def animate(im: Image.Image, bid: str, t: float, x0: float, y0: float, z: float,
         if visible(2490):
             cx, cy = px(2490, 430)
             _clock(d, cx, cy, 62 * s, t, s)
+    elif bid == "flat_bedroom":
+        if visible(630):
+            cx, cy = px(630, 510)
+            _clock(d, cx, cy, 62 * s, t, s)
+        cx, cy = px(1300, 140)                                    # ceiling fan
+        d.line([(cx, 0), (cx, cy)], fill=(80, 64, 52, 255), width=max(1, round(10 * s)))
+        _fan(d, cx, cy, t, s)
+        for j in range(3):                                         # twinkling stars in the window
+            X, Y = 1200 + j * 140, 470 + j * 90
+            if visible(X):
+                a = max(0.0, math.sin(t * 3 + j * 2))
+                x, y = px(X, Y)
+                r = 6 * s * a
+                d.polygon([(x, y - 3 * r), (x + r, y), (x, y + 3 * r), (x - r, y)], fill=(255, 255, 230, 230))
     elif bid == "flat_market":
         for X, spd, col in it["walkers"]:                         # shoppers walking behind the stalls
             Xw = (X + t * spd) % (PW + 400) - 200

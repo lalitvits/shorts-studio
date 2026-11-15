@@ -20,6 +20,17 @@ You write a scenario, pick characters and backgrounds from dropdowns, edit the s
 - **Gemini voice lines left today** is shown in the Voices step (free tier: about 10 lines per voice model per day).
 - **Speed:** drawing a full-quality frame is about 30% faster. On computers with 6 or more CPU threads, frames are drawn in parallel; set `SHORTS_WORKERS=1` to turn that off (on a 2-core laptop it did not help, so it stays off there).
 
+## Sketch-comedy tools (scripts like "2 AM pizza")
+
+- **Paste a full script** (Story step): a screenplay with stage directions in brackets. Gemini turns it into characters, scenes, emotions, actions, sound effects, lighting, phone pop-ups, stickers, text cards and the ending; the dialogue is kept word for word. Gemini's safety filter sometimes refuses comedy with slaps or throws: the app tries three times, then tells you to press Import again or soften that line.
+- **Bedroom at night** background, and **lighting** per scene: normal, night with the lights off, or dark lit by a phone (a blue glow on the face of whoever holds one). A line can **switch the light on or off** (with a click and a flash). **Appear**: a character is hidden until their line, then simply there.
+- **"My brain" (inner voice)**: a floating pink brain with little devil horns that glows in the dark. **Voice effects** for any character: echo, devil, devil whisper, chipmunk, phone call.
+- **Sounds**: stomach growl, notification ping, doorbell, chappal smack, audience laughter, meme boom, dun-dun-duuun, light switch, clock ticking, record scratch. Put a real recording in `assets/sounds/<name>.mp3` (for example `growl.mp3`) to replace a synthesized one; the growl in particular is only an approximation.
+- **On screen**: a phone-notification banner per line (slides down with a ping) and stickers (pizza, burger, money, heart, idea, angry, laugh, question, exclamation, sleep, fire).
+- **Text cards** ("20 मिनट बाद" with a ticking clock), **black screen** endings (with laughter), and the **throw** action: a chappal flies at the camera, smack, shake.
+- **New actions and props**: wipe tears, hold a food parcel, hide it behind the back, a realistic full-size phone.
+- **Pacing**: the Microsoft voices are 10% faster and their long pauses between sentences are shortened, for snappy Shorts.
+
 ## What you need
 
 - Python 3.10 or newer

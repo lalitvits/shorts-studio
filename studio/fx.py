@@ -26,7 +26,11 @@ TWO_PI = 2 * math.pi
 
 FX_LABELS = {"punch": "Punch hit (effect)", "slap": "Slap (effect)", "whoosh": "Whoosh (effect)",
              "pop": "Pop (effect)", "ding": "Ding, idea! (effect)", "boing": "Boing, comedy (effect)",
-             "thud": "Thud, fall (effect)"}
+             "thud": "Thud, fall (effect)", "growl": "Stomach growl (effect)",
+             "ping": "Phone notification (effect)", "doorbell": "Doorbell ting-tong (effect)",
+             "chappal": "Chappal smack (effect)", "laugh_track": "Audience laughing (effect)",
+             "boom": "Meme boom (effect)", "dun_dun": "Dun dun duuun (effect)", "click": "Light switch click (effect)",
+             "tick": "Clock ticking (effect)", "scratch": "Record scratch (effect)"}
 MUSIC_LABELS = {"happy": "Happy (ukulele-style)", "comedy": "Comedy (bouncy)", "suspense": "Suspense",
                 "emotional": "Emotional (slow)", "heaven": "Heavenly (Swarg)", "hell": "Dark drums (Nark)"}
 
@@ -149,8 +153,193 @@ def _thud():
     return _lowpass(out, 0.3)
 
 
+def _growl():
+    """Stomach growl: an irregular low buzz whose resonance slides up and down (gurgle), in two bursts."""
+    n, rnd = int(1.6 * RATE), random.Random(5)
+    out, ph = [], 0.0
+    y1 = y2 = 0.0
+    for i in range(n):
+        t = i / RATE
+        burst = max(0.0, math.sin(math.pi * min(1.0, t / 0.7))) if t < 0.7 else \
+            0.8 * max(0.0, math.sin(math.pi * min(1.0, (t - 0.8) / 0.8))) if t > 0.8 else 0.0
+        f0 = 55 + 25 * math.sin(TWO_PI * 1.3 * t) + 10 * math.sin(TWO_PI * 7 * t)
+        ph += f0 / RATE * (1 + 0.3 * rnd.uniform(-1, 1))
+        src = (2 * (ph % 1.0) - 1) + 0.3 * rnd.uniform(-1, 1)
+        fr = 180 + 220 * (0.5 + 0.5 * math.sin(TWO_PI * 2.2 * t + math.sin(TWO_PI * 0.7 * t) * 2))
+        r = 0.985
+        a1, a2 = 2 * r * math.cos(TWO_PI * fr / RATE), -r * r
+        y = (1 - r) * src + a1 * y1 + a2 * y2
+        y2, y1 = y1, y
+        out.append(y * burst)
+    return [math.tanh(3 * v) for v in out]
+
+
+
+def _ping():
+    """Phone notification: two quick chimes."""
+    n = int(0.6 * RATE)
+    out = []
+    for i in range(n):
+        t = i / RATE
+        a = math.sin(TWO_PI * 1568 * t) * math.exp(-t * 14) if t < 0.3 else 0.0
+        b = math.sin(TWO_PI * 2093 * (t - 0.11)) * math.exp(-(t - 0.11) * 9) if t >= 0.11 else 0.0
+        out.append(a + 0.9 * b + 0.2 * math.sin(TWO_PI * 4186 * t) * math.exp(-t * 30))
+    return out
+
+
+def _bell(t, f):
+    return sum(g * math.sin(TWO_PI * f * m * t) * math.exp(-t * d) for m, g, d in ((1, 1.0, 2.2), (2.0, 0.4, 3.5),
+                                                                                   (3.01, 0.22, 5.0), (4.2, 0.1, 7.0)))
+
+
+def _doorbell():
+    """Ting-tong."""
+    n = int(2.0 * RATE)
+    out = []
+    for i in range(n):
+        t = i / RATE
+        v = _bell(t, 659) if t < 0.75 else _bell(t, 659) * 0.3
+        if t >= 0.6:
+            v += _bell(t - 0.6, 523)
+        out.append(v)
+    return out
+
+
+def _chappal():
+    """Slipper smack: a flat slap with some body."""
+    n, rnd, out, ph = int(0.35 * RATE), random.Random(6), [], 0.0
+    lp = 0.0
+    for i in range(n):
+        t = i / RATE
+        v = rnd.uniform(-1, 1)
+        lp += 0.45 * (v - lp)
+        ph += (110 + 80 * math.exp(-t * 40)) / RATE
+        out.append(lp * math.exp(-t * 35) * 1.4 + 0.7 * math.sin(TWO_PI * ph) * math.exp(-t * 20))
+    return out
+
+
+def _gemini_laughs() -> list:
+    """Real-sounding laughs: four Gemini voices laughing (made once and saved; uses 4 free Gemini voice lines)."""
+    from .gemini_tts import synthesize, ready
+    if not ready():
+        return []
+    out = []
+    for name, text in (("Puck", "[laughing] हा हा हा हा हा!"), ("Kore", "[laughing] ही ही ही ही!"),
+                       ("Fenrir", "[laughing] हा हा हा, हो हो!"), ("Leda", "[laughing] हा हा हा हा!")):
+        path = CACHE / f"laugh_{name}.wav"
+        try:
+            if not path.exists():
+                synthesize(text, name, "laughing", path, RATE)
+            with wave.open(str(path), "rb") as w:
+                a = array.array("h")
+                a.frombytes(w.readframes(w.getnframes()))
+                out.append([v / 32768 for v in a])
+        except Exception:  # noqa: BLE001  no key / limit used up: the synthesized laughs below are used
+            continue
+    return out
+
+
+def _laugh_track():
+    """A small studio audience laughing: many laughs, each a little higher or lower, mixed over a murmur."""
+    src = _gemini_laughs()
+    if len(src) < 2:
+        from .sfx import _synth_cached
+        src = []
+        for g in ("male", "female"):
+            with wave.open(str(_synth_cached("laugh", g)), "rb") as w:
+                a = array.array("h")
+                a.frombytes(w.readframes(w.getnframes()))
+                src.append([v / 32768 for v in a])
+    n, rnd = int(3.2 * RATE), random.Random(7)
+    out = [0.0] * n
+    for k in range(10 if len(src) > 2 else 14):
+        s = src[k % len(src)]
+        rate = rnd.uniform(0.9, 1.12) if len(src) > 2 else rnd.uniform(0.82, 1.25)
+        off = int(rnd.uniform(0.0, 0.9) * RATE)
+        amp = rnd.uniform(0.35, 0.8)
+        j = 0.0
+        while int(j) < len(s) - 1 and off < n:
+            out[off] += s[int(j)] * amp
+            j += rate
+            off += 1
+    lp = 0.0
+    for i in range(n):                                    # crowd murmur
+        t = i / RATE
+        lp += 0.08 * (rnd.uniform(-1, 1) - lp)
+        out[i] += lp * 0.9 * min(1.0, t / 0.3) * min(1.0, (3.2 - t) / 1.2)
+    fade = int(1.0 * RATE)
+    for i in range(n - fade, n):
+        out[i] *= (n - i) / fade
+    return out
+
+
+def _boom():
+    """'Vine boom' meme hit: a deep boom with a long tail."""
+    n, ph, out = int(1.6 * RATE), 0.0, []
+    for i in range(n):
+        t = i / RATE
+        ph += (48 + 30 * math.exp(-t * 12)) / RATE
+        out.append(math.sin(TWO_PI * ph) * math.exp(-t * 2.6) * min(1.0, t / 0.005))
+    echo = int(0.11 * RATE)
+    for i in range(echo, n):
+        out[i] += 0.35 * out[i - echo]
+    return [math.tanh(2.5 * v) for v in out]
+
+
+def _dun_dun():
+    """Dramatic 'dun dun duuun' sting."""
+    n = int(2.4 * RATE)
+    out = [0.0] * n
+    for start, f, dur in ((0.0, 147, 0.32), (0.4, 147, 0.32), (0.85, 139, 1.5)):
+        ph = 0.0
+        lp = 0.0
+        for i in range(int(start * RATE), min(n, int((start + dur) * RATE))):
+            t = i / RATE - start
+            ph += f / RATE
+            saw = 2 * (ph % 1.0) - 1
+            lp += 0.15 * (saw - lp)
+            out[i] += lp * min(1.0, t / 0.02) * min(1.0, (dur - t) / 0.15)
+    return out
+
+
+def _click():
+    n, rnd = int(0.08 * RATE), random.Random(8)
+    return [(rnd.uniform(-1, 1) * math.exp(-(i / RATE) * 250) + 0.6 * math.sin(TWO_PI * 2400 * i / RATE)
+             * math.exp(-(i / RATE) * 120)) for i in range(n)]
+
+
+def _tick():
+    """Clock ticking (for a 'later...' card)."""
+    n = int(2.0 * RATE)
+    out = [0.0] * n
+    for k in range(4):
+        s = int((0.05 + k * 0.5) * RATE)
+        f = 3000 if k % 2 == 0 else 2500
+        for i in range(int(0.04 * RATE)):
+            if s + i < n:
+                out[s + i] += math.sin(TWO_PI * f * i / RATE) * math.exp(-(i / RATE) * 120)
+    return out
+
+
+def _scratch():
+    """Record scratch."""
+    n, rnd, out = int(0.6 * RATE), random.Random(9), []
+    y1 = y2 = 0.0
+    for i in range(n):
+        t = i / RATE
+        f = 600 + 2200 * abs(math.sin(TWO_PI * 2.5 * t))
+        r = 0.96
+        a1, a2 = 2 * r * math.cos(TWO_PI * f / RATE), -r * r
+        y = (1 - r) * rnd.uniform(-1, 1) + a1 * y1 + a2 * y2
+        y2, y1 = y1, y
+        out.append(y * math.exp(-t * 3))
+    return out
+
+
 MAKERS = {"punch": _punch, "slap": _slap, "whoosh": _whoosh, "pop": _pop, "ding": _ding, "boing": _boing,
-          "thud": _thud}
+          "thud": _thud, "growl": _growl, "ping": _ping, "doorbell": _doorbell, "chappal": _chappal,
+          "laugh_track": _laugh_track, "boom": _boom, "dun_dun": _dun_dun, "click": _click, "tick": _tick,
+          "scratch": _scratch}
 
 
 def fx_wav(fx_id: str) -> Path:

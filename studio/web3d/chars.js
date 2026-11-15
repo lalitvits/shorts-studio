@@ -306,9 +306,16 @@
     /* props held in the right hand (shown for phone, tea, book and snack actions) */
     var handY = woman ? -0.255 : -0.275, P = {};
     P.phone = new THREE.Group();
-    var ph = mesh(new THREE.BoxGeometry(0.062, 0.12, 0.012), mat(0x22252d, 0.35));
-    var scr = new THREE.Mesh(new THREE.PlaneGeometry(0.052, 0.1), new THREE.MeshBasicMaterial({color:col(0x7fc8f5)}));
-    scr.position.z = 0.0065; ph.add(scr); P.phone.add(ph);
+    var ph = mesh(new THREE.BoxGeometry(0.085, 0.17, 0.014), mat(0x2e323e, 0.3));      /* real-sized phone */
+    var scr = new THREE.Mesh(new THREE.PlaneGeometry(0.077, 0.16), new THREE.MeshBasicMaterial({color:col(0x7fc8f5)}));
+    scr.position.z = 0.0075; ph.add(scr);
+    var camMod = mesh(new THREE.BoxGeometry(0.03, 0.034, 0.006), mat(0x15171d, 0.3));
+    camMod.position.set(-0.022, 0.058, -0.009); ph.add(camMod);
+    [[-0.028, 0.066], [-0.028, 0.05], [-0.016, 0.058]].forEach(function(q){
+      var lens = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0055, 0.004, 14), mat(0x050608, 0.1));
+      lens.rotation.x = Math.PI/2; lens.position.set(q[0], q[1], -0.0125); ph.add(lens);
+    });
+    P.phone.add(ph);
     P.cup = new THREE.Group();
     var cup = mesh(new THREE.CylinderGeometry(0.032, 0.026, 0.07, 20), mat(0xf4f1ea, 0.4));
     var tea = new THREE.Mesh(new THREE.CircleGeometry(0.029, 20), mat(0xa8683a, 0.5)); tea.rotation.x = -Math.PI/2; tea.position.y = 0.03;
@@ -500,6 +507,14 @@
       tg.shRx = -1.45; tg.shRz = -0.15; tg.elRx = -1.25;
     } else if(action === 'thumbs_up' || action === 'ok_sign'){
       tg.shRx = -0.9; tg.elRx = -1.3; tg.shRz = -0.2;
+    } else if(action === 'wipe_tears'){
+      tg.shRx = -1.3; tg.shRz = 0.35; tg.elRx = -2.3 + 0.12*s(t*9); tg.headX = 0.15;
+    } else if(action === 'hold_parcel'){
+      tg.shLx = tg.shRx = -0.6; tg.elLx = tg.elRx = -1.0; tg.shLz = -0.15; tg.shRz = 0.15;
+    } else if(action === 'hide_behind'){
+      tg.shLx = tg.shRx = 0.55; tg.elLx = tg.elRx = -0.4; tg.shLz = 0.05; tg.shRz = -0.05; tg.headY = 0.2*s(t*3);
+    } else if(action === 'throw'){
+      if(t < 0.5){ tg.shRz = -2.6; tg.elRz = -0.8; tg.spineY = 0.3; } else { tg.shRx = -1.4; tg.shRz = -0.2; tg.spineY = -0.3; }
     } else if(action === 'look_around'){
       tg.headY = 0.55*s(t*1.6);
     } else if(action === 'phone_call'){

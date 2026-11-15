@@ -36,6 +36,12 @@
         <label>Target length
           <select data-path="seconds"><option value="30">About 30 seconds</option><option value="45">About 45 seconds</option><option value="60">About 60 seconds</option></select></label>
       </div>
+      <details class="oneclick import">
+        <summary><b>Paste a full script</b> (with stage directions in brackets)</summary>
+        <p class="hint">Gemini turns your screenplay into characters, scenes, emotions, actions, sound effects, lighting, phone pop-ups, text cards ("20 मिनट बाद") and a black ending. Your dialogue is kept word for word.</p>
+        <textarea id="import-text" rows="8" lang="hi" placeholder="दृश्य: रात के 2 बजे...&#10;मैं: (आत्मविश्वास के साथ) &quot;बस! बहुत हो गया बाहर का खाना...&quot;"></textarea>
+        <div class="actions" style="justify-content:flex-start"><button class="primary" data-act="import-script">Import script</button></div>
+      </details>
       <div class="oneclick">
         <h2>Make it for me</h2>
         <p class="hint">One click: Gemini writes the script and hook, the app picks backgrounds, emotions, actions and music, makes the voices and the video. Uses the characters in the Cast step. You can open the result as a project and change anything.</p>
@@ -113,6 +119,8 @@
       <div id="scenes"></div>
       <div class="actions">
         <button class="secondary" data-act="add-scene">Add scene</button>
+        <button class="secondary" data-act="add-card">Add text card</button>
+        <button class="secondary" data-act="add-black">Add black ending</button>
         <button class="primary" data-act="go" data-step="4">Next: voices</button>
       </div>
     </section>
