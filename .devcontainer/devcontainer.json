@@ -2,10 +2,10 @@
   "name": "Shorts Studio",
   "image": "mcr.microsoft.com/devcontainers/python:3.12",
   "features": {
-    "ghcr.io/devcontainers/features/sshd:1": {}
+    "ghcr.io/devcontainers/features/sshd:1": {},
+    "./start-app": {}
   },
   "postCreateCommand": "sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-core fonts-freefont-ttf && pip install -r requirements.txt && python -m playwright install --with-deps chromium",
-  "postStartCommand": "setsid nohup python run.py --no-browser > /tmp/shorts-studio.log 2>&1 < /dev/null &",
   "secrets": {
     "GEMINI_API_KEY": { "description": "Optional: your Gemini key, for script writing, Gemini voices and captions from your audio." }
   },

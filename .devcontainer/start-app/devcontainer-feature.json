@@ -1,0 +1,8 @@
+{
+  "id": "start-app",
+  "version": "1.0.0",
+  "name": "Start Shorts Studio",
+  "description": "Starts Shorts Studio on port 8000 whenever the codespace starts, and restarts it if it stops.",
+  "entrypoint": "/usr/local/share/shorts-studio-start.sh",
+  "installsAfter": ["ghcr.io/devcontainers/features/sshd"]
+}
