@@ -31,6 +31,19 @@ You write a scenario, pick characters and backgrounds from dropdowns, edit the s
 - **New actions and props**: wipe tears, hold a food parcel, hide it behind the back, a realistic full-size phone.
 - **Pacing**: the Microsoft voices are 10% faster and their long pauses between sentences are shortened, for snappy Shorts.
 
+## Story and safety-video tools (scripts like "kitchen fire")
+
+- **Narrator (voice-over)**: add a character with the look "Narrator". It is never on screen; while it speaks, the camera keeps showing the scene. Any line can also make someone else act meanwhile ("Meanwhile: Neha, Step back in fear"), so the narration and the acting happen together.
+- **Silent moments**: a line with no words and a number of seconds is an action beat ("Lalit covers the kadhai, 2 seconds"). A scene can have a length in seconds (from the script's 0:10 - 0:25), and it lasts at least that long.
+- **Kadhai on the stove** (flat kitchen): a line can make it fry (puris, bubbles, sizzle), **catch fire** (flames shoot up, the camera shakes, warm flickering light on everyone), be **covered with a steel thali** (the fire dies, then smoke) or have the **gas turned off**. The camera keeps the stove in view, and there is a close-up shot of the stove.
+- **New actions**: cook at the stove, step back in fear, run in, lift a water jug, jug pushed down (water splashes), grab someone's hand, turn off the gas, cover the kadhai, hand on someone's shoulder, look at the camera. A character who grabs a hand or touches a shoulder walks up to the nearest person; one who works at the stove walks to it.
+- **Kid look** (about 10 years old, striped t-shirt) and a high, young voice.
+- **Sounds**: oil sizzling, fire flaring up, water splash, running footsteps, metal clang. The kitchen and action sounds are added by themselves.
+- **Music that changes per scene** (with a cross-fade): for example panic while the fire burns, then calm while explaining. New tracks: Panic and Calm.
+- **Cut-away (B-roll)**: while a line plays, the picture can cut to an **explainer animation** (why water on an oil fire explodes into a fireball, and why covering it with a plate puts it out, with step-by-step captions), or to one of your own pictures (Backgrounds), slowly zooming in.
+- **Big text on screen**: a bold message over the picture from a line to the end of its scene; write a second, smaller line after ` | ` (for example `आग पर पानी न डालें, उसे ढकें! | NEVER USE WATER ON OIL FIRE`).
+- **Paste a full script** understands all of these: VO lines, visuals, kadhai, B-roll, on-screen text, music changes and scene timings.
+
 ## What you need
 
 - Python 3.10 or newer

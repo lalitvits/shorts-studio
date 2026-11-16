@@ -20,6 +20,11 @@ ACTION_LABELS = {
     "appear": "Appear (hidden until this line)",
     "wipe_tears": "Wipe tears", "hold_parcel": "Hold a food parcel", "hide_behind": "Hide something behind the back",
     "throw": "Throw a chappal (at the camera)",
+    "cook": "Cook at the stove (frying)", "step_back": "Step back in fear", "run_in": "Run in (enters running)",
+    "hold_jug": "Lift a water jug (about to throw it)", "lower_jug": "Jug pushed down (water splashes)",
+    "grab_hand": "Grab someone's hand (stop them)", "turn_off_gas": "Turn off the gas knob",
+    "cover_kadhai": "Cover the kadhai with a thali", "hand_on_shoulder": "Hand on someone's shoulder",
+    "look_camera": "Look at the camera (relieved)",
     "sit": "Sit on sofa", "sit_phone": "Sit and use phone", "sit_tea": "Sit and drink tea",
     "sit_read": "Sit and read", "sit_eat": "Sit and eat a snack", "sit_sleep": "Sit and sleep",
 }
@@ -72,6 +77,10 @@ _FLAT = {
         bottom_color=(196, 168, 110), hat="police_cap", hat_color=(196, 168, 110), band_color=(196, 40, 40),
         hair="none", hair_color=(40, 30, 28), mustache=True, female=False, height=1.0, belly=1.0, holds="lathi",
         shoe=(30, 28, 30))),
+    "flat_kid": ("Flat: Kid, about 10 (striped t-shirt, shorts)", False, dict(
+        kind="human", skin=(198, 140, 96), top="tshirt", top_color=(230, 80, 70), bottom="shorts",
+        bottom_color=(50, 80, 140), hat=None, hair="short", hair_color=(30, 26, 26), mustache=False,
+        female=False, height=0.66, stripes=(250, 236, 220))),
     "flat_brain": ("Flat: My brain (inner voice, little devil)", False, dict(
         kind="brain", color=(244, 150, 172), glow=(255, 110, 140), horns=True, height=1.0)),
     "flat_dog": ("Flat: Dog (brown)", False, dict(kind="dog", color=(146, 94, 58), light=(196, 150, 104), height=1.0)),
@@ -103,6 +112,10 @@ for _k, (_label, _fem, _model, _fb) in _3D.items():
     LOOKS[_k] = dict(label=_label, style="3d", flat=dict(kind="3d", model=_model, height=1.0, fallback=_fb),
                      female=_fem, sprite=False, scale=1.0, skin=_fb["skin"], shirt=_fb["top_color"],
                      pants=_fb["bottom_color"], hair=_fb["hair_color"])
+# The narrator: a voice-over that is never on screen (the camera keeps showing the scene while it speaks).
+LOOKS["narrator"] = dict(label="Narrator (voice-over, not on screen)", style="narrator", female=False, sprite=False,
+                         scale=1.0, skin=(200, 150, 110), shirt=(90, 90, 100), pants=(60, 60, 70), hair=(40, 30, 30))
+NARRATOR_LOOKS = {"narrator"}
 for _k, _v in LOOKS.items():
     _v["id"] = _k
 
@@ -123,7 +136,8 @@ FLAT_BACKGROUNDS = {
 
 # Camera shot for a line (flat cartoon style). "auto" picks one like a cartoon editor would.
 SHOT_LABELS = {"auto": "Camera: automatic", "wide": "Camera: wide (everyone)", "single": "Camera: on the speaker",
-               "ots": "Camera: over the shoulder", "close": "Camera: close-up"}
+               "ots": "Camera: over the shoulder", "close": "Camera: close-up",
+               "stove": "Camera: close-up on the stove (kitchen)"}
 
 # Older saved projects used other ids; they now open as the closest of the three.
 LOOK_ALIASES = {"blue_shirt": "rahul", "rahul_sheet": "rahul", "vikram": "rahul", "vikram_sheet": "rahul",
@@ -156,6 +170,7 @@ EDGE_FOR_GENDER = {"male": "hi-IN-MadhurNeural", "female": "hi-IN-SwaraNeural"}
 VOICE_TUNE = {"3d_oldman": (-10, -10), "flat_uncle": (-6, -4), "flat_police": (-8, -6), "maa": (-4, -10),
               "flat_aunty": (-2, -4), "flat_boy": (28, 8), "3d_boy": (20, 6), "flat_girl": (12, 4),
               "3d_woman": (6, 2), "flat_man": (0, 2), "3d_youngman": (0, 2), "flat_dog": (8, 10), "flat_cat": (24, 6),
+              "flat_kid": (34, 10), "narrator": (-4, -4),
               "clay": (14, 4)}
 # Voice effects (tts.VOICE_FX) and the look that gets one by default
 VOICE_FX_LABELS = {"": "No effect", "echo": "Echo", "devil": "Devil (deep, with echo)",
@@ -163,7 +178,7 @@ VOICE_FX_LABELS = {"": "No effect", "echo": "Echo", "devil": "Devil (deep, with 
                    "phone": "Phone call"}
 VOICE_FX_FOR_LOOK = {"flat_brain": "devil_whisper"}
 # Gemini voice for each look when the engine picks Gemini for a character that has a Microsoft voice
-GEMINI_FOR_LOOK = {"flat_brain": "Fenrir", "3d_oldman": "Algenib", "flat_uncle": "Algenib", "flat_police": "Orus", "flat_boy": "Sadachbia",
+GEMINI_FOR_LOOK = {"narrator": "Charon", "flat_kid": "Sadachbia", "flat_brain": "Fenrir", "3d_oldman": "Algenib", "flat_uncle": "Algenib", "flat_police": "Orus", "flat_boy": "Sadachbia",
                    "3d_boy": "Sadachbia", "3d_youngman": "Puck", "flat_man": "Achird", "3d_woman": "Leda",
                    "flat_girl": "Leda", "flat_aunty": "Sulafat", "maa": "Gacrux", "priya": "Kore", "rahul": "Charon",
                    "aman": "Puck"}
@@ -182,9 +197,12 @@ SOUND_LABELS = {
     "chappal": "Chappal smack (effect)", "laugh_track": "Audience laughing (effect)", "boom": "Meme boom (effect)",
     "dun_dun": "Dun dun duuun (effect)", "click": "Light switch click (effect)", "tick": "Clock ticking (effect)",
     "scratch": "Record scratch (effect)",
+    "sizzle": "Oil sizzling, chhann (effect)", "fire": "Fire flaring up (effect)", "splash": "Water splash (effect)",
+    "footsteps": "Running footsteps (effect)", "clang": "Metal clang, thali (effect)",
 }
 FX_SOUNDS = {"punch", "slap", "whoosh", "pop", "ding", "boing", "thud", "growl", "ping", "doorbell", "chappal",
-             "laugh_track", "boom", "dun_dun", "click", "tick", "scratch"}
+             "laugh_track", "boom", "dun_dun", "click", "tick", "scratch", "sizzle", "fire", "splash", "footsteps",
+             "clang"}
 # The emotion that usually goes with each sound (the app suggests it when the line is still "neutral").
 SOUND_EMOTIONS = {"laugh": "laughing", "giggle": "happy", "cry": "crying", "angry": "angry", "frustrated": "angry",
                   "sigh": "sad", "gasp": "surprised", "scream": "scared", "yawn": "sleepy", "hmm": "thinking"}

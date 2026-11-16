@@ -25,10 +25,11 @@ from .audio import AudioError, env_segments, fit_segments, get_audio, load_env
 from .backgrounds import get_background, get_background_3d
 from .shading import shade_3d, soft_shadow
 from .visemes import build_track
-from .catalog import (ACTIONS, DEFAULT_VOICE, EMOTIONS, GEMINI_FOR_LOOK, LOOK_ALIASES, LOOKS, SHOT_LABELS,
-                      SOUND_LABELS, VOICE_FX_FOR_LOOK, VOICE_FX_LABELS, VOICE_TUNE)
+from .catalog import (ACTIONS, DEFAULT_VOICE, EMOTIONS, GEMINI_FOR_LOOK, LOOK_ALIASES, LOOKS, NARRATOR_LOOKS,
+                      SHOT_LABELS, SOUND_LABELS, VOICE_FX_FOR_LOOK, VOICE_FX_LABELS, VOICE_TUNE)
 from .flat import FlatComposer
 from . import fx as fx_mod
+from . import kitchen
 from . import overlays
 from .config import GROUND_Y, OUTPUT_DIR, QUALITY, WORLD_W, find_devanagari_font, find_ffmpeg
 from .rig import (BOX_H, BOX_W, KEEP_EMOTION, ORG_X, ORG_Y, PERSISTENT, SIT_ACTIONS, blink_amount,
@@ -53,6 +54,17 @@ def _num(v):
 CARD_STYLES = ("dark", "black", "bright")
 LIGHTING = ("day", "dark", "phone")
 STICKERS = ("pizza", "burger", "money", "heart", "idea", "angry", "laugh", "question", "exclaim", "sleep", "fire")
+
+
+def _broll(v) -> str:
+    """A line's cut-away picture: one of the explainer animations, or "pic:<background id>" (your own picture)."""
+    v = str(v or "")
+    return v if v in kitchen.EXPLAINERS or (v.startswith("pic:") and len(v) < 120) else ""
+
+
+def _scene_music(v) -> str:
+    """A scene's music: a built-in track id, "none" (silence from here), or "" (keep the music playing)."""
+    return v if v in fx_mod.MUSIC_LABELS or v == "none" else ""
 
 
 def _clampi(v, default, lo, hi):
@@ -85,15 +97,29 @@ def normalize(tl: dict) -> dict:
     if not chars:
         raise RenderError("Add at least one character.")
     ids = [c["id"] for c in chars]
+    narrators = {c["id"] for c in chars if c["look"] in NARRATOR_LOOKS}       # voice-over: never on screen
+    if len(narrators) == len(chars):
+        raise RenderError("Add at least one character who is on screen (the narrator is only a voice).")
     scenes = []
     for sc in tl.get("scenes", []):
         lines = []
         for ln in sc.get("lines", []):
             text = str(ln.get("text", "")).strip()
             sound = ln.get("sound") if ln.get("sound") in SOUND_LABELS else ""
-            if not text and not sound and audio["mode"] != "file":   # nothing to say or play (own audio: acting only)
-                continue
+            hold = min(20.0, _num(ln.get("hold")) or 0.0)
+            if not text and not sound and not hold and audio["mode"] != "file":
+                if (ln.get("action") in ("talk", "idle", None, "") and not ln.get("kadhai") and not ln.get("actor")
+                        and not ln.get("broll") and not ln.get("overlay")):
+                    continue                                     # nothing to say, play or show
+                hold = 1.5                                       # an action with no words: a silent moment
+            actor = ln.get("actor") if ln.get("actor") in ids and ln.get("actor") not in narrators else ""
             lines.append(dict(speaker=ln.get("speaker") if ln.get("speaker") in ids else ids[0], text=text, sound=sound,
+                              hold=hold, actor=actor,
+                              actor_action=ln.get("actor_action") if ln.get("actor_action") in ACTIONS else "idle",
+                              actor_emotion=ln.get("actor_emotion") if ln.get("actor_emotion") in EMOTIONS else "neutral",
+                              kadhai=ln.get("kadhai") if ln.get("kadhai") in kitchen.KADHAI_STATES else "",
+                              broll=_broll(ln.get("broll")),
+                              overlay=" ".join(str(ln.get("overlay") or "").split())[:120],
                               emotion=ln.get("emotion") if ln.get("emotion") in EMOTIONS else "neutral",
                               action=ln.get("action") if ln.get("action") in ACTIONS else "talk",
                               shot=ln.get("shot") if ln.get("shot") in SHOT_LABELS else "auto",
@@ -108,17 +134,24 @@ def normalize(tl: dict) -> dict:
                 speakers.append(ln["speaker"])
         given = sc.get("cast")
         cast = [c for c in given if c in ids] if isinstance(given, list) else []
-        cast = cast + [x for x in speakers if x not in cast]
+        cast = [c for c in cast + [x for x in speakers if x not in cast] if c not in narrators]
+        for ln in lines:                          # a narrator line shows someone acting: they are in the scene
+            if ln["actor"] and ln["actor"] not in cast:
+                cast.append(ln["actor"])
+        if lines and not cast and sc.get("card") is None:     # only narration: show the first on-screen character
+            cast = [next(i for i in ids if i not in narrators)]
         if sc.get("card") is not None:          # a text card (or a black screen) between scenes
             snd = sc.get("card_sound") if sc.get("card_sound") in SOUND_LABELS else ""
             scenes.append(dict(background="", cast=[], lines=[], audio_from=None, audio_to=None, lighting="day",
                                card=" ".join(str(sc.get("card") or "").split())[:80],
                                card_style=sc.get("card_style") if sc.get("card_style") in CARD_STYLES else "dark",
-                               card_sound=snd, card_seconds=_num(sc.get("card_seconds")) or 0.0))
-        elif lines or cast:
+                               card_sound=snd, card_seconds=_num(sc.get("card_seconds")) or 0.0,
+                               music=_scene_music(sc.get("music"))))
+        elif cast:
             scenes.append(dict(background=sc.get("background") or "living_room", cast=cast, lines=lines,
                                audio_from=_num(sc.get("audio_from")), audio_to=_num(sc.get("audio_to")),
                                lighting=sc.get("lighting") if sc.get("lighting") in LIGHTING else "day",
+                               music=_scene_music(sc.get("music")), seconds=min(60.0, _num(sc.get("seconds")) or 0.0),
                                card=None))
     if not any(sc["cast"] for sc in scenes):
         raise RenderError("Add at least one scene with a character in it.")
@@ -145,6 +178,12 @@ class LineT:
     popup: str = ""         # a phone-notification banner shown during this line
     sticker: str = ""       # a sticker that pops up next to the speaker
     src: tuple = None       # own-audio mode: (start, end) of this line in your audio file
+    actor: str = ""         # a narrator line: the character the camera shows acting meanwhile
+    actor_action: str = "idle"
+    actor_emotion: str = "neutral"
+    kadhai: str = ""        # the kadhai on the stove changes: fry, fire, cover, gas_off
+    broll: str = ""         # cut away to an explainer animation / your picture while this line plays
+    overlay: str = ""       # big bold text over the picture, from this line to the end of the scene
 
 
 @dataclass
@@ -158,6 +197,7 @@ class SceneT:
     card_style: str = "dark"
     card_sound: str = ""
     lighting: str = "day"          # day, dark (night, lights off) or phone (dark, lit by a phone screen)
+    music: str = ""                # the music from this scene on ("" keeps the music, "none" stops it)
 
 
 def _card_seconds(sc: dict) -> float:
@@ -176,14 +216,22 @@ def _card_seconds(sc: dict) -> float:
 
 def _line_extras(lt, ln: dict):
     lt.lights, lt.popup, lt.sticker = ln.get("lights", ""), ln.get("popup", ""), ln.get("sticker", "")
+    lt.actor, lt.actor_action = ln.get("actor", ""), ln.get("actor_action", "idle")
+    lt.actor_emotion = ln.get("actor_emotion", "neutral")
+    lt.kadhai, lt.broll, lt.overlay = ln.get("kadhai", ""), ln.get("broll", ""), ln.get("overlay", "")
     return lt
+
+
+def silent_clip(seconds: float) -> Clip:
+    """A moment with no voice (a silent action beat)."""
+    return Clip(None, seconds, [0.0] * (int(seconds * ENV_HZ) + 1), synthetic=False)
 
 
 def make_clip(ln: dict, ch: dict, engine: str, warnings: list | None = None) -> Clip:
     """The audio of one line made by the app: its voice, an emotional sound, or the sound followed by the words."""
     sound = get_sound(ln["sound"], ch["voice"]) if ln["sound"] else None
-    if not ln["text"]:                              # a reaction: only the emotional sound
-        return sound
+    if not ln["text"]:                              # a reaction: only the emotional sound (or a silent beat)
+        return sound or silent_clip(ln.get("hold") or 1.0)
     voice = ch["voice"]
     if engine == "gemini" and not voice.startswith("gemini:"):        # the Gemini voice that suits this look
         g = GEMINI_FOR_LOOK.get(ch["look"])
@@ -231,20 +279,26 @@ def build_schedule(tl: dict, clip_for) -> tuple[list, float]:
     for sc in tl["scenes"]:
         if sc.get("card") is not None:
             secs = _card_seconds(sc)
-            out.append(SceneT("", [], t, t + secs, [], sc["card"], sc["card_style"], sc["card_sound"]))
+            out.append(SceneT("", [], t, t + secs, [], sc["card"], sc["card_style"], sc["card_sound"],
+                              music=sc.get("music", "")))
             t += secs
             continue
-        st = SceneT(sc["background"], list(sc["cast"]), t, t, lighting=sc.get("lighting", "day"))
+        st = SceneT(sc["background"], list(sc["cast"]), t, t, lighting=sc.get("lighting", "day"),
+                    music=sc.get("music", ""))
+        t0 = t
         t += 0.25
         for ln in sc["lines"]:
             clip = clip_for(ln, by_id[ln["speaker"]])
+            dur = max(clip.duration, ln.get("hold") or 0.0)          # "hold": the line lasts at least this long
             st.lines.append(_line_extras(LineT(ln["speaker"], ln["text"], ln["emotion"], ln["action"],
-                                  t, t + clip.duration, clip, None, not ln["text"] and bool(ln["sound"]), ln["shot"]),
+                                  t, t + dur, clip, None, not ln["text"] and bool(ln["sound"]), ln["shot"]),
                                   ln))
-            t += clip.duration + 0.18
+            t += dur + 0.18
         if not sc["lines"]:                      # a scene with only silent characters holds for a moment
             t += 2.0
         t += 0.4
+        if sc.get("seconds") and t - t0 < sc["seconds"]:            # the scene's length from the script
+            t = t0 + sc["seconds"]
         st.end = t
         out.append(st)
     return out, t
@@ -414,6 +468,32 @@ class Composer:
         self.hits = sorted([h for sc in sched for ln in sc.lines              # punch / slap / thrown chappal: shake
                             for h in fx_mod.hit_times(ln.action, ln.start, ln.end)] + overlays.throw_hits(sched)) \
             if fxon else []
+        self.shakes = kitchen.shake_times(sched) if fxon else []           # the oil catching fire: a big shake
+        self._pics: dict = {}
+
+    def line_at(self, t: float):
+        sc = self.scene_at(t)
+        return next((l for l in sc.lines if l.start <= t < l.end), None)
+
+    def _broll(self, ln, t: float) -> Image.Image:
+        """A cut-away while the line plays: an explainer animation, or your picture slowly zooming in."""
+        a, b = kitchen.broll_span(ln)
+        u = min(1.0, max(0.0, (t - a) / max(0.1, b - a)))
+        if ln.broll in kitchen.EXPLAINERS:
+            return kitchen.draw_explainer(self.w, self.h, u, t, ln.broll)
+        bid = ln.broll[4:]
+        if bid not in self._pics:
+            try:
+                self._pics[bid] = get_background(bid, self.w, self.h).convert("RGB")
+            except Exception:  # noqa: BLE001  the picture is gone: show the scene instead
+                self._pics[bid] = None
+        pic = self._pics[bid]
+        if pic is None:
+            return self._frame(t)
+        z = 1.0 + 0.1 * u
+        cw, ch = self.w / z, self.h / z
+        return pic.resize((self.w, self.h), Image.BILINEAR, box=((self.w - cw) / 2, (self.h - ch) / 2,
+                                                                  (self.w + cw) / 2, (self.h + ch) / 2))
 
     def scene_at(self, t: float) -> SceneT:
         for sc in self.sched:
@@ -422,7 +502,9 @@ class Composer:
         return self.sched[-1]
 
     def frame(self, t: float) -> Image.Image:
-        im = self._frame(t)
+        cur = self.line_at(t)
+        im = self._broll(cur, t) if cur is not None and cur.broll and t >= kitchen.broll_span(cur)[0] \
+            else self._frame(t)
         sc = self.scene_at(t)
         for ln in sc.lines:                                   # notification banners and stickers
             if ln.popup:
@@ -443,6 +525,13 @@ class Composer:
                 dx += amp * math.sin(t * 97)
                 dy += amp * math.cos(t * 71)
                 zoom = max(zoom, 1.035)
+        for sh in self.shakes:                                # the fire flaring up
+            u = (t - sh) / 0.6
+            if 0 <= u < 1:
+                amp = 24 * self.k * (1 - u)
+                dx += amp * math.sin(t * 83)
+                dy += amp * math.cos(t * 61)
+                zoom = max(zoom, 1.05)
         if zoom == 1.0 and not dx and not dy:
             return im
         cw, ch = self.w / zoom, self.h / zoom
@@ -490,7 +579,7 @@ class Composer:
         im = (get_background_3d if self.look3d else get_background)(sc.bg, self.w, self.h).copy()
         line = next((l for l in sc.lines if l.start <= t < l.end), None)
         xs, scale = layout(len(sc.cast))
-        sx = xs[sc.cast.index(line.char)] if line else None
+        sx = xs[sc.cast.index(line.char)] if line and line.char in sc.cast else None
 
         # Sitting is a scene-level choice: if a character has any sit_* line, they sit the whole scene.
         seated = {cid for cid in sc.cast if any(l.char == cid and l.action in SIT_ACTIONS for l in sc.lines)}
@@ -562,7 +651,7 @@ def _chunks(words: list) -> list:
 
 
 def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = True, hook: str = "",
-             hook_end: float = 2.4) -> str:
+             hook_end: float = 2.4, language: str = "hi") -> str:
     """Captions, the hook title and text-card titles, in one ASS subtitle file."""
     size, outline, margin_v = int(h * 0.05), max(2, int(h * 0.006)), int(h * 0.15)
     head = (
@@ -577,6 +666,10 @@ def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = Tru
         f"{int(outline * 1.8)},3,8,{int(w * 0.07)},{int(w * 0.07)},{int(h * 0.27)},1\n"
         f"Style: Card,{font_family},{int(h * 0.072)},&H00FFFFFF,&H00FFFFFF,&H00202020,&H96000000,-1,0,0,0,100,100,0,0,1,"
         f"{int(outline * 1.5)},2,5,{int(w * 0.08)},{int(w * 0.08)},0,1\n"
+        f"Style: Over,{font_family},{int(h * 0.058)},&H00FFFFFF,&H00FFFFFF,&H002A1FD0,&H002A1FD0,-1,0,0,0,100,100,0,0,3,"
+        f"{int(h * 0.012)},0,2,{int(w * 0.06)},{int(w * 0.06)},{int(h * 0.2)},1\n"
+        f"Style: Explain,{font_family},{int(h * 0.046)},&H00FFFFFF,&H00FFFFFF,&H00301810,&H96000000,-1,0,0,0,100,100,0,0,1,"
+        f"{int(outline * 1.4)},2,2,{int(w * 0.06)},{int(w * 0.06)},{int(h * 0.09)},1\n"
         + overlays.popup_ass_styles(w, h, font_family) + "\n"
         "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
@@ -594,6 +687,21 @@ def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = Tru
             events.append(f"Dialogue: 2,{_ass_time(sc.start + 0.05)},{_ass_time(sc.end - 0.05)},Card,,0,0,0,,"
                           "{\\fad(120,150)\\fscx60\\fscy60\\t(0,200,\\fscx106\\fscy106)\\t(200,320,\\fscx100\\fscy100)}"
                           + col + txt)
+    for sc in sched:                            # big bold text over the picture, until the scene ends
+        for ln in sc.lines:
+            if getattr(ln, "overlay", ""):
+                parts = [x.strip().replace("{", "").replace("}", "") for x in ln.overlay.split("|") if x.strip()]
+                if parts:
+                    txt = parts[0] + "".join("\\N{\\fs%d}%s" % (int(h * 0.036), x) for x in parts[1:])
+                    events.append(f"Dialogue: 3,{_ass_time(ln.start + 0.05)},{_ass_time(sc.end)},Over,,0,0,0,,"
+                                  "{\\fad(150,200)\\fscx70\\fscy70\\t(0,220,\\fscx105\\fscy105)\\t(220,340,\\fscx100\\fscy100)}"
+                                  + txt)
+            if getattr(ln, "broll", "") in kitchen.EXPLAINERS:         # the explainer's words, step by step
+                b0, b1 = kitchen.broll_span(ln)
+                span = b1 - b0
+                for a, b, txt in kitchen.explain_labels(ln.broll, language):
+                    events.append(f"Dialogue: 2,{_ass_time(b0 + a * span)},{_ass_time(b0 + b * span)},"
+                                  "Explain,,0,0,0,,{\\fad(120,120)}" + txt)
     for sc in (sched if captions else []):
         for ln in sc.lines:
             words = [x.replace("{", "").replace("}", "") for x in ln.text.split()]
@@ -651,6 +759,8 @@ def build_audio(sched: list, total: float, path: Path):
     buf = array.array("h", [0]) * n
     for sc in sched:
         for ln in sc.lines:
+            if not ln.clip.wav:                   # a silent beat
+                continue
             s = read_samples(ln.clip.wav)
             off = int(ln.start * RATE)
             end = min(n, off + len(s))
@@ -766,9 +876,19 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
             music_path = str(get_audio(au["music_id"])["path"])
         except AudioError as e:
             raise RenderError("Background music: " + str(e))
-    elif au["music_builtin"]:
+    elif au["music_builtin"] or any(sc.music for sc in sched):
         progress("Making music", 0.0)
-        music_path = str(fx_mod.music_wav(au["music_builtin"]))
+        music_path = str(fx_mod.music_wav(au["music_builtin"])) if au["music_builtin"] else None
+    music_parts = None
+    if not au["music_id"] and any(sc.music for sc in sched):     # a scene changes the music: one track for all
+        cur, music_parts = au["music_builtin"], []
+        for sc in sched:
+            if sc.music:
+                cur = None if sc.music == "none" else sc.music
+            if music_parts and music_parts[-1][2] == cur:
+                music_parts[-1] = (music_parts[-1][0], sc.end, cur)
+            else:
+                music_parts.append((sc.start if music_parts else 0.0, sc.end, cur))
     if total > 180:
         warnings.append("This video is longer than 3 minutes, so YouTube will not treat it as a Short.")
 
@@ -793,8 +913,8 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
             warnings.append("No Devanagari font found. Hindi captions may show empty boxes. "
                             "Put a font such as Noto Sans Devanagari in assets/fonts (see README).")
         hook_end = min(2.4, total)
-        (work / "captions.ass").write_text(make_ass(sched, w, h, family, tl["captions"], tl["hook"], hook_end),
-                                           encoding="utf-8")
+        (work / "captions.ass").write_text(make_ass(sched, w, h, family, tl["captions"], tl["hook"], hook_end,
+                                                    tl["language"]), encoding="utf-8")
         events = []                               # sound effects: hits, scene whooshes, the hook's pop
         if tl["effects"]:
             thrown = set(round(x, 3) for x in overlays.throw_hits(sched))
@@ -806,6 +926,7 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
             events += [(c - 0.15, "whoosh", 0.55) for c in comp.cuts]
             if tl["hook"]:
                 events.append((0.1, "pop", 0.6))
+            events += kitchen.sound_events(sched)          # sizzle, fire, thali clang, gas knob, footsteps, splash
         events += [(sc.start + 0.05, sc.card_sound, 1.0) for sc in sched if sc.card is not None and sc.card_sound]
         events += [(ln.start, "click", 0.9) for sc in sched for ln in sc.lines if getattr(ln, "lights", "")]
         events += [(ln.start + 0.05, "ping", 0.9) for sc in sched for ln in sc.lines if ln.popup]
@@ -829,7 +950,11 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
             fx_mod.build_track(events, total, work / "fx.wav")
             cmd += ["-i", "fx.wav"]
             fx_idx, nxt = nxt, nxt + 1
-        if music_path:
+        if music_parts:
+            fx_mod.build_music_track(music_parts, total, work / "music.wav")
+            music_idx = nxt
+            cmd += ["-i", "music.wav"]
+        elif music_path:
             music_idx = nxt
             cmd += ["-stream_loop", "-1", "-i", music_path]
         if au["mode"] == "file":      # cut each scene's part out of your audio and join the parts in scene order
@@ -859,7 +984,8 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
                            f"amix=inputs={len(streams)}:duration=first:weights='{weights}',"
                            f"volume={sum(w for _, w in streams):.2f}[aout]")
         vf = "ass=captions.ass:fontsdir=fonts" if (tl["captions"] or tl["hook"] or any(sc.card for sc in sched) or
-                                                   any(ln.popup for sc in sched for ln in sc.lines)) else "null"
+                                                   any(ln.popup or ln.overlay or ln.broll for sc in sched
+                                                       for ln in sc.lines)) else "null"
         cmd += ["-filter_complex", f"[0:v]{vf}[vout];{audio_graph}",
                 "-map", "[vout]", "-map", "[aout]", "-t", f"{total:.3f}",
                 "-c:v", "libx264", "-preset", q["preset"], "-crf", str(q["crf"]), "-pix_fmt", "yuv420p",

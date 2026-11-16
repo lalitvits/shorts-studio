@@ -23,6 +23,7 @@ from .catalog import FLAT_BACKGROUNDS, LOOKS
 from .places import PLACES, animate as animate_place, draw_static as draw_place
 from .realms import REALMS, animate as animate_realm, draw_static as draw_realm
 from .rig import KEEP_EMOTION, PERSISTENT, blink_amount
+from . import kitchen
 
 OUT = (36, 31, 32)          # outline colour
 OL = 5.5                    # outline width (world units)
@@ -30,6 +31,10 @@ FW, FH = 1080, 1920         # frame in world units
 STRONG = {"angry", "shocked", "surprised", "crying", "laughing", "scared", "excited"}
 SHOTS = ("auto", "wide", "single", "ots", "close")
 PHONE_ACTIONS = {"use_phone", "sit_phone", "phone_call"}
+# actions a character keeps doing while someone else talks (on top of the rig's long activities)
+FLAT_PERSIST = PERSISTENT | {"cook", "hold_jug", "lower_jug", "hand_on_shoulder", "look_camera"}
+TWO_PERSON = {"grab_hand", "hand_on_shoulder"}            # the actor walks up to the nearest other character
+MOVE_S = 0.5                                              # seconds that walk-up takes
 
 
 def three_d_unit():
@@ -282,6 +287,48 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
         p["prop"] = "snack"
     elif action in ("sit", "sit_sleep"):
         p["L"] = p["R"] = HIP_T if action == "sit" else ("fk", 12, -6)
+    elif action == "cook":                  # stirring the kadhai with a jhara
+        p["R"] = ("fk", 64 + 7 * s(t * 4), 28 + 8 * s(t * 4 + 1))
+        p["L"] = ("fk", 16, -10)
+        p["prop"] = "ladle"
+        p["head_dy"] = 8
+        p["eyes_dir"] = 0.6
+    elif action == "step_back":             # jumps back from the fire, hands up
+        e = min(1.0, t / 0.35)
+        p["L"] = p["R"] = ("fk", 72, 84 + 6 * s(t * 15))
+        p["dx"] = -80 * (1 - (1 - e) ** 2)
+        p["dy"] = -18 * math.sin(math.pi * e)
+    elif action == "hold_jug":              # a water jug lifted, about to throw it
+        p["L"] = ("ik", 0, -690 - 10 * s(t * 6))
+        p["R"] = ("ik", 110, -720 - 10 * s(t * 6))
+        p["prop"] = "jug"
+    elif action == "lower_jug":             # the jug pushed down, water slopping out
+        p["L"] = ("ik", -6, -560)
+        p["R"] = ("ik", 70, -560)
+        p["prop"] = "jug_low"
+        p["head_dy"] = 6
+    elif action == "grab_hand":             # grabs someone's hand to stop them
+        p["R"] = ("fk", 86, -2)
+        p["L"] = ("fk", 40, 30)
+        p["dx"] = 12.0
+    elif action == "turn_off_gas":          # leans over and turns the knob
+        p["R"] = ("fk", 58 + 4 * s(t * 6), 18)
+        p["L"] = HIP_T
+        p["dy"] = 10.0
+        p["head_dy"] = 10
+        p["eyes_dir"] = 0.6
+    elif action == "cover_kadhai":          # puts a steel thali on the kadhai
+        e = min(1.0, t / 0.6)
+        p["R"] = ("fk", 110 - 40 * e, 20 - 10 * e)
+        p["L"] = ("ik", 50, -700)
+        p["prop"] = "thali" if t < 0.65 else None
+        p["eyes_dir"] = 0.6
+    elif action == "hand_on_shoulder":      # a calm hand on someone's shoulder
+        p["R"] = ("fk", 100, -10)
+        p["L"] = ("fk", 40, 55 + 6 * s(t * 3))
+    elif action == "look_camera":           # looks straight at the camera
+        p["L"] = p["R"] = ("fk", 12, -6)
+        p["eyes_dir"] = 0.0
     if emotion == "laughing":
         p["dy"] += 6 * s(t * 22)
     if emotion in ("sad", "bored", "sleepy"):
@@ -597,6 +644,11 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         pen.poly(_sup(0, -615, 135, 168), tc)
         if sp["top"] == "vest" and not back:
             pen.pie(-40, -812, 40, -742, 0, 180, skin, 4)
+        if sp.get("stripes"):
+            for yy in range(-735, -470, 52):
+                half = 135 * max(0.0, 1 - abs((yy + 615) / 168) ** 2.6) ** (1 / 2.6) - 10
+                if half > 20:
+                    pen.line([(-half, yy), (half, yy)], sp["stripes"], 18)
         if sp["top"] == "tshirt" and not back:
             pen.pie(-38, -812, 38, -752, 0, 180, skin, 4)
 
@@ -687,8 +739,38 @@ def _chappal(pen, x, y, ang=0.0, k=1.0):
     pen.line([rot(0, -40), rot(24, 10)], (240, 240, 240), 9)
 
 
+def _jug(pen, x, y, tilt=0.0, k=1.0):
+    """A plastic water jug (blue, see-through, water inside) with a handle."""
+    ca, sa = math.cos(tilt), math.sin(tilt)
+    rot = lambda px, py: (x + (px * ca - py * sa) * k, y + (px * sa + py * ca) * k)   # noqa: E731
+    body = [rot(-52, -70), rot(52, -70), rot(60, 70), rot(-60, 70)]
+    pen.poly(body, (150, 200, 240), 4)
+    pen.poly([rot(-56, -10), rot(56, -10), rot(60, 70), rot(-60, 70)], (90, 160, 230), 0)
+    pen.d.line([pen.p(*rot(-52, -70)), pen.p(*rot(52, -70))], fill=OUT, width=pen.wd(6))
+    pen.poly([rot(40, -70), rot(78, -96), rot(56, -60)], (150, 200, 240), 3)             # spout
+    pen.arc(*[v for v in (x - 110 * k, y - 50 * k, x - 30 * k, y + 50 * k)], 90, 270, 7, OUT)
+
+
 def _prop(pen, kind, hand, other=None, skin=None):
     x, y = hand
+    if kind == "ladle":                     # a jhara: long handle, round slotted end
+        pen.line([(x, y), (x + 70, y + 150)], (150, 150, 160), 9)
+        pen.circle(x + 82, y + 170, 30, (170, 170, 180), 4)
+        for dx, dy in ((-10, -6), (8, -8), (0, 8)):
+            pen.circle(x + 82 + dx, y + 170 + dy, 4, (90, 90, 100), 0)
+        return
+    if kind in ("jug", "jug_low"):
+        if other is not None:
+            x, y = (hand[0] + other[0]) / 2, (hand[1] + other[1]) / 2
+        _jug(pen, x, y + (30 if kind == "jug" else 50), 0.25 if kind == "jug" else 0.7)
+        if kind == "jug_low":               # water slopping out of the spout
+            for j, (dx, dy, r) in enumerate(((120, 10, 12), (150, 60, 9), (110, 90, 11), (170, 120, 7))):
+                pen.circle(x + dx, y + dy, r, (110, 180, 245), 2, (60, 120, 200))
+        return
+    if kind == "thali":                     # a steel plate held flat
+        pen.ellipse(x - 20, y - 30, x + 210, y + 14, (200, 206, 216), 4)
+        pen.ellipse(x + 20, y - 20, x + 170, y + 4, (224, 230, 238), 2)
+        return
     if kind == "parcel":
         if other is not None:
             x, y = (hand[0] + other[0]) / 2, (hand[1] + other[1]) / 2
@@ -1094,6 +1176,7 @@ class FlatComposer:
         self.warnings: list = []
         self.segs: dict = {}
         self.bgs: dict = {}
+        self.kev = kitchen.events(sched)                  # the kadhai: frying, fire, covered (kitchen.py)
 
     def handles(self, sc) -> bool:
         return sc.bg in FLAT_BACKGROUNDS or any(is_flat_look(self.chars[c]["look"]) for c in sc.cast)
@@ -1115,12 +1198,23 @@ class FlatComposer:
             a = sc.start if i == 0 else ln.start
             b = lines[i + 1].start if i + 1 < len(lines) else sc.end
             subj = ln.char
+            narr = subj not in cast                               # a narrator line: show who acts meanwhile
+            if narr:
+                subj = ln.actor if getattr(ln, "actor", "") in cast else cast[0]
             others = [c for c in cast if c != subj]
             partner = others[0] if others else None
             kind = getattr(ln, "shot", "auto") or "auto"
+            if kind == "stove" and sc.bg != "flat_kitchen":
+                kind = "auto"
             auto = kind == "auto"
+            acts = {ln.action, getattr(ln, "actor_action", "")}
             if auto:
-                if len(cast) > 1 and i == 0:
+                if len(cast) > 1 and (narr and not getattr(ln, "actor", "") or acts & TWO_PERSON
+                                      or acts & (kitchen.STOVE_ACTIONS | {"look_camera"})):
+                    kind = "wide"
+                elif narr:
+                    kind = "single"
+                elif len(cast) > 1 and i == 0:
                     kind = "wide"
                 elif ln.emotion in STRONG and last_close.get(subj, -9) < i - 2:
                     kind = "close"
@@ -1132,9 +1226,11 @@ class FlatComposer:
                 last_close[subj] = i
             if kind in ("ots",) and not partner:
                 kind = "single"
+            if kind == "ots" and narr:
+                kind = "single"
             spec = dict(type=kind, subj=subj, partner=partner)
             dur = ln.end - ln.start
-            if auto and partner and dur > 5.5 and kind != "wide":     # a reaction shot in the middle of a long line
+            if auto and partner and dur > 5.5 and kind not in ("wide", "stove") and not narr:   # a reaction shot
                 cut = ln.start + dur * 0.58
                 segs.append((a, cut, spec))
                 if self._animal(subj):
@@ -1153,15 +1249,22 @@ class FlatComposer:
         _, _, PW, G = panorama(bid, self.k)
         si = self.sched.index(sc) if sc in self.sched else 0
         base = PW / 2 + ((_h(bid, si) % 7) - 3) * 120
+        stove = self._stove_scene(sc)
+        if stove:
+            base = kitchen.KX - 300
         cast = sc.cast
         subj, partner = spec["subj"], spec.get("partner")
         side = 1 if partner and cast.index(partner) > cast.index(subj) else -1 if partner else 1
         actors = []
         t = spec["type"]
+        if t == "stove":                                       # close on the kadhai, nobody in the shot
+            return dict(bg=(kitchen.KX, 2.1, False, kitchen.KY - 70), actors=[], ground=G)
         if t == "wide":
             n = len(cast)
             sc_ = 0.82 if n <= 2 else max(0.55, 0.82 - 0.09 * (n - 2))
             xs = [540] if n == 1 else [FW * (0.2 + 0.6 * i / (n - 1)) for i in range(n)]
+            if stove:                                          # everyone to the left of the stove
+                xs = [400] if n == 1 else [FW * (0.13 + 0.47 * i / (n - 1)) for i in range(n)]
             for i, cid in enumerate(cast):
                 fd = 1 if xs[i] < 540 else -1 if n > 1 else 1
                 actors.append(dict(cid=cid, view="front", x=xs[i], g=G, scale=sc_, face=fd))
@@ -1178,7 +1281,8 @@ class FlatComposer:
             if self._animal(subj):
                 actors.append(dict(cid=subj, view="side", x=200, g=1660, scale=2.2, face=1))
             else:
-                actors.append(dict(cid=subj, view="front", x=540, g=G + 820, scale=1.75, face=fd))
+                hgt = self.specs[subj].get("height", 1.0)       # a short character: the camera goes lower
+                actors.append(dict(cid=subj, view="front", x=540, g=G + 820 - (1 - hgt) * 890 * 1.75, scale=1.75, face=fd))
             bg = (base + 260 * fd, 1.3, True)
         else:  # over the shoulder: the partner's back big in front, the speaker further away
             if self._animal(subj):
@@ -1191,18 +1295,72 @@ class FlatComposer:
                 else:
                     actors.append(dict(cid=partner, view="back", x=930, g=G + 1490, scale=2.1, face=1, back=True))
             bg = (base - 380, 1.0, True)
-        return dict(bg=bg, actors=actors, ground=G)
+        return dict(bg=bg, actors=actors, ground=G, type=t)
+
+    def _stove_scene(self, sc) -> bool:
+        """A kitchen scene where the kadhai matters: the camera keeps the stove in view."""
+        if sc.bg != "flat_kitchen":
+            return False
+        key = ("stove", id(sc))
+        if key not in self.segs:
+            self.segs[key] = kitchen.state_at(self.kev, sc.end) is not None or any(
+                getattr(l, "shot", "") == "stove" or {l.action, getattr(l, "actor_action", "")} & kitchen.STOVE_ACTIONS
+                for l in sc.lines)
+        return self.segs[key]
+
+    def _acts(self, sc, cid):
+        """What a character does in a scene: their own lines, and lines where they act while someone else speaks."""
+        key = ("acts", id(sc), cid)
+        if key not in self.segs:
+            out = []
+            for l in sc.lines:
+                if l.char == cid:
+                    out.append((l.start, l.end, l.action, l.emotion, l, True))
+                elif l.char not in sc.cast and l.action == "look_camera":   # narrator: "everyone looks at us"
+                    out.append((l.start, l.end, "look_camera", l.emotion if l.emotion != "neutral" else "relieved",
+                                l, False))
+                elif getattr(l, "actor", "") == cid:
+                    out.append((l.start, l.end, l.actor_action, l.actor_emotion, l, False))
+            self.segs[key] = out
+        return self.segs[key]
+
+    def _moved_x(self, sc, cid, a, lay, x0, z, t):
+        """Where a character stands after walking up to the stove or to someone (None: where the shot puts them)."""
+        if lay.get("type") not in ("wide", "single"):
+            return None
+        x, moved = a["x"], False
+        for start, _end, action, _em, _l, _sp in self._acts(sc, cid):
+            if start > t:
+                break
+            tgt = None
+            if action in kitchen.STOVE_ACTIONS and self._stove_scene(sc):
+                tgt, face = (kitchen.KX - x0) * z - 300 * a["scale"], 1
+            elif action in TWO_PERSON:
+                others = [o for o in lay["actors"] if o["cid"] != cid and not o.get("back")]
+                if others:
+                    o = min(others, key=lambda o: abs(o["x"] - a["x"]))
+                    side = 1 if o["x"] > a["x"] else -1
+                    dist = (300 if action == "grab_hand" else 250) * max(a["scale"], o["scale"])
+                    tgt, face = o["x"] - side * dist, side
+            if tgt is None:
+                continue
+            e = min(1.0, (t - start) / MOVE_S)
+            e = 1 - (1 - e) ** 2
+            x = x + (tgt - x) * e
+            moved = True
+            last_face = face
+        return (x, last_face) if moved else None
 
     def _bg_image(self, bid, bg):
-        cx, z, blur = bg
-        key = (bid, round(cx), z, blur)
+        cx, z, blur = bg[:3]
+        key = (bid, round(cx), z, blur, bg[3] if len(bg) > 3 else None)
         if key in self.bgs:
             return self.bgs[key]
         im, ps, PW, G = panorama(bid, self.k)
         src = _blurred(bid, self.k) if blur else im
         vw, vh = FW / z, FH / z
         x0 = min(max(0.0, cx - vw / 2), PW - vw)
-        y0 = G - G / z
+        y0 = G - G / z if len(bg) < 4 else min(max(0.0, bg[3] - vh / 2), FH - vh)
         box = (x0 * ps, y0 * ps, min(src.width, (x0 + vw) * ps), min(src.height, (y0 + vh) * ps))  # rounding
         out = src.resize((self.w, self.h), Image.LANCZOS, box=box)
         if len(self.bgs) > 24:
@@ -1211,6 +1369,7 @@ class FlatComposer:
         return self.bgs[key]
 
     WALK_S = 1.6     # seconds a walk in / walk out takes
+    RUN_S = 0.75     # ... and a run in
 
     def lighting_at(self, sc, t):
         """The room's light at time t: the scene's lighting, changed by lines that switch the lights on / off.
@@ -1246,24 +1405,24 @@ class FlatComposer:
 
     def _walk(self, sc, cid, a, t):
         """None (not walking), "hidden" (not in the frame yet / any more) or (x, direction) while walking."""
-        mine = [l for l in sc.lines if l.char == cid]
+        mine = self._acts(sc, cid)
         off = -330 if a["x"] < FW / 2 else FW + 330           # leave / enter on the nearer side of the frame
-        for l in mine:
-            u = (t - l.start) / self.WALK_S
-            if l.action == "appear" and u < 0 and l is mine[0]:      # not there yet, then simply there
+        for i, (start, _end, action, _em, _l, _sp) in enumerate(mine):
+            u = (t - start) / (self.RUN_S if action == "run_in" else self.WALK_S)
+            if action == "appear" and u < 0 and i == 0:            # not there yet, then simply there
                 return "hidden"
-            if l.action == "walk_in":
-                if u < 0 and l is mine[0]:
+            if action in ("walk_in", "run_in"):
+                if u < 0 and i == 0:
                     return "hidden"
                 if 0 <= u < 1:
                     e = 1 - (1 - u) ** 2                          # slow down when arriving
-                    return (off + (a["x"] - off) * e, 1 if a["x"] > off else -1)
-            elif l.action == "walk_out":
+                    return (off + (a["x"] - off) * e, 1 if a["x"] > off else -1, action == "run_in")
+            elif action == "walk_out":
                 if u >= 1:
                     return "hidden"
                 if u >= 0:
                     e = u * u                                     # speed up when leaving
-                    return (a["x"] + (off - a["x"]) * e, 1 if off > a["x"] else -1)
+                    return (a["x"] + (off - a["x"]) * e, 1 if off > a["x"] else -1, False)
         return None
 
     def _sprite_3d(self, a, sp, action, emotion, speaking, still, mq, blink, tq, k):
@@ -1308,10 +1467,13 @@ class FlatComposer:
         def to_px(X, Y):
             return ((X - x0) * z * k, (Y - y0) * z * k)
 
+        kst = kitchen.state_at(self.kev, t) if bid == "flat_kitchen" else None
         if bid in REALMS:
             animate_realm(im, bid, t, x0, y0, z, k, panorama(bid, k)[2], blur)
         elif bid in PLACES:
-            animate_place(im, bid, t, x0, y0, z, k, panorama(bid, k)[2], blur)
+            animate_place(im, bid, t, x0, y0, z, k, panorama(bid, k)[2], blur, kadhai=kst is not None)
+            if kst is not None:
+                kitchen.draw(im, kst, t, x0, y0, z, k)
         elif flat_bg:
             vw = FW / z
             # birds
@@ -1342,28 +1504,36 @@ class FlatComposer:
             cid = a["cid"]
             sp = self.specs[cid]
             speaking = bool(line and line.char == cid)
-            mine = [l for l in sc.lines if l.char == cid]
-            recent = next((l for l in reversed(mine) if l.start <= t), mine[0] if mine else None)
-            if speaking:
-                action, emotion = line.action, line.emotion
-                t_act = t - line.start
-                key = line.text + cid
+            mine = self._acts(sc, cid)
+            now = next((m for m in mine if m[0] <= t < m[1]), None)       # acting right now (own line or meanwhile)
+            recent = next((m for m in reversed(mine) if m[0] <= t), mine[0] if mine else None)
+            if now is not None:
+                action, emotion = now[2], now[3]
+                t_act = t - now[0]
+                key = now[4].text + cid
             elif recent is None:
                 action, emotion, t_act, key = "idle", "neutral", t - sc.start, cid
             else:
-                action = recent.action if recent.action in PERSISTENT else "idle"
-                emotion = recent.emotion if recent.emotion in KEEP_EMOTION else "neutral"
+                action = recent[2] if recent[2] in FLAT_PERSIST else "idle"
+                emotion = recent[3] if recent[3] in KEEP_EMOTION or recent[2] == "look_camera" else "neutral"
                 t_act, key = t - sc.start, cid
+            if action in ("step_back", "lower_jug") and now is None:
+                t_act = 9.0                            # stays stepped back / jug down
             walk = self._walk(sc, cid, a, t)          # walking in or out of the frame
             if walk == "hidden":
                 continue
             if walk:
                 a = dict(a, x=walk[0], face=walk[1], travel=walk[1])
-                action, t_act = "walk", t - sc.start
-            elif action in ("walk_in", "walk_out", "appear"):
+                action, t_act = "walk", (t - sc.start) * (2.2 if walk[2] else 1.0)
+            elif action in ("walk_in", "walk_out", "appear", "run_in"):
                 action = "talk" if speaking else "idle"
+            mv = self._moved_x(sc, cid, a, lay, x0, z, t)       # walked up to the stove / to someone
+            if mv is not None and not walk:
+                a = dict(a, x=mv[0], face=mv[1])
             still = speaking and line.action == "idle"
             mouth = line.clip.mouth_at(t - line.start) if speaking and not still else 0.0
+            if not speaking:
+                still = False
             phase = (_h(cid) % 100) / 30
             blink = blink_amount(t, phase)
             # quantize so repeated drawings come from the cache
@@ -1404,6 +1574,8 @@ class FlatComposer:
                 glows.append((fx, fy - 830 * a["scale"] * k, a["scale"] * k, "self"))
 
         im = self._light(sc, t, im, glows)
+        if kst is not None:
+            im = kitchen.glow(im, kst, t, x0, y0, z, k)
 
         # slow camera drift inside the shot
         a0, b0 = seg[0], seg[1]

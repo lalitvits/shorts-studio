@@ -138,12 +138,24 @@ function renderCast() {
 const soundLabel = id => (A.sounds.find(x => x.id === id) || {}).label || "";
 const voiceLabel = ln => !ln ? "" : (ln.text || (ln.sound ? "(" + soundLabel(ln.sound) + ")" : ""));
 const nameOf = id => (S.characters.find(c => c.id === id) || {}).name || id;
+const isNarr = id => (S.characters.find(c => c.id === id) || {}).look === "narrator";   // a voice, never on screen
 function ensureScene(sc) {          // every scene has its own list of characters (they stay in frame even without dialogue)
   if (!Array.isArray(sc.cast)) sc.cast = [];
-  (sc.lines || []).forEach(l => { if (!sc.cast.includes(l.speaker)) sc.cast.push(l.speaker); });
+  if (sc.card !== undefined) return sc;
+  (sc.lines || []).forEach(l => {
+    if (!sc.cast.includes(l.speaker) && !isNarr(l.speaker)) sc.cast.push(l.speaker);
+    if (l.actor && !sc.cast.includes(l.actor) && !isNarr(l.actor)) sc.cast.push(l.actor);
+  });
   return sc;
 }
-const castOpts = sc => sc.cast.map(id => ({ id, label: nameOf(id) }));
+const castOpts = sc => sc.cast.filter(id => !isNarr(id)).map(id => ({ id, label: nameOf(id) }))
+  .concat(S.characters.filter(c => c.look === "narrator").map(c => ({ id: c.id, label: c.name + " (voice-over)" })));
+const KADHAI = [{ id: "", label: "Kadhai: no change" }, { id: "fry", label: "Kadhai: oil frying" },
+  { id: "fire", label: "Kadhai: catches FIRE" }, { id: "cover", label: "Kadhai: covered with a thali" },
+  { id: "gas_off", label: "Gas turned off" }];
+const brollOpts = () => [{ id: "", label: "No cut-away" }]
+  .concat((A.explainers || []).map(x => ({ id: x.id, label: x.label })))
+  .concat((A.backgrounds || []).filter(b => !String(b.id).startsWith("flat_")).map(b => ({ id: "pic:" + b.id, label: "Cut to picture: " + b.label })));
 const r2 = v => Math.round(v * 100) / 100;
 function sceneRange(sc) {           // the part of the audio this scene plays: set by hand, else from its lines
   if (sc.audio_from != null && sc.audio_to != null && sc.audio_to > sc.audio_from) return [sc.audio_from, sc.audio_to];
@@ -179,6 +191,8 @@ function renderScenes() {
       <div class="scene-head"><h2>Scene ${si + 1}</h2>
         <label>Background<select data-path="scenes.${si}.background">${opts(A.backgrounds, sc.background)}</select></label>
         <label>Lighting<select data-path="scenes.${si}.lighting">${opts([{ id: "day", label: "Normal" }, { id: "dark", label: "Night, lights off" }, { id: "phone", label: "Dark, lit by a phone" }], sc.lighting || "day")}</select></label>
+        <label>Music<select data-path="scenes.${si}.music">${opts([{ id: "", label: "Keep playing" }, { id: "none", label: "Silence from here" }].concat((A.music || []).map(m => ({ id: m.id, label: "Change to: " + m.label }))), sc.music || "")}</select></label>
+        <label>Seconds<input type="number" min="0" step="0.5" style="width:5.5em" title="Make the scene at least this long (empty: as long as its lines)" data-path="scenes.${si}.seconds" value="${sc.seconds || ""}" placeholder="auto"></label>
         <button class="icon" data-act="del-scene" data-si="${si}" aria-label="Delete scene ${si + 1}">✕</button></div>
       <div class="cast-row"><span class="cast-label">Characters in this scene</span>
         ${sc.cast.map(id => `<span class="chip">${esc(nameOf(id))}<button class="chip-x" data-act="remove-cast" data-si="${si}" data-id="${esc(id)}" aria-label="Take ${esc(nameOf(id))} out of scene ${si + 1}">✕</button></span>`).join("") || `<span class="hint">No one is in this scene.</span>`}
@@ -213,6 +227,17 @@ function renderScenes() {
             <input aria-label="Phone notification on screen (optional)" lang="hi" placeholder="Notification pop-up (optional)" data-path="scenes.${si}.lines.${li}.popup" value="${esc(ln.popup || "")}">
             <select aria-label="Sticker" data-path="scenes.${si}.lines.${li}.sticker"><option value="">No sticker</option>${opts((A.stickers || []).map(x => ({ id: x, label: "Sticker: " + x })), ln.sticker || "")}</select>
             <select aria-label="Room light" data-path="scenes.${si}.lines.${li}.lights">${opts([{ id: "", label: "Light: no change" }, { id: "on", label: "Light switches ON" }, { id: "off", label: "Light switches OFF" }], ln.lights || "")}</select>
+          </div>
+          <div class="line-sub four extras">
+            <select aria-label="Meanwhile, someone else acts" title="While this line is spoken, this character does the action next to it (use it with a narrator)" data-path="scenes.${si}.lines.${li}.actor"><option value="">Meanwhile: nobody else</option>${opts(sc.cast.filter(id => id !== ln.speaker && !isNarr(id)).map(id => ({ id, label: "Meanwhile: " + nameOf(id) })), ln.actor || "")}</select>
+            <select aria-label="Their action" data-path="scenes.${si}.lines.${li}.actor_action">${opts(A.actions, ln.actor_action || "idle")}</select>
+            <select aria-label="Their emotion" data-path="scenes.${si}.lines.${li}.actor_emotion">${opts(A.emotions, ln.actor_emotion || "neutral")}</select>
+            <input type="number" min="0" step="0.5" aria-label="Seconds on screen (for a line with no words)" title="The line lasts at least this long; a line with no words is a silent action moment" placeholder="Seconds (auto)" data-path="scenes.${si}.lines.${li}.hold" value="${ln.hold || ""}">
+          </div>
+          <div class="line-sub four extras">
+            <select aria-label="Kadhai on the stove (kitchen)" data-path="scenes.${si}.lines.${li}.kadhai">${opts(KADHAI, ln.kadhai || "")}</select>
+            <select aria-label="Cut-away picture (B-roll)" data-path="scenes.${si}.lines.${li}.broll">${opts(brollOpts(), ln.broll || "")}</select>
+            <input aria-label="Big text on screen (optional)" lang="hi" placeholder="Big text on screen (line 1 | line 2)" data-path="scenes.${si}.lines.${li}.overlay" value="${esc(ln.overlay || "")}" style="grid-column: span 2">
           </div>
           ${file ? `<div class="line-time">
             <label>Spoken from (seconds in the audio)<input type="number" min="0" step="0.05" data-path="scenes.${si}.lines.${li}.start" value="${ln.start ?? ""}"></label>
@@ -386,6 +411,7 @@ const ACTIONS = {
     el.disabled = true; const label = el.textContent; el.textContent = "Reading your script...";
     try {
       const r = await api("/api/import_script", { text, provider: S.provider });
+      S.characters = r.characters;                   // first, so the scenes know who is the narrator
       Object.assign(S, { title: r.title || S.title, hook: r.hook || "", scenario: text.slice(0, 500),
                          characters: r.characters, scenes: r.scenes.map(ensureScene), sel: { scene: 0, line: 0 } });
       S.audio.musicBuiltin = r.music || S.audio.musicBuiltin;

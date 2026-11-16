@@ -30,9 +30,13 @@ FX_LABELS = {"punch": "Punch hit (effect)", "slap": "Slap (effect)", "whoosh": "
              "ping": "Phone notification (effect)", "doorbell": "Doorbell ting-tong (effect)",
              "chappal": "Chappal smack (effect)", "laugh_track": "Audience laughing (effect)",
              "boom": "Meme boom (effect)", "dun_dun": "Dun dun duuun (effect)", "click": "Light switch click (effect)",
-             "tick": "Clock ticking (effect)", "scratch": "Record scratch (effect)"}
+             "tick": "Clock ticking (effect)", "scratch": "Record scratch (effect)",
+             "sizzle": "Oil sizzling, chhann (effect)", "fire": "Fire flaring up (effect)",
+             "splash": "Water splash (effect)", "footsteps": "Running footsteps (effect)",
+             "clang": "Metal clang, thali (effect)"}
 MUSIC_LABELS = {"happy": "Happy (ukulele-style)", "comedy": "Comedy (bouncy)", "suspense": "Suspense",
-                "emotional": "Emotional (slow)", "heaven": "Heavenly (Swarg)", "hell": "Dark drums (Nark)"}
+                "emotional": "Emotional (slow)", "heaven": "Heavenly (Swarg)", "hell": "Dark drums (Nark)",
+                "panic": "Panic (fast, tense)", "calm": "Calm, explaining (soft)"}
 
 # when a punch or slap action lands (seconds after the line starts, repeating): matches the 3D and flat poses
 HIT_PERIOD = {"punch": 1 / 2.4, "slap": 1 / 1.3}
@@ -336,10 +340,86 @@ def _scratch():
     return out
 
 
+def _sizzle():
+    """Hot oil frying (chhann): bright hissing noise full of tiny crackles."""
+    n, rnd, out = int(3.0 * RATE), random.Random(10), []
+    prev = lp = 0.0
+    for i in range(n):
+        t = i / RATE
+        v = rnd.uniform(-1, 1)
+        hp = v - prev                                      # hiss
+        prev = v
+        lp += 0.5 * (hp - lp)
+        crack = rnd.uniform(-1, 1) * 3.0 if rnd.random() < 0.004 else 0.0
+        env = min(1.0, t / 0.08) * (0.75 + 0.25 * math.sin(TWO_PI * 0.9 * t)) * min(1.0, (3.0 - t) / 0.5)
+        out.append((lp * 0.6 + crack) * env)
+    return out
+
+
+def _fire():
+    """Oil catching fire: a deep 'whoomp', then a roaring, crackling fire."""
+    n, rnd, out = int(2.8 * RATE), random.Random(11), []
+    lp = lp2 = ph = 0.0
+    for i in range(n):
+        t = i / RATE
+        v = rnd.uniform(-1, 1)
+        lp += 0.06 * (v - lp)                              # low roar
+        lp2 += 0.3 * (v - lp2)
+        ph += (40 + 70 * math.exp(-t * 9)) / RATE
+        whoomp = math.sin(TWO_PI * ph) * math.exp(-t * 5) * 1.4
+        roar = (lp * 3.0 + lp2 * 0.35) * min(1.0, t / 0.12) * (0.8 + 0.2 * math.sin(TWO_PI * 3.1 * t))
+        crack = rnd.uniform(-1, 1) * 2.2 if rnd.random() < 0.0025 else 0.0
+        out.append((whoomp + roar + crack) * min(1.0, (2.8 - t) / 0.8))
+    return [math.tanh(1.6 * v) for v in out]
+
+
+def _splash():
+    """Water slopping out of a jug: a noisy splash with a falling 'blub', then drops."""
+    n, rnd, out = int(1.0 * RATE), random.Random(12), []
+    y1 = y2 = 0.0
+    for i in range(n):
+        t = i / RATE
+        f = 1800 - 1300 * min(1.0, t / 0.35)
+        r = 0.93
+        a1, a2 = 2 * r * math.cos(TWO_PI * f / RATE), -r * r
+        y = (1 - r) * rnd.uniform(-1, 1) * 6 + a1 * y1 + a2 * y2
+        y2, y1 = y1, y
+        drops = sum(math.sin(TWO_PI * (900 + 300 * k) * (t - d0)) * math.exp(-(t - d0) * 40)
+                    for k, d0 in enumerate((0.42, 0.55, 0.71)) if t >= d0)
+        out.append(y * math.exp(-t * 4) + 0.3 * drops)
+    return out
+
+
+def _footsteps():
+    """Quick running footsteps on a hard floor."""
+    n, rnd = int(1.5 * RATE), random.Random(13)
+    out = [0.0] * n
+    for k in range(7):
+        s0 = int((0.05 + k * 0.19 + rnd.uniform(-0.015, 0.015)) * RATE)
+        ph, amp = 0.0, 0.7 + 0.3 * (k % 2)
+        for i in range(int(0.12 * RATE)):
+            if s0 + i >= n:
+                break
+            t = i / RATE
+            ph += (70 + 60 * math.exp(-t * 60)) / RATE
+            out[s0 + i] += amp * (math.sin(TWO_PI * ph) * math.exp(-t * 35) + rnd.uniform(-1, 1) * math.exp(-t * 120) * 0.6)
+    return out
+
+
+def _clang():
+    """A steel plate banged onto a kadhai: bright metal ringing."""
+    n = int(1.6 * RATE)
+    parts = ((523, 1.0, 3.2), (1290, 0.7, 4.0), (2210, 0.5, 5.5), (3170, 0.35, 7.0), (531, 0.6, 3.0), (4410, 0.2, 9))
+    rnd = random.Random(14)
+    return [sum(g * math.sin(TWO_PI * f * i / RATE) * math.exp(-(i / RATE) * dcy) for f, g, dcy in parts)
+            + rnd.uniform(-1, 1) * math.exp(-(i / RATE) * 80) * 0.8 for i in range(n)]
+
+
 MAKERS = {"punch": _punch, "slap": _slap, "whoosh": _whoosh, "pop": _pop, "ding": _ding, "boing": _boing,
           "thud": _thud, "growl": _growl, "ping": _ping, "doorbell": _doorbell, "chappal": _chappal,
           "laugh_track": _laugh_track, "boom": _boom, "dun_dun": _dun_dun, "click": _click, "tick": _tick,
-          "scratch": _scratch}
+          "scratch": _scratch, "sizzle": _sizzle, "fire": _fire, "splash": _splash, "footsteps": _footsteps,
+          "clang": _clang}
 
 
 def fx_wav(fx_id: str) -> Path:
@@ -407,6 +487,8 @@ def _music(mid: str):
         "emotional": (70, [(57, 1), (65, 0), (60, 0), (67, 0)], "pluck_slow"),
         "heaven": (64, [(60, 0), (65, 0), (57, 1), (67, 0)], "pad"),
         "hell": (80, [(40, 1), (40, 1), (41, 0), (39, 0)], "drums"),
+        "panic": (148, [(52, 1), (52, 1), (53, 0), (51, 0)], "panic"),
+        "calm": (84, [(60, 0), (57, 1), (65, 0), (67, 0)], "calm"),
     }[mid]
     bpm, chords, style = spec
     beat = 60.0 / bpm
@@ -450,6 +532,20 @@ def _music(mid: str):
             for k in range(3):
                 tt = t0 + rnd.uniform(0, 4 * beat)
                 _tone(buf, int(tt * RATE), _note(rnd.choice(triad) + 24), 1.2, 0.06, 0.005, 1.1)
+        elif style == "panic":                           # driving low pulse, high tense notes, hats on every 8th
+            for b in range(8):
+                _tone(buf, int((t0 + b * beat / 2) * RATE), _note(root - 12), beat * 0.4, 0.4, 0.005, 0.1, "tri")
+                _hat(buf, int((t0 + b * beat / 2) * RATE), 0.1, seed=bar * 8 + b)
+            for b in range(4):
+                _kick(buf, int((t0 + b * beat) * RATE), 0.6)
+            _tone(buf, int(t0 * RATE), _note(root + 13), 4 * beat, 0.08, 0.3, 0.3, "sine", trem=0.6)
+            if bar % 2:
+                _tone(buf, int((t0 + 2 * beat) * RATE), _note(root + 24), 2 * beat, 0.06, 0.1, 0.4, "tri")
+        elif style == "calm":                            # soft plucks over a warm pad
+            for nn in triad:
+                _tone(buf, int(t0 * RATE), _note(nn), 4 * beat + 0.3, 0.09, 0.6, 0.8, "sine")
+            for kk, p_ in enumerate([0, 2, 1, 2]):
+                _pluck(buf, int((t0 + kk * beat) * RATE), _note(triad[p_] + 12), beat * 2.2, 0.22, 0.998, seed=bar * 4 + kk)
         elif style == "drums":
             _tone(buf, int(t0 * RATE), _note(root), 4 * beat, 0.3, 0.3, 0.3, "tri", trem=0.3)
             for b, a in ((0, 1.0), (1.5, 0.6), (2, 0.9), (3, 0.5), (3.5, 0.7)):
@@ -471,6 +567,36 @@ def music_wav(mid: str) -> Path:
     if not path.exists():
         _write(path, _music(mid), 0.8)
     return path
+
+
+def build_music_track(parts: list, total: float, path: Path, fade: float = 0.8):
+    """parts: [(start, end, music id or None)] in time order; writes one WAV with each part's music looped,
+    cross-fading where the music changes (a scene can switch the music, e.g. panic -> calm)."""
+    n = int((total + 1.0) * RATE)
+    buf = array.array("h", [0]) * n
+    cache: dict = {}
+    for a, b, mid in parts:
+        if not mid:
+            continue
+        if mid not in cache:
+            with wave.open(str(music_wav(mid)), "rb") as w:
+                if w.getframerate() != RATE or w.getnchannels() != 1:
+                    raise ValueError("music must be mono at the fx rate")
+                s = array.array("h")
+                s.frombytes(w.readframes(w.getnframes()))
+                cache[mid] = s
+        s = cache[mid]
+        i0, i1 = max(0, int((a - fade / 2) * RATE)), min(n, int((b + fade / 2) * RATE))
+        fd = max(1, int(fade * RATE))
+        for i in range(i0, i1):
+            g = min(1.0, (i - i0) / fd, (i1 - i) / fd)
+            v = buf[i] + int(s[(i - i0) % len(s)] * g)
+            buf[i] = 32767 if v > 32767 else -32768 if v < -32768 else v
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(RATE)
+        w.writeframes(buf.tobytes())
 
 
 # ----------------------------------------------------------------- the effects track of a video

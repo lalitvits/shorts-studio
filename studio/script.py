@@ -212,15 +212,20 @@ IMPORT_PROMPT = """You turn a short-video screenplay into a JSON timeline for a 
 exactly as written (same language and script); do not translate or shorten it. Stage directions in brackets become
 emotions, actions, sounds, lighting, pop-ups, stickers and text cards - they are never spoken.
 
-Allowed character looks (pick the best fit for each character; "flat_brain" is a floating cartoon brain for an
-inner voice / "my mind" character):
+Allowed character looks (use the "flat_" cartoon looks, pick the best fit for each character; "flat_brain" is a floating cartoon brain for an
+inner voice / "my mind" character; "narrator" is a voice-over (VO / वॉयसओवर) that is never on screen; "flat_kid" is
+a child of about 10):
 {looks}
-Allowed backgrounds: {bgs}
+Allowed backgrounds (use the "flat_" cartoon ones): {bgs}
 Allowed emotions: {emotions}
 Allowed actions: {actions}
   - use_phone: looking at a phone (a dark room is then lit by its screen); hold_parcel / hide_behind: a food parcel;
     wipe_tears; throw: throws a chappal at the camera; appear: hidden until this line (someone who suddenly appears);
-    walk_in / walk_out; point; talk (default).
+    walk_in / walk_out / run_in; point; talk (default).
+  - kitchen: cook (frying at the stove), step_back (jumps back in fear), hold_jug (lifts a water jug, about to throw
+    it), lower_jug (the jug is pushed down), grab_hand (grabs someone's hand to stop them), turn_off_gas,
+    cover_kadhai (puts a steel plate on the kadhai), hand_on_shoulder, look_camera (looks at the camera, relieved).
+Allowed camera shots: {shots}
 Allowed sounds (a line's "sound" plays at the start of the line): {sounds}
 Allowed stickers: {stickers}
 
@@ -235,24 +240,49 @@ Rules:
   {{"card": "", "card_style": "black", "card_sound": "laugh_track"}} if laughter / a meme sound ends the video.
 - Background music mentioned (suspense, comedy...): set "music" to one of: {music}.
 - Voice effects: "devil_whisper" for an inner / devil voice, otherwise "".
+- Voice-over (VO): a character with look "narrator" speaks it. While the narrator (or anyone) speaks, the person the
+  visuals show doing something goes in "actor", with "actor_action" and "actor_emotion" (for example the narrator
+  says "she stepped back" -> actor: her id, actor_action: "step_back", actor_emotion: "scared"). This also works on a
+  normal line: "Stop!" said by the father while the son's jug is pushed down -> actor: son, actor_action: "lower_jug".
+- A visual with no words: a line with "text": "", the action, and "hold": its seconds (for example 2).
+- Kadhai / stove: "kadhai" on the line where it changes: "fry" (oil frying), "fire" (the oil catches fire),
+  "cover" (covered with a plate), "gas_off". The actions cook / turn_off_gas / cover_kadhai already do their part.
+  A close-up of the stove: "shot": "stove". Their sounds (sizzle, fire, clang, knob click, running footsteps, water
+  splash) are added automatically: do not put them in "sound".
+- A graphic / animation / B-roll explaining why water on an oil fire explodes and why covering works: "broll":
+  "oil_fire" on the line spoken during it.
+- Big bold text on screen at the end (a message): "overlay" on the line where it appears; put a second line after
+  " | " (for example "आग पर पानी न डालें, उसे ढकें! | NEVER USE WATER ON OIL FIRE").
+- Music that changes in a scene (for example panic, then calm while explaining): the scene's "music" (one of the music
+  ids); "" keeps the music playing. Scene timings in the script (0:10 - 0:25): the scene's "seconds" (here 15).
 
 Reply with JSON only:
 {{"title": "...", "hook": "a punchy opening line (max 6 words, same language)", "music": "...",
   "characters": [{{"id": "short_id", "name": "name as in the script", "look": "...", "gender": "male|female",
                    "voice_fx": ""}}],
-  "scenes": [{{"background": "...", "lighting": "day|dark|phone", "cast": ["id", ...],
+  "scenes": [{{"background": "...", "lighting": "day|dark|phone", "music": "", "seconds": 0, "cast": ["id", ...],
               "lines": [{{"speaker": "id", "text": "...", "emotion": "...", "action": "...", "sound": "",
-                         "popup": "", "sticker": "", "lights": ""}}]}},
+                         "popup": "", "sticker": "", "lights": "", "shot": "auto", "hold": 0, "actor": "",
+                         "actor_action": "", "actor_emotion": "", "kadhai": "", "broll": "", "overlay": ""}}]}},
              {{"card": "...", "card_style": "dark|black|bright", "card_sound": ""}}]}}
 
 Screenplay:
 {script}"""
 
 
+def _secs(v, top: float) -> float:
+    try:
+        return max(0.0, min(top, float(v or 0)))
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def import_screenplay(text: str, provider: str = "gemini") -> dict:
     """A full screenplay (with stage directions) -> characters, scenes, cards, title, hook and music."""
-    from .catalog import (DEFAULT_VOICE, EDGE_FOR_GENDER, FLAT_BACKGROUNDS, LOOKS, SOUND_LABELS, VOICE_FX_LABELS)
+    from .catalog import (DEFAULT_VOICE, EDGE_FOR_GENDER, FLAT_BACKGROUNDS, LOOKS, SHOT_LABELS, SOUND_LABELS,
+                          VOICE_FX_LABELS)
     from .fx import MUSIC_LABELS
+    from .kitchen import EXPLAINERS, KADHAI_STATES
     from .overlays import STICKER_KINDS
     if not text.strip():
         raise ScriptError("Paste your script first.")
@@ -262,7 +292,8 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
     prompt = IMPORT_PROMPT.format(looks=looks, bgs=", ".join(b["id"] for b in list_backgrounds()),
                                   emotions=", ".join(EMOTIONS), actions=", ".join(ACTIONS),
                                   sounds=", ".join(SOUND_LABELS), stickers=", ".join(STICKER_KINDS),
-                                  music=", ".join(MUSIC_LABELS), script=text.strip()[:6000])
+                                  music=", ".join(MUSIC_LABELS), shots=", ".join(SHOT_LABELS),
+                                  script=text.strip()[:6000])
     # Gemini's safety check is borderline on comedy with slaps, chappals or jokes about dowry: it can refuse the same
     # text once and accept it the next time. Say what the text is, and try a few times.
     context = ("Context: this is a harmless, family-friendly Indian comedy sketch for a cartoon YouTube Short. "
@@ -284,6 +315,8 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
             cid += "x"
         ids.add(cid)
         look = c.get("look") if c.get("look") in LOOKS else ("flat_aunty" if c.get("gender") == "female" else "flat_man")
+        if LOOKS[look].get("style") not in ("flat", "narrator"):   # picture / 3D looks: a flat one (all the acting)
+            look = "flat_aunty" if c.get("gender") == "female" or LOOKS[look].get("female") else "flat_man"
         fem = c.get("gender") == "female" or LOOKS[look].get("female")
         fxv = c.get("voice_fx") if c.get("voice_fx") in VOICE_FX_LABELS else ("devil_whisper" if look == "flat_brain" else "")
         chars.append(dict(id=cid, name=str(c.get("name") or cid)[:30], look=look,
@@ -291,6 +324,9 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
         c["_id"] = cid
     if not chars:
         raise ScriptError("No characters were found in the script.")
+    narr = {c["id"] for c in chars if c["look"] == "narrator"}
+    if len(narr) == len(chars):
+        raise ScriptError("The script has only a narrator; add at least one character who is on screen.")
     remap = {str(c.get("id")): c["_id"] for c in data.get("characters", [])[:8] if "_id" in c}
     remap.update({str(c.get("name")): c["_id"] for c in data.get("characters", [])[:8] if "_id" in c})
     bg_ids = {b["id"] for b in list_backgrounds()}
@@ -314,12 +350,35 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
                 sound=ln.get("sound") if ln.get("sound") in SOUND_LABELS else "",
                 popup=str(ln.get("popup") or "")[:90],
                 sticker=ln.get("sticker") if ln.get("sticker") in STICKER_KINDS else "",
-                lights=ln.get("lights") if ln.get("lights") in ("on", "off") else "", shot="auto"))
+                lights=ln.get("lights") if ln.get("lights") in ("on", "off") else "",
+                shot=ln.get("shot") if ln.get("shot") in SHOT_LABELS else "auto",
+                hold=_secs(ln.get("hold"), 20),
+                actor=remap.get(str(ln.get("actor") or ""), ln.get("actor")) if ln.get("actor") else "",
+                actor_action=ln.get("actor_action") if ln.get("actor_action") in ACTIONS else "idle",
+                actor_emotion=ln.get("actor_emotion") if ln.get("actor_emotion") in EMOTIONS else "neutral",
+                kadhai=ln.get("kadhai") if ln.get("kadhai") in KADHAI_STATES else "",
+                broll=ln.get("broll") if ln.get("broll") in EXPLAINERS else "",
+                overlay=str(ln.get("overlay") or "")[:120]))
+            if lines[-1]["actor"] not in ids or lines[-1]["actor"] in narr:
+                lines[-1]["actor"] = ""
+            last = lines[-1]
+            if last["speaker"] in narr and last["action"] not in ("talk", "idle", "look_camera"):
+                if not last["actor"]:          # the narrator does not act: the action is the on-screen person's
+                    cands = [x for x in sc.get("cast", []) if remap.get(str(x), x) in ids and remap.get(str(x), x) not in narr]
+                    last["actor"] = remap.get(str(cands[0]), cands[0]) if cands else ""
+                    last["actor_action"], last["actor_emotion"] = last["action"], last["emotion"]
+                last["action"] = "talk"
         if not lines:
             continue
-        for ln in lines:                       # a throw makes its own whoosh and smack
-            if ln["action"] == "throw" and ln["sound"] in ("chappal", "slap", "whoosh", "punch"):
+        auto = {"throw": ("chappal", "slap", "whoosh", "punch"), "cook": ("sizzle",), "turn_off_gas": ("click",),
+                "cover_kadhai": ("clang",), "run_in": ("footsteps",), "lower_jug": ("splash",)}
+        for ln in lines:                       # sounds the app adds by itself are not added twice
+            made = set(auto.get(ln["action"], ())) | set(auto.get(ln["actor_action"], ()))
+            made |= {"fry": {"sizzle"}, "fire": {"fire", "whoosh"}, "cover": {"clang"}, "gas_off": {"click"}}.get(ln["kadhai"], set())
+            if ln["sound"] in made:
                 ln["sound"] = ""
+            if not ln["text"] and not ln["sound"] and not ln["hold"]:
+                ln["hold"] = 1.5                   # a visual with no words still gets a moment on screen
         lighting = sc.get("lighting") if sc.get("lighting") in ("day", "dark", "phone") else "day"
         on = [i for i, ln in enumerate(lines) if ln["lights"] == "on"]
         if on:                                 # a light switched on means the room was dark before
@@ -333,8 +392,21 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
         for ln in lines:
             if ln["speaker"] not in cast:
                 cast.append(ln["speaker"])
+        cast = [x for x in cast if x not in narr]
+        for ln in lines:
+            if ln["actor"] and ln["actor"] not in cast:
+                cast.append(ln["actor"])
+        if not cast:
+            cast = [next(c["id"] for c in chars if c["id"] not in narr)]
         bg = sc.get("background") if sc.get("background") in bg_ids else next(iter(FLAT_BACKGROUNDS))
-        scenes.append(dict(background=bg, lighting=lighting, cast=cast, lines=lines))
+        if bg not in FLAT_BACKGROUNDS:         # flat cartoon characters: the cartoon version of that place
+            bg = next((f for f in FLAT_BACKGROUNDS if f == "flat_" + bg or bg in f), bg)
+        if any(ln["kadhai"] or {ln["action"], ln["actor_action"]} & {"cook", "turn_off_gas", "cover_kadhai"}
+               for ln in lines):
+            bg = "flat_kitchen"                # the kadhai and stove are in the cartoon kitchen
+        scenes.append(dict(background=bg, lighting=lighting, cast=cast, lines=lines,
+                           music=sc.get("music") if sc.get("music") in MUSIC_LABELS or sc.get("music") == "none" else "",
+                           seconds=_secs(sc.get("seconds"), 60)))
     if not any(s.get("lines") for s in scenes):
         raise ScriptError("No dialogue was found in the script.")
     music = data.get("music") if data.get("music") in MUSIC_LABELS else ""

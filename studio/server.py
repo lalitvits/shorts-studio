@@ -42,6 +42,7 @@ def assets_payload() -> dict:
         "shots": [{"id": k, "label": v} for k, v in SHOT_LABELS.items()],
         "stickers": list(__import__("studio.overlays", fromlist=["x"]).STICKER_KINDS),
         "music": [{"id": k, "label": v} for k, v in __import__("studio.fx", fromlist=["x"]).MUSIC_LABELS.items()],
+        "explainers": [{"id": k, "label": v} for k, v in __import__("studio.kitchen", fromlist=["x"]).EXPLAINERS.items()],
         "voices": VOICES, "default_voice": DEFAULT_VOICE,
         "voice_tune": {k: list(v) for k, v in __import__("studio.catalog", fromlist=["x"]).VOICE_TUNE.items()},
         "emotions": EMOTIONS, "actions": [{"id": k, "label": v} for k, v in ACTION_LABELS.items()],

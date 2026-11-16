@@ -303,7 +303,8 @@ def _birds(d, x0, vw, t, px, s, n=3, y=300):
                width=max(1, round(3.5 * s)))
 
 
-def animate(im: Image.Image, bid: str, t: float, x0: float, y0: float, z: float, k: float, PW: int, blur: bool):
+def animate(im: Image.Image, bid: str, t: float, x0: float, y0: float, z: float, k: float, PW: int, blur: bool,
+            kadhai: bool = False):
     vw = 1080 / z
     s = z * k
 
@@ -359,13 +360,13 @@ def animate(im: Image.Image, bid: str, t: float, x0: float, y0: float, z: float,
             for dx, r in ((0, 34), (36, 44), (76, 30)):
                 d.ellipse([x + dx * s - r * s, y - r * s, x + dx * s + r * s, y + r * s], fill=(255, 255, 255, 230))
         if visible(1820):
-            for bx in (1820, 2020):                               # gas flames
+            for bx in ((2020,) if kadhai else (1820, 2020)):      # gas flames (the kadhai draws its own burner)
                 for j in range(5):
                     fx_ = bx - 40 + j * 20
                     h = 22 + 8 * math.sin(t * 17 + j * 2)
                     x, y = px(fx_, 1190)
                     d.polygon([(x - 7 * s, y), (x + 7 * s, y), (x, y - h * s)], fill=(80, 140, 255, 230))
-            for j in range(4):                                     # steam from the pot
+            for j in range(0 if kadhai else 4):                    # steam from the pot
                 u = (t * 0.4 + j / 4) % 1
                 x, y = px(1820 + 30 * math.sin(t + j), 1040 - 300 * u)
                 r = (18 + 40 * u) * s
