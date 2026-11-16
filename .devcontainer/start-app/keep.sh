@@ -14,6 +14,7 @@ while true; do
   [ -n "$W" ] || continue
   as_user "python -c 'import PIL, edge_tts'" > /dev/null 2>&1 || continue
   echo "$(date) starting Shorts Studio in $W"
-  as_user "sh /usr/local/share/shorts-studio-run.sh '$W'" >> /tmp/shorts-studio.log 2>&1 &
+  # the log is written by the codespace user (root may not write a user's file in /tmp)
+  as_user "sh /usr/local/share/shorts-studio-run.sh '$W' >> /tmp/shorts-studio.log 2>&1" &
   sleep 20
 done
