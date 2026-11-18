@@ -25,8 +25,9 @@ from .audio import AudioError, env_segments, fit_segments, get_audio, load_env
 from .backgrounds import get_background, get_background_3d
 from .shading import shade_3d, soft_shadow
 from .visemes import build_track
-from .catalog import (ACTIONS, DEFAULT_VOICE, EMOTIONS, GEMINI_FOR_LOOK, LOOK_ALIASES, LOOKS, NARRATOR_LOOKS,
-                      SHOT_LABELS, SOUND_LABELS, VOICE_FX_FOR_LOOK, VOICE_FX_LABELS, VOICE_TUNE)
+from .catalog import (ACTIONS, BUILDS, DEFAULT_VOICE, EMOTIONS, GEMINI_FOR_LOOK, HEIGHTS, LOOK_ALIASES, LOOKS,
+                      NARRATOR_LOOKS, OUTFIT_COLORS, PROPS, SHOT_LABELS, SOUND_LABELS, VOICE_FX_FOR_LOOK,
+                      VOICE_FX_LABELS, VOICE_TUNE)
 from .flat import FlatComposer
 from . import fx as fx_mod
 from . import kitchen
@@ -62,6 +63,16 @@ def _broll(v) -> str:
     return v if v in kitchen.EXPLAINERS or (v.startswith("pic:") and len(v) < 120) else ""
 
 
+def _body(v, names, lo, hi):
+    """A height / build: one of the names ("tall", "fat"...) or a number (1.1 = 10% taller / wider); "" = the look's own."""
+    if v in names:
+        return v
+    try:
+        return max(lo, min(hi, float(v)))
+    except (TypeError, ValueError):
+        return ""
+
+
 def _scene_music(v) -> str:
     """A scene's music: a built-in track id, "none" (silence from here), or "" (keep the music playing)."""
     return v if v in fx_mod.MUSIC_LABELS or v == "none" else ""
@@ -93,7 +104,10 @@ def normalize(tl: dict) -> dict:
                           voice_pitch=_clampi(c.get("voice_pitch"), VOICE_TUNE.get(look, (0, 0))[0], -60, 80),
                           voice_rate=_clampi(c.get("voice_rate"), VOICE_TUNE.get(look, (0, 0))[1], -40, 60),
                           voice_fx=c["voice_fx"] if c.get("voice_fx") in VOICE_FX_LABELS
-                          else VOICE_FX_FOR_LOOK.get(look, "")))
+                          else VOICE_FX_FOR_LOOK.get(look, ""),
+                          height=_body(c.get("height"), HEIGHTS, 0.5, 1.3),
+                          build=_body(c.get("build"), BUILDS, 0.7, 1.7),
+                          outfit=c.get("outfit") if c.get("outfit") in OUTFIT_COLORS else ""))
     if not chars:
         raise RenderError("Add at least one character.")
     ids = [c["id"] for c in chars]
@@ -119,6 +133,7 @@ def normalize(tl: dict) -> dict:
                               actor_emotion=ln.get("actor_emotion") if ln.get("actor_emotion") in EMOTIONS else "neutral",
                               kadhai=ln.get("kadhai") if ln.get("kadhai") in kitchen.KADHAI_STATES else "",
                               broll=_broll(ln.get("broll")),
+                              prop=ln.get("prop") if ln.get("prop") in PROPS or ln.get("prop") == "none" else "",
                               overlay=" ".join(str(ln.get("overlay") or "").split())[:120],
                               emotion=ln.get("emotion") if ln.get("emotion") in EMOTIONS else "neutral",
                               action=ln.get("action") if ln.get("action") in ACTIONS else "talk",
@@ -184,6 +199,7 @@ class LineT:
     kadhai: str = ""        # the kadhai on the stove changes: fry, fire, cover, gas_off
     broll: str = ""         # cut away to an explainer animation / your picture while this line plays
     overlay: str = ""       # big bold text over the picture, from this line to the end of the scene
+    prop: str = ""          # something the speaker holds from this line on ("none" puts it away)
 
 
 @dataclass
@@ -219,6 +235,7 @@ def _line_extras(lt, ln: dict):
     lt.actor, lt.actor_action = ln.get("actor", ""), ln.get("actor_action", "idle")
     lt.actor_emotion = ln.get("actor_emotion", "neutral")
     lt.kadhai, lt.broll, lt.overlay = ln.get("kadhai", ""), ln.get("broll", ""), ln.get("overlay", "")
+    lt.prop = ln.get("prop", "")
     return lt
 
 

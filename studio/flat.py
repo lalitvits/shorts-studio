@@ -18,8 +18,8 @@ from functools import lru_cache
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
-from .backgrounds import get_background
-from .catalog import FLAT_BACKGROUNDS, LOOKS
+from .backgrounds import get_background, stamp as bg_stamp
+from .catalog import BUILD_VALUES, FLAT_BACKGROUNDS, HEIGHT_VALUES, LOOKS, OUTFIT_COLORS
 from .places import PLACES, animate as animate_place, draw_static as draw_place
 from .realms import REALMS, animate as animate_realm, draw_static as draw_realm
 from .rig import KEEP_EMOTION, PERSISTENT, blink_amount
@@ -66,6 +66,69 @@ def flat_spec(look: dict) -> dict:
                 bottom="dress" if fem else "pants", bottom_color=look.get("pants", (40, 50, 70)), hat=None,
                 hair="long" if fem else "short", hair_color=look.get("hair", (50, 35, 28)),
                 mustache=False, female=fem, height=0.97 * look.get("scale", 1.0), bindi=fem)
+
+
+def char_spec(c: dict) -> dict:
+    """A character's drawing recipe with their own height, build and outfit colour on top of the look's."""
+    sp = dict(flat_spec(LOOKS[c["look"]]))
+    if sp.get("kind") == "3d":
+        sp["fallback"] = dict(sp["fallback"])
+    h, b, o = c.get("height"), c.get("build"), c.get("outfit")
+    base = sp.get("height", 1.0)
+    if h in HEIGHT_VALUES:
+        sp["height"] = HEIGHT_VALUES[h]
+    elif isinstance(h, (int, float)) and h:
+        sp["height"] = base * h                       # a number: relative (1.1 = 10% taller)
+    if b in BUILD_VALUES:
+        sp["build"] = BUILD_VALUES[b]
+    elif isinstance(b, (int, float)) and b:
+        sp["build"] = b
+    if o and isinstance(OUTFIT_COLORS.get(o), tuple):
+        sp["top_color"] = OUTFIT_COLORS[o]
+        if sp.get("kind") == "3d":
+            sp["fallback"]["top_color"] = OUTFIT_COLORS[o]
+    return sp
+
+
+# things a character holds (PROP_LABELS): which hand pose goes with each
+ONE_HAND = {"phone": ("ik", 62, -650), "glass": ("ik", 62, -640), "bottle": ("ik", 62, -640), "cup": ("ik", 50, -690),
+            "flowers": ("ik", 60, -680), "thali": ("ik", 80, -690), "chappal": ("fk", 30, 20),
+            "umbrella": ("ik", 36, -790), "suitcase": ("fk", 14, 4), "lathi": ("fk", 12, -6), "bag": None}
+# (the left arm's x is mirrored: a positive x is out to the left)
+TWO_HAND = {"book": (("ik", -55, -700), ("ik", 55, -700)), "newspaper": (("ik", 130, -720), ("ik", 130, -720)),
+            "laptop": (("ik", 70, -690), ("ik", 70, -690)), "parcel": (("ik", -48, -610), ("ik", 48, -610)),
+            "jug": (("ik", 0, -690), ("ik", 110, -720))}
+BUSY_HANDS = {"clap", "cry", "facepalm", "wipe_tears", "punch", "slap", "throw", "grab_hand", "cover_kadhai",
+              "hold_jug", "lower_jug", "turn_off_gas", "cook", "use_phone", "sit_phone", "phone_call", "read_book",
+              "sit_read", "drink_tea", "sit_tea", "eat", "sit_eat", "hold_parcel", "hide_behind", "think",
+              "arms_crossed", "cheer", "dance", "jump", "stop2", "step_back", "hand_on_shoulder", "ride"}
+
+
+def hold_prop(pose: dict, prop: str, action: str):
+    """Put the held prop in the character's hands (keeps the action's own prop when it has one)."""
+    if prop in ("glass", "bottle") and pose.get("prop") == "cup":       # drinking from a glass / bottle
+        pose["prop"] = prop
+        return
+    if prop == "cycle":
+        if not pose.get("ride"):
+            pose["cycle"] = True
+            if action not in BUSY_HANDS:
+                pose["R"] = ("ik", 150, -500)
+        return
+    if pose.get("prop") or action in BUSY_HANDS:
+        if prop == "bag":
+            pose["bag"] = True
+        return
+    if prop == "bag":
+        pose["bag"] = True
+    elif prop == "lathi":
+        pose["lathi"] = True
+    elif prop in TWO_HAND:
+        pose["L"], pose["R"] = TWO_HAND[prop]
+        pose["prop"] = prop
+    elif ONE_HAND.get(prop):
+        pose["R"] = ONE_HAND[prop]
+        pose["prop"] = "phone_hand" if prop == "phone" else prop
 
 
 def is_flat_look(look_id: str) -> bool:
@@ -326,6 +389,11 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
     elif action == "hand_on_shoulder":      # a calm hand on someone's shoulder
         p["R"] = ("fk", 100, -10)
         p["L"] = ("fk", 40, 55 + 6 * s(t * 3))
+    elif action in ("ride", "ride_cycle"):  # on a cycle, pedalling
+        p["ride"] = t
+        p["dy"] = 110 + 4 * s(t * 14)
+        p["R"] = ("ik", 150, -600)
+        p["L"] = ("ik", -120, -590)          # (left arm: a negative x reaches across to the handlebar)
     elif action == "look_camera":           # looks straight at the camera
         p["L"] = p["R"] = ("fk", 12, -6)
         p["eyes_dir"] = 0.0
@@ -561,7 +629,36 @@ def _lathi(pen, elbow, hand):
         pen.line([(x - uy * 10, y + ux * 10), (x + uy * 10, y - ux * 10)], (120, 80, 40), 4)
 
 
+def _cycle(pen, bx, f, t, spin, color=(214, 60, 52)):
+    """A bicycle seen from the side (f = 1: front wheel to the right), wheels turning with spin."""
+    rh, fh = (bx - 170 * f, -100), (bx + 170 * f, -100)
+    crank, seat, head, bar = (bx + 10 * f, -130), (bx - 40 * f, -360), (bx + 150 * f, -300), (bx + 140 * f, -480)
+    for cx, cy in (rh, fh):
+        pen.circle(cx, cy, 100, None, 14, (40, 40, 46))
+        pen.circle(cx, cy, 86, None, 3, (170, 170, 180))
+        for k in range(4):
+            a = spin + k * math.pi / 4
+            pen.line([(cx - 84 * math.cos(a), cy - 84 * math.sin(a)), (cx + 84 * math.cos(a), cy + 84 * math.sin(a))],
+                     (170, 170, 180), 2.5)
+        pen.circle(cx, cy, 10, (120, 120, 130), 2)
+    for a_, b_ in ((rh, crank), (crank, seat), (seat, rh), (seat, head), (crank, head), (head, fh), (head, bar)):
+        pen.limb([a_, b_], 13, color, 3)
+    pen.ellipse(seat[0] - 42, seat[1] - 18, seat[0] + 36, seat[1] + 8, (40, 40, 46), 3)          # seat
+    pen.limb([(bar[0] - 30 * f, bar[1] + 6), (bar[0] + 20 * f, bar[1] - 4)], 12, (40, 40, 46), 3)   # handlebar
+    pen.circle(crank[0], crank[1], 22, (90, 90, 100), 3)
+    for k in (0, math.pi):                                                                  # pedals
+        a = spin * 1.4 + k
+        px, py = crank[0] + 46 * math.cos(a), crank[1] + 46 * math.sin(a)
+        pen.line([crank, (px, py)], (90, 90, 100), 6)
+        pen.line([(px - 18, py), (px + 18, py)], (40, 40, 46), 9)
+
+
 def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
+    bw = sp.get("build", 1.0)                       # 0.86 thin .. 1.5 very fat
+    if pose.get("cycle") and view != "back":         # standing with a cycle: it is beside them
+        _cycle(Pen(im, ox + pose["dx"] * s, oy, s), 300, -1, t, 0.0, sp.get("cycle_color", (214, 60, 52)))
+    if pose.get("ride") is not None:                 # riding: the cycle under them
+        _cycle(Pen(im, ox + pose["dx"] * s, oy, s), 0, 1, t, pose["ride"] * 7, sp.get("cycle_color", (214, 60, 52)))
     pen = Pen(im, ox + pose["dx"] * s, oy + pose["dy"] * s, s)
     skin, sk_d = sp["skin"], _mix(sp["skin"], 0.85)
     back = view == "back"
@@ -577,15 +674,26 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
     # legs and shoes
     hip_y = -260 if dress else -470
     wk = pose["walk"]
-    for side in (-1, 1):
+    lw = 1 + 0.6 * (bw - 1)                          # legs further apart on a wider body
+    if pose.get("ride") is not None:                 # pedalling: feet on the pedals, knees bent forward
+        for side in (-1, 1):
+            a = pose["ride"] * 7 * 1.4 + (0 if side > 0 else math.pi)
+            foot = (10 + 46 * math.cos(a), -130 + 46 * math.sin(a) - pose["dy"])
+            hip = (side * 30, -300 if dress else hip_y)
+            knee, foot = _ik(hip[0], hip[1], foot[0], foot[1], 230, 230, 1)
+            col = sp["bottom_color"] if not dress else _mix(sp["bottom_color"], 1.1)
+            pen.limb([hip, knee, foot], 38 * lw ** 0.5, col if sp["bottom"] != "shorts" else skin)
+            pen.ellipse(foot[0] - 30, foot[1] - 18, foot[0] + 44, foot[1] + 14, sp.get("shoe", (44, 40, 42)))
+    for side in ((-1, 1) if pose.get("ride") is None else ()):
         sw = 26 * math.sin(wk * 8) * side if wk else 0
-        top, foot = (side * 44, hip_y), (side * 50 + sw, -34)
+        top, foot = (side * 44 * lw, hip_y), (side * 50 * lw + sw, -34)
         if sp["bottom"] == "shorts":
             mid = (side * 47 + sw * 0.4, -330)
             pen.limb([mid, foot], 30, skin)
             pen.limb([top, mid], 48, sp["bottom_color"])
         else:
-            pen.limb([top, foot], 36 if dress else 40, sp["bottom_color"] if not dress else _mix(sp["bottom_color"], 1.1))
+            pen.limb([top, foot], (36 if dress else 40) * lw ** 0.5,
+                     sp["bottom_color"] if not dress else _mix(sp["bottom_color"], 1.1))
         pen.ellipse(side * 50 + sw - 42 + side * 8, -46, side * 50 + sw + 42 + side * 8, -6, sp.get("shoe", (44, 40, 42)))
 
     def _arms():
@@ -593,7 +701,7 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         hands = {}
         for side, key in ((-1, "L"), (1, "R")):
             spec = pose[key]
-            sx, sy = side * 110, -742
+            sx, sy = side * 110 * (1 + 0.5 * (bw - 1)), -742
             if spec[0] == "ik":
                 elbow, hand = _ik(sx, sy, side * spec[1], spec[2], 150, 142, side)
             else:
@@ -609,7 +717,7 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
                                             fill=_mix(tc, 0.78), outline=OUT, width=pen.wd(3))
                 if sp["top"] == "kurta":
                     pen.limb([elbow, (elbow[0] + (hand[0] - elbow[0]) * 0.55, elbow[1] + (hand[1] - elbow[1]) * 0.55)], 40, tc)
-            if key == "R" and sp.get("holds") == "lathi" and not pose["prop"]:
+            if key == "R" and (sp.get("holds") == "lathi" or pose.get("lathi")) and not pose["prop"]:
                 _lathi(pen, elbow, hand)
             if key == "R" and not back and pose["prop"] == "phone_ear":      # the phone goes behind the hand
                 _prop(pen, "phone_ear", hand)
@@ -634,14 +742,17 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
     tc = sp["top_color"]
     if sp["top"] == "kurta":
         body = [(-92, -772), (92, -772), (110, -650), (118, -520), (160, -250), (-160, -250), (-118, -520), (-110, -650)]
+        body = [(x * (1 + 0.85 * (bw - 1) * (1 if y > -700 else 0.5)), y) for x, y in body]
         pen.poly(body, tc)
         if not back:
             pen.poly([(-88, -770), (-50, -770), (150, -330), (122, -300)], sp.get("accent", _mix(tc, 0.7)), 4)
             pen.line([(-150, -262), (150, -262)], sp.get("accent", _mix(tc, 0.7)), 14)
     elif sp["top"] == "uniform":
-        _uniform(pen, sp, back, t)
+        _uniform(pen, dict(sp, belly=max(sp.get("belly", 0.0), min(1.6, (bw - 1) * 2.4)),
+                           slim=max(sp.get("slim", 0.0), (1 - bw) * 5)), back, t)
     else:
-        pen.poly(_sup(0, -615, 135, 168), tc)
+        fat = max(0.0, bw - 1)
+        pen.poly(_sup(0, -615 + 30 * fat, 135 * bw, 168 + 40 * fat, n=max(2.0, 2.6 - 0.9 * fat)), tc)
         if sp["top"] == "vest" and not back:
             pen.pie(-40, -812, 40, -742, 0, 180, skin, 4)
         if sp.get("stripes"):
@@ -691,6 +802,11 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
 
     if not pose.get("arms_behind"):
         _arms()
+    if pose.get("bag") and not back:                 # shoulder bag on the left hip, strap across the chest
+        pen.line([(-70, -770), (110 * bw, -470)], (110, 70, 40), 12)
+        pen.d.rounded_rectangle(pen.box(-170 * bw, -520, -60 * bw, -400), radius=12 * pen.s, fill=(150, 96, 56),
+                                outline=OUT, width=pen.wd(4))
+        pen.line([(-160 * bw, -490), (-70 * bw, -490)], (110, 70, 40), 5)
 
 def _phone_back(pen, cx, cy, w, h, skin=None):
     """A real-sized smartphone seen from the back (what you see when someone looks at their phone):
@@ -753,6 +869,70 @@ def _jug(pen, x, y, tilt=0.0, k=1.0):
 
 def _prop(pen, kind, hand, other=None, skin=None):
     x, y = hand
+    if kind == "glass":                     # a glass of water
+        pen.poly([(x - 26, y - 70), (x + 26, y - 70), (x + 20, y + 16), (x - 20, y + 16)], (225, 240, 250), 4)
+        pen.poly([(x - 23, y - 40), (x + 23, y - 40), (x + 19, y + 12), (x - 19, y + 12)], (130, 190, 240), 0)
+        pen.circle(x, y - 6, 24, skin or (200, 140, 95), 4)
+        return
+    if kind == "bottle":                    # a plastic water bottle
+        pen.d.rounded_rectangle(pen.box(x - 22, y - 110, x + 22, y + 40), radius=12 * pen.s, fill=(150, 205, 245),
+                                outline=OUT, width=pen.wd(4))
+        pen.d.rectangle(pen.box(x - 21, y - 60, x + 21, y - 20), fill=(60, 130, 220))      # label
+        pen.d.rounded_rectangle(pen.box(x - 12, y - 132, x + 12, y - 108), radius=4 * pen.s, fill=(40, 90, 200),
+                                outline=OUT, width=pen.wd(3))
+        pen.circle(x, y + 4, 24, skin or (200, 140, 95), 4)
+        return
+    if kind == "phone_hand":                # a mobile held in one hand
+        pen.d.rounded_rectangle(pen.box(x - 26, y - 92, x + 26, y + 10), radius=10 * pen.s, fill=(46, 50, 62),
+                                outline=OUT, width=pen.wd(4))
+        pen.d.rounded_rectangle(pen.box(x - 20, y - 84, x + 20, y + 2), radius=7 * pen.s, fill=(120, 170, 230))
+        pen.circle(x, y + 2, 24, skin or (200, 140, 95), 4)
+        return
+    if kind == "flowers":
+        for k, (dx, dy, col) in enumerate(((-30, -110, (230, 70, 90)), (10, -130, (250, 200, 60)),
+                                           (40, -100, (230, 110, 170)), (0, -90, (240, 240, 240)))):
+            pen.line([(x, y), (x + dx * 0.6, y + dy + 30)], (70, 150, 70), 6)
+            pen.circle(x + dx, y + dy, 24, col, 3)
+        return
+    if kind == "umbrella":                  # an open umbrella over the head
+        pen.line([(x, y + 40), (x - 10, y - 380)], (60, 50, 50), 8)
+        pen.arc(x - 24, y + 20, x + 24, y + 64, 0, 180, 6, (60, 50, 50))
+        pen.pie(x - 250, y - 500, x + 230, y - 260, 180, 360, (40, 90, 170), 5)
+        for k in range(5):
+            pen.line([(x - 10, y - 390), (x - 250 + k * 120, y - 380)], (30, 70, 140), 3)
+        return
+    if kind == "suitcase":                  # a rolling suitcase next to the leg, pulled by the handle
+        cx, top = x + 90, -330
+        pen.line([(x, y), (cx, top)], (70, 70, 80), 8)
+        pen.d.rounded_rectangle(pen.box(cx - 80, top, cx + 80, -40), radius=16 * pen.s, fill=(60, 120, 190),
+                                outline=OUT, width=pen.wd(5))
+        for dx in (-40, 0, 40):
+            pen.line([(cx + dx, top + 20), (cx + dx, -60)], (40, 90, 160), 4)
+        for dx in (-55, 55):
+            pen.circle(cx + dx, -26, 14, (40, 40, 46), 3)
+        return
+    if kind == "newspaper" and other is not None:
+        (x0_, y0_), (x1_, y1_) = other, hand
+        pen.poly([(x0_ - 40, y0_ - 190), (x1_ + 40, y1_ - 190), (x1_ + 40, y1_ + 40), (x0_ - 40, y0_ + 40)],
+                 (236, 234, 226), 4)
+        pen.line([(x0_ + (x1_ - x0_) / 2, y0_ - 190), (x0_ + (x1_ - x0_) / 2, y0_ + 40)], (190, 190, 190), 3)
+        for k in range(6):
+            yy = y0_ - 160 + k * 32
+            pen.line([(x0_ - 10, yy), (x1_ + 10, yy)], (150, 150, 150), 5)
+        return
+    if kind == "laptop" and other is not None:
+        cx_, cy_ = (hand[0] + other[0]) / 2, (hand[1] + other[1]) / 2
+        pen.poly([(cx_ - 120, cy_ - 150), (cx_ + 120, cy_ - 150), (cx_ + 120, cy_ - 10), (cx_ - 120, cy_ - 10)],
+                 (60, 64, 76), 4)
+        pen.poly([(cx_ - 104, cy_ - 136), (cx_ + 104, cy_ - 136), (cx_ + 104, cy_ - 24), (cx_ - 104, cy_ - 24)],
+                 (140, 190, 240), 0)
+        pen.poly([(cx_ - 140, cy_ - 10), (cx_ + 140, cy_ - 10), (cx_ + 120, cy_ + 16), (cx_ - 120, cy_ + 16)],
+                 (180, 184, 196), 4)
+        return
+    if kind == "jug" and other is not None:
+        x, y = (hand[0] + other[0]) / 2, (hand[1] + other[1]) / 2
+        _jug(pen, x, y + 30, 0.25)
+        return
     if kind == "ladle":                     # a jhara: long handle, round slotted end
         pen.line([(x, y), (x + 70, y + 150)], (150, 150, 160), 9)
         pen.circle(x + 82, y + 170, 30, (170, 170, 180), 4)
@@ -871,7 +1051,7 @@ def draw_animal(im, ox, oy, s, sp, pose, emotion, mouth, blink, t, speaking):
 
 
 # ===================================================================== sprites
-HUMAN_BOX = (-470, -1110, 470, 40)
+HUMAN_BOX = (-560, -1300, 660, 40)        # wide enough for a cycle beside them and an umbrella above
 BRAIN_BOX = (-330, -1130, 330, 40)
 
 
@@ -1019,9 +1199,13 @@ def _building_colors(night):
     return [_mix(c, 0.55) for c in cols] if night else cols
 
 
-@lru_cache(maxsize=6)
 def panorama(bid: str, k: float):
     """The whole wide background picture (sky, buildings, street), drawn once. Returns (image, px per unit, width units, ground y)."""
+    return _panorama(bid, k, bg_stamp(bid))
+
+
+@lru_cache(maxsize=6)
+def _panorama(bid: str, k: float, _stamp: float):
     if bid not in FLAT_BACKGROUNDS:
         ps = k * 1.25
         im = get_background(bid, round(FW * ps), round(FH * ps)).copy()
@@ -1131,8 +1315,12 @@ def panorama(bid: str, k: float):
     return im, ps, PW, GROUND["flat"]
 
 
-@lru_cache(maxsize=6)
 def _blurred(bid: str, k: float):
+    return _blurred_s(bid, k, bg_stamp(bid))
+
+
+@lru_cache(maxsize=6)
+def _blurred_s(bid: str, k: float, _stamp: float):
     im, ps, *_ = panorama(bid, k)
     return im.filter(ImageFilter.GaussianBlur(7 * ps))
 
@@ -1171,7 +1359,7 @@ class FlatComposer:
         self.tl, self.sched, self.w, self.h = tl, sched, w, h
         self.k = w / FW
         self.chars = {c["id"]: c for c in tl["characters"]}
-        self.specs = {cid: flat_spec(LOOKS[c["look"]]) for cid, c in self.chars.items()}
+        self.specs = {cid: char_spec(c) for cid, c in self.chars.items()}
         self.sprites = SpriteCache()
         self.warnings: list = []
         self.segs: dict = {}
@@ -1324,6 +1512,23 @@ class FlatComposer:
             self.segs[key] = out
         return self.segs[key]
 
+    def _held(self, sc, cid, t):
+        """What the character carries at time t: the prop of their latest line that set one (in this scene, or
+        carried over from earlier scenes); "none" puts it away. Riding in on a cycle means they have one."""
+        prop = None
+        for scx in self.sched:
+            if scx.start > t:
+                break
+            for l in scx.lines:
+                if l.start > t:
+                    break
+                if l.char == cid and getattr(l, "prop", ""):
+                    prop = None if l.prop == "none" else l.prop
+                elif (l.char == cid and l.action in ("ride_in", "ride_out", "ride_cycle")) or \
+                        (getattr(l, "actor", "") == cid and l.actor_action in ("ride_in", "ride_out", "ride_cycle")):
+                    prop = "cycle"
+        return prop
+
     def _moved_x(self, sc, cid, a, lay, x0, z, t):
         """Where a character stands after walking up to the stove or to someone (None: where the shot puts them)."""
         if lay.get("type") not in ("wide", "single"):
@@ -1408,21 +1613,23 @@ class FlatComposer:
         mine = self._acts(sc, cid)
         off = -330 if a["x"] < FW / 2 else FW + 330           # leave / enter on the nearer side of the frame
         for i, (start, _end, action, _em, _l, _sp) in enumerate(mine):
-            u = (t - start) / (self.RUN_S if action == "run_in" else self.WALK_S)
+            dur = self.RUN_S if action in ("run_in", "run_out") else self.WALK_S * (0.8 if "ride" in action else 1.0)
+            u = (t - start) / dur
+            kind = "run" if action.startswith("run") else "ride" if action.startswith("ride") else "walk"
             if action == "appear" and u < 0 and i == 0:            # not there yet, then simply there
                 return "hidden"
-            if action in ("walk_in", "run_in"):
+            if action in ("walk_in", "run_in", "ride_in"):
                 if u < 0 and i == 0:
                     return "hidden"
                 if 0 <= u < 1:
                     e = 1 - (1 - u) ** 2                          # slow down when arriving
-                    return (off + (a["x"] - off) * e, 1 if a["x"] > off else -1, action == "run_in")
-            elif action == "walk_out":
+                    return (off + (a["x"] - off) * e, 1 if a["x"] > off else -1, kind)
+            elif action in ("walk_out", "run_out", "ride_out"):
                 if u >= 1:
                     return "hidden"
                 if u >= 0:
                     e = u * u                                     # speed up when leaving
-                    return (a["x"] + (off - a["x"]) * e, 1 if off > a["x"] else -1, False)
+                    return (a["x"] + (off - a["x"]) * e, 1 if off > a["x"] else -1, kind)
         return None
 
     def _sprite_3d(self, a, sp, action, emotion, speaking, still, mq, blink, tq, k):
@@ -1524,8 +1731,11 @@ class FlatComposer:
                 continue
             if walk:
                 a = dict(a, x=walk[0], face=walk[1], travel=walk[1])
-                action, t_act = "walk", (t - sc.start) * (2.2 if walk[2] else 1.0)
-            elif action in ("walk_in", "walk_out", "appear", "run_in"):
+                action = "ride" if walk[2] == "ride" else "walk"
+                t_act = (t - sc.start) * (2.2 if walk[2] == "run" else 1.0)
+            elif action in ("walk_in", "walk_out", "appear", "run_in", "run_out", "ride_out"):
+                action = "talk" if speaking else "idle"
+            elif action == "ride_in":                  # arrived on the cycle: stands with it
                 action = "talk" if speaking else "idle"
             mv = self._moved_x(sc, cid, a, lay, x0, z, t)       # walked up to the stove / to someone
             if mv is not None and not walk:
@@ -1552,13 +1762,17 @@ class FlatComposer:
                 pose = pose_for(action, emotion, tq, speaking, key)
             else:
                 pose = dict(dy=0.0, walk=tq if action == "walk" else 0.0)
+            held = self._held(sc, cid, t) if sp["kind"] == "human" else None
+            if held:                                   # something they carry (a line's "prop")
+                hold_prop(pose, held, action)
             if a.get("back"):                    # big foreground back: hardly moves, so it is drawn once
                 tq, mq, blink = (round(t_act * 6) / 6 if sp["kind"] != "human" else 0.0), 0.0, 0.0
                 if sp["kind"] == "human":
                     pose = pose_for("rest" if action in ("idle", "talk") else action, "neutral", 0.0, False, key)
                     pose["dy"] = 0.0
             scale_px = a["scale"] * k
-            ck = (cid, a["view"], a["face"], round(scale_px, 3), action, emotion, mq, round(blink, 1), tq, speaking, key)
+            ck = (cid, a["view"], a["face"], round(scale_px, 3), action, emotion, mq, round(blink, 1), tq, speaking, key,
+                  held)
             below = (FH - a["g"]) * k
             spr, (ax, ay) = self.sprites.get(ck, lambda: render_sprite(sp, a["view"], a["face"], scale_px, pose,
                                                                      emotion, mq, blink, tq, speaking, below))

@@ -13,7 +13,7 @@ from urllib.parse import unquote
 
 from . import audio as audio_mod
 from . import script as script_mod
-from .backgrounds import list_backgrounds
+from .backgrounds import folder_info, list_backgrounds
 from .catalog import ACTION_LABELS, DEFAULT_VOICE, EMOTIONS, LOOKS, SHOT_LABELS, SOUND_EMOTIONS, SOUND_LABELS, VOICES
 from .config import OUTPUT_DIR, PROJECTS_DIR, UPLOADS_DIR, WEB_DIR, find_devanagari_font, find_ffmpeg
 from .render import RenderError, make_clip, normalize, render_still, render_video
@@ -36,6 +36,12 @@ def assets_payload() -> dict:
     font = find_devanagari_font()
     return {
         "backgrounds": list_backgrounds(),
+        "bg_folder": folder_info(),
+        "heights": [{"id": k, "label": v} for k, v in __import__("studio.catalog", fromlist=["x"]).HEIGHTS.items()],
+        "builds": [{"id": k, "label": v} for k, v in __import__("studio.catalog", fromlist=["x"]).BUILDS.items()],
+        "outfits": [{"id": k, "label": ("Outfit: " + k.replace("_", " ")) if k else v} for k, v in
+                    __import__("studio.catalog", fromlist=["x"]).OUTFIT_COLORS.items()],
+        "props": [{"id": k, "label": v} for k, v in __import__("studio.catalog", fromlist=["x"]).PROP_LABELS.items()],
         "looks": [{"id": k, "label": v["label"], "female": bool(v.get("female")), "flat": v.get("style") == "flat"}
                   for k, v in LOOKS.items() if not v.get("hidden")],
         "voice_fx": [{"id": k, "label": v} for k, v in __import__("studio.catalog", fromlist=["x"]).VOICE_FX_LABELS.items()],
@@ -149,6 +155,15 @@ class Handler(BaseHTTPRequestHandler):
                 with LOCK:
                     job = JOBS.get(path.rsplit("/", 1)[1])
                 return self._json(job or {"error": "Unknown job"}, 200 if job else 404)
+            if path == "/api/script_format":                    # the format to paste into another AI app
+                from urllib.parse import parse_qs, urlparse
+                from . import script_format
+                q = parse_qs(urlparse(self.path).query)
+                text = script_format.build_format(q.get("idea", [""])[0], q.get("language", ["hi"])[0],
+                                                  int(float(q.get("seconds", ["45"])[0] or 45)))
+                return self._json({"text": text})
+            if path == "/api/backgrounds":                      # look in the backgrounds folders again
+                return self._json({"backgrounds": list_backgrounds(True), "bg_folder": folder_info()})
             if path == "/api/videos":                           # newest videos with their kit files
                 from .publish import list_videos
                 return self._json({"videos": list_videos()})
@@ -192,8 +207,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"texts": texts, "warning": warn})
             if path == "/api/audio/segments":
                 return self._json({"segments": audio_mod.speech_segments(data.get("id", ""), float(data.get("pause", 0.45)))})
+            if path == "/api/open_backgrounds":                 # show your backgrounds folder (this computer)
+                info = folder_info()
+                import os
+                if os.name == "nt" and self.client_address[0] in ("127.0.0.1", "::1"):
+                    os.startfile(info["folder"])               # noqa: S606  opens File Explorer
+                    return self._json({"opened": True, **info})
+                return self._json({"opened": False, **info})
             if path == "/api/import_script":                    # a full screenplay -> scenes
+                from . import script_format
+                if script_format.is_format(data.get("text", "")):  # our own format: read exactly, no AI
+                    return self._json(script_format.parse(data.get("text", "")))
                 return self._json(script_mod.import_screenplay(data.get("text", ""), data.get("provider", "gemini")))
+            if path == "/api/export_format":                    # your project -> the script format
+                from . import script_format
+                return self._json({"text": script_format.export(data.get("timeline") or {})})
             if path == "/api/script":
                 res = script_mod.generate(data.get("scenario", ""), data.get("characters", []),
                                           data.get("language", "hi"), int(data.get("seconds", 45)),

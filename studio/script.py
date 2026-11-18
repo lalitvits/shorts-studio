@@ -226,6 +226,9 @@ Allowed actions: {actions}
     it), lower_jug (the jug is pushed down), grab_hand (grabs someone's hand to stop them), turn_off_gas,
     cover_kadhai (puts a steel plate on the kadhai), hand_on_shoulder, look_camera (looks at the camera, relieved).
 Allowed camera shots: {shots}
+Allowed props (something a character holds or has with them, from that line on; "none" puts it away): {props}
+  Movement on a cycle: ride_in / ride_out / ride_cycle. Leaving running: run_out.
+Character body: "height" one of {heights}; "build" one of {builds}; "outfit" colour one of {outfits} ("" = default).
 Allowed sounds (a line's "sound" plays at the start of the line): {sounds}
 Allowed stickers: {stickers}
 
@@ -259,11 +262,12 @@ Rules:
 Reply with JSON only:
 {{"title": "...", "hook": "a punchy opening line (max 6 words, same language)", "music": "...",
   "characters": [{{"id": "short_id", "name": "name as in the script", "look": "...", "gender": "male|female",
-                   "voice_fx": ""}}],
+                   "voice_fx": "", "height": "", "build": "", "outfit": ""}}],
   "scenes": [{{"background": "...", "lighting": "day|dark|phone", "music": "", "seconds": 0, "cast": ["id", ...],
               "lines": [{{"speaker": "id", "text": "...", "emotion": "...", "action": "...", "sound": "",
                          "popup": "", "sticker": "", "lights": "", "shot": "auto", "hold": 0, "actor": "",
-                         "actor_action": "", "actor_emotion": "", "kadhai": "", "broll": "", "overlay": ""}}]}},
+                         "actor_action": "", "actor_emotion": "", "kadhai": "", "broll": "", "overlay": "",
+                         "prop": ""}}]}},
              {{"card": "...", "card_style": "dark|black|bright", "card_sound": ""}}]}}
 
 Screenplay:
@@ -279,8 +283,8 @@ def _secs(v, top: float) -> float:
 
 def import_screenplay(text: str, provider: str = "gemini") -> dict:
     """A full screenplay (with stage directions) -> characters, scenes, cards, title, hook and music."""
-    from .catalog import (DEFAULT_VOICE, EDGE_FOR_GENDER, FLAT_BACKGROUNDS, LOOKS, SHOT_LABELS, SOUND_LABELS,
-                          VOICE_FX_LABELS)
+    from .catalog import (BUILDS, DEFAULT_VOICE, EDGE_FOR_GENDER, FLAT_BACKGROUNDS, HEIGHTS, LOOKS, OUTFIT_COLORS,
+                          PROPS, SHOT_LABELS, SOUND_LABELS, VOICE_FX_LABELS)
     from .fx import MUSIC_LABELS
     from .kitchen import EXPLAINERS, KADHAI_STATES
     from .overlays import STICKER_KINDS
@@ -293,6 +297,8 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
                                   emotions=", ".join(EMOTIONS), actions=", ".join(ACTIONS),
                                   sounds=", ".join(SOUND_LABELS), stickers=", ".join(STICKER_KINDS),
                                   music=", ".join(MUSIC_LABELS), shots=", ".join(SHOT_LABELS),
+                                  props=", ".join(PROPS), heights=", ".join(k for k in HEIGHTS if k),
+                                  builds=", ".join(k for k in BUILDS if k), outfits=", ".join(k for k in OUTFIT_COLORS if k),
                                   script=text.strip()[:6000])
     # Gemini's safety check is borderline on comedy with slaps, chappals or jokes about dowry: it can refuse the same
     # text once and accept it the next time. Say what the text is, and try a few times.
@@ -320,7 +326,10 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
         fem = c.get("gender") == "female" or LOOKS[look].get("female")
         fxv = c.get("voice_fx") if c.get("voice_fx") in VOICE_FX_LABELS else ("devil_whisper" if look == "flat_brain" else "")
         chars.append(dict(id=cid, name=str(c.get("name") or cid)[:30], look=look,
-                          voice=EDGE_FOR_GENDER["female" if fem else "male"] or DEFAULT_VOICE, voice_fx=fxv))
+                          voice=EDGE_FOR_GENDER["female" if fem else "male"] or DEFAULT_VOICE, voice_fx=fxv,
+                          height=c.get("height") if c.get("height") in HEIGHTS else "",
+                          build=c.get("build") if c.get("build") in BUILDS else "",
+                          outfit=c.get("outfit") if c.get("outfit") in OUTFIT_COLORS else ""))
         c["_id"] = cid
     if not chars:
         raise ScriptError("No characters were found in the script.")
@@ -358,7 +367,8 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
                 actor_emotion=ln.get("actor_emotion") if ln.get("actor_emotion") in EMOTIONS else "neutral",
                 kadhai=ln.get("kadhai") if ln.get("kadhai") in KADHAI_STATES else "",
                 broll=ln.get("broll") if ln.get("broll") in EXPLAINERS else "",
-                overlay=str(ln.get("overlay") or "")[:120]))
+                overlay=str(ln.get("overlay") or "")[:120],
+                prop=ln.get("prop") if ln.get("prop") in PROPS or ln.get("prop") == "none" else ""))
             if lines[-1]["actor"] not in ids or lines[-1]["actor"] in narr:
                 lines[-1]["actor"] = ""
             last = lines[-1]

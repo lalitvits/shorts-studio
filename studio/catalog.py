@@ -25,6 +25,8 @@ ACTION_LABELS = {
     "grab_hand": "Grab someone's hand (stop them)", "turn_off_gas": "Turn off the gas knob",
     "cover_kadhai": "Cover the kadhai with a thali", "hand_on_shoulder": "Hand on someone's shoulder",
     "look_camera": "Look at the camera (relieved)",
+    "ride_in": "Ride in on a cycle", "ride_out": "Ride away on a cycle", "ride_cycle": "Ride a cycle (in place)",
+    "run_out": "Run away (leaves running)",
     "sit": "Sit on sofa", "sit_phone": "Sit and use phone", "sit_tea": "Sit and drink tea",
     "sit_read": "Sit and read", "sit_eat": "Sit and eat a snack", "sit_sleep": "Sit and sleep",
 }
@@ -118,6 +120,28 @@ LOOKS["narrator"] = dict(label="Narrator (voice-over, not on screen)", style="na
 NARRATOR_LOOKS = {"narrator"}
 for _k, _v in LOOKS.items():
     _v["id"] = _k
+
+# A character's body (flat cartoon style). "" keeps the look's own.
+HEIGHTS = {"": "Height: as the look", "child": "Height: child", "short": "Height: short", "normal": "Height: normal",
+           "tall": "Height: tall", "very_tall": "Height: very tall"}
+HEIGHT_VALUES = {"child": 0.66, "short": 0.86, "normal": 0.97, "tall": 1.07, "very_tall": 1.15}
+BUILDS = {"": "Build: as the look", "thin": "Build: thin", "normal": "Build: normal", "fat": "Build: fat",
+          "very_fat": "Build: very fat"}
+BUILD_VALUES = {"thin": 0.86, "normal": 1.0, "fat": 1.28, "very_fat": 1.5}
+OUTFIT_COLORS = {"": "Outfit: as the look", "red": (214, 60, 52), "blue": (60, 120, 210), "green": (70, 160, 100),
+                 "yellow": (240, 196, 60), "orange": (240, 140, 50), "pink": (226, 110, 150),
+                 "purple": (140, 90, 190), "white": (240, 238, 232), "black": (50, 50, 56), "grey": (140, 140, 150),
+                 "brown": (150, 100, 66), "khaki": (196, 168, 110), "sky_blue": (130, 190, 236),
+                 "maroon": (130, 40, 56)}
+
+# Things a character can hold or have with them (flat cartoon style). A line's "prop" stays with the character for
+# the rest of the scene ("none" puts it away).
+PROP_LABELS = {"": "Prop: none", "phone": "Mobile phone (in the hand)", "glass": "Glass of water", "bottle": "Water bottle",
+               "cup": "Tea cup", "book": "Book", "newspaper": "Newspaper", "suitcase": "Suitcase (rolling)",
+               "bag": "Bag", "umbrella": "Umbrella (open)", "laptop": "Laptop", "flowers": "Flowers",
+               "cycle": "Cycle (bicycle, standing with it)", "parcel": "Food parcel", "jug": "Water jug",
+               "thali": "Steel thali (plate)", "chappal": "Chappal", "lathi": "Lathi (stick)"}
+PROPS = [k for k in PROP_LABELS if k]
 
 # Procedural flat-cartoon backgrounds (animated: cars, birds). id -> dropdown label.
 FLAT_BACKGROUNDS = {

@@ -5,3 +5,5 @@ output/
 tests/out/
 .venv/
 *.tmp
+my_backgrounds/*
+!my_backgrounds/README.md

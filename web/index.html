@@ -37,8 +37,28 @@
           <select data-path="seconds"><option value="30">About 30 seconds</option><option value="45">About 45 seconds</option><option value="60">About 60 seconds</option></select></label>
       </div>
       <details class="oneclick import">
-        <summary><b>Paste a full script</b> (with stage directions in brackets)</summary>
-        <p class="hint">Gemini turns your screenplay into characters, scenes, emotions, actions, sound effects, lighting, phone pop-ups, text cards ("20 मिनट बाद") and a black ending. Your dialogue is kept word for word.</p>
+        <summary><b>Paste a full script</b> (any screenplay, or one in the Shorts Studio format)</summary>
+        <p class="hint">A script in the <b>Shorts Studio format</b> is read exactly, with no AI and no daily limit: characters (look, height, build, outfit, voice), scenes, emotions, actions, movements, props, camera shots, sounds and on-screen text. Any other screenplay is read by Gemini, which turns the stage directions into the same things. Your dialogue is kept word for word.</p>
+        <div class="format-box">
+          <b>Write scripts with any AI app (ChatGPT, Gemini, Claude...)</b>
+          <p class="hint">1. Get the format, with your idea in it. 2. Paste it into the AI app. 3. Paste its answer below and press Import.</p>
+          <div class="line-sub four">
+            <input id="fmt-idea" lang="hi" placeholder="Your idea (optional), e.g. विक्रम गोवा जाने से पहले सेल्फी पोस्ट करता है" style="grid-column: span 2">
+            <select id="fmt-lang" aria-label="Dialogue language"><option value="hi">Hindi (Devanagari)</option><option value="hinglish">Hinglish</option><option value="en">English</option></select>
+            <input id="fmt-secs" type="number" min="10" max="180" step="5" value="45" aria-label="Length in seconds" title="Length in seconds">
+          </div>
+          <div class="actions" style="justify-content:flex-start">
+            <button class="secondary" data-act="get-format">Get the script format</button>
+            <button class="secondary" data-act="export-format">My project in this format</button>
+          </div>
+          <div id="fmt-out" hidden>
+            <textarea id="fmt-text" rows="10" readonly></textarea>
+            <div class="actions" style="justify-content:flex-start">
+              <button class="primary" data-act="copy-format">Copy</button>
+              <button class="secondary" data-act="save-format">Download as .txt</button>
+            </div>
+          </div>
+        </div>
         <textarea id="import-text" rows="8" lang="hi" placeholder="दृश्य: रात के 2 बजे...&#10;मैं: (आत्मविश्वास के साथ) &quot;बस! बहुत हो गया बाहर का खाना...&quot;"></textarea>
         <div class="actions" style="justify-content:flex-start"><button class="primary" data-act="import-script">Import script</button></div>
       </details>
@@ -116,6 +136,7 @@
       </div>
       <p class="hint" id="provider-hint"></p>
       <p class="hint">Every line can also have an optional emotional sound (laugh, angry growl, frustrated groan, and more). A line with a sound and no words is a reaction: that character stays in the scene and reacts while the sound plays. Leave it on "No sound" if you do not want one.</p>
+      <div class="bg-folder" id="bg-folder"></div>
       <div id="scenes"></div>
       <div class="actions">
         <button class="secondary" data-act="add-scene">Add scene</button>

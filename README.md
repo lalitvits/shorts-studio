@@ -31,6 +31,22 @@ You write a scenario, pick characters and backgrounds from dropdowns, edit the s
 - **New actions and props**: wipe tears, hold a food parcel, hide it behind the back, a realistic full-size phone.
 - **Pacing**: the Microsoft voices are 10% faster and their long pauses between sentences are shortened, for snappy Shorts.
 
+## Write scripts with any AI app (the Shorts Studio format)
+
+In the Story step, open **Paste a full script**:
+
+1. Type your idea (optional), pick the language and length, and press **Get the script format**. You get instructions, every value the app understands, and an example. Press **Copy** (or **Download as .txt**).
+2. Paste it into any AI chat app (ChatGPT, Gemini, Claude, ...). It answers with a script in the format.
+3. Paste that answer into the box and press **Import script**. A script in this format is read **exactly, with no AI and no daily limit**; anything it does not know is listed (for example a background you do not have yet).
+
+What the format can say:
+- **Characters**: look, gender, **height** (child, short, normal, tall, very tall, or a number), **build** (thin, normal, fat, very fat), **outfit colour**, voice and voice effect, or a narrator.
+- **Scenes**: background (also your own pictures), lighting, music changes, length in seconds; **cards** (text screens and black endings).
+- **Lines**: emotion, action and **movement** (walk / run / ride a cycle in or out, appear, step back...), **props** (mobile, glass of water, bottle, cup, cycle, suitcase, bag, umbrella, laptop, newspaper, flowers, parcel, jug, thali, chappal, lathi; a prop stays with the character until "prop: none"), **camera angle** (wide, single, over the shoulder, close-up, stove), sound effect, notification pop-up, sticker, big on-screen text, light switch, kadhai, cut-away, silent acting moments, and **meanwhile** (someone else acts while a line is spoken).
+- Common words other AI apps use are understood too ("close-up", "mobile", "bicycle", "chubby", "enter"...), and speakers can be written by name ("दोस्त").
+
+**My project in this format** writes your current project in the format, so you can edit it in another AI app and bring it back. The Cast step also has **height, build and outfit colour** for each character, and each line has a **Prop** menu.
+
 ## Story and safety-video tools (scripts like "kitchen fire")
 
 - **Narrator (voice-over)**: add a character with the look "Narrator". It is never on screen; while it speaks, the camera keeps showing the scene. Any line can also make someone else act meanwhile ("Meanwhile: Neha, Step back in fear"), so the narration and the acting happen together.
@@ -144,7 +160,9 @@ To use sharper pictures of your own, replace the files:
 
 The app has nine backgrounds, all in `assets/backgrounds/`: classroom, garden park, kitchen, living room, office, railway platform, school playground, street market and village tea stall. Each picture file is one background, and its file name is its name in the dropdown.
 
-- **Add one:** drop a picture (PNG, JPG or WebP) into `assets/backgrounds/` and restart the app. Vertical pictures (9:16, like 1080 x 1920) fit best. Other shapes are cropped from the centre.
+- **Add your own:** put pictures in the **`my_backgrounds/`** folder (next to `run.py`). They appear in the Background menus as "Your picture: ..." within a few seconds, with no restart; the Scenes step shows the folder, an **Open the folder** button and **Refresh pictures**. Pictures in that folder stay on your computer (they are not pushed to GitHub).
+- **Supported files:** JPG / JPEG, PNG, WebP, BMP, GIF (first frame) and TIFF. HEIC (iPhone) photos: save them as JPG first. Vertical pictures (9:16, like 1080 x 1920) fit best. Other shapes are cropped from the centre. A file that cannot be read is skipped, and the Scenes step names it.
+- A picture in `my_backgrounds/` with the same name as a built-in one (for example `kitchen.jpg`) replaces it. Saving over a picture is picked up from the next preview.
 - **Remove one:** delete its file.
 - Characters stand with their feet about 78% of the way down the picture, so pictures with the floor or ground in the lower part work best.
 - Older projects that used the previous backgrounds (room, street, park, village) open with the closest new one.

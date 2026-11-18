@@ -90,10 +90,33 @@ function renderNav() {
 function showStep(n) {
   S.step = n; save(); renderNav();
   document.querySelectorAll(".step").forEach(el => { el.hidden = el.id !== "step-" + n; });
-  if (n === 3) { renderScenes(); renderAudio(); }
+  if (n === 3) { renderScenes(); renderAudio(); refreshBackgrounds(); }
   window.scrollTo({ top: 0 });
   refreshPreview();
 }
+function renderBgFolder() {
+  const el = $("#bg-folder"), f = A.bg_folder;
+  if (!el || !f) return;
+  el.innerHTML = `<b>Your own backgrounds</b>: put pictures in the folder <code>${esc(f.folder)}</code>
+    and they appear in the Background menus as "Your picture: ..." (no restart needed).
+    Supported files: ${esc(f.supported)}. Vertical pictures (9:16, like 1080 x 1920) fit best; others are cropped from the centre.
+    ${f.count ? `You have ${f.count} picture${f.count > 1 ? "s" : ""} there.` : "The folder is empty for now."}
+    ${f.skipped && f.skipped.length ? `<br><span class="bad-text">Could not read: ${esc(f.skipped.join(", "))}. Save them again as JPG or PNG.</span>` : ""}
+    <div class="actions" style="justify-content:flex-start;margin-top:6px">
+      <button class="secondary" data-act="open-bg-folder">Open the folder</button>
+      <button class="secondary" data-act="refresh-bgs">Refresh pictures</button></div>`;
+}
+async function refreshBackgrounds(announce) {            // new pictures in the folder show up without a restart
+  try {
+    const r = await fetch("/api/backgrounds").then(x => x.json());
+    const before = (A.backgrounds || []).map(b => b.id).join("|");
+    A.backgrounds = r.backgrounds; A.bg_folder = r.bg_folder;
+    renderBgFolder();
+    if (r.backgrounds.map(b => b.id).join("|") !== before && S.step === 3) renderScenes();
+    if (announce) toast(`${r.bg_folder.count} of your own picture${r.bg_folder.count === 1 ? "" : "s"} found.`);
+  } catch (e) { if (announce) toast("Could not look for pictures: " + e.message, true); }
+}
+window.addEventListener("focus", () => { if (S.step === 3) refreshBackgrounds(); });
 function renderSeries() {
   const el = $("#series-info");
   if (el) el.textContent = S.series ? `Series: ${S.series}, episode ${S.episode || 1}` : "";
@@ -124,6 +147,11 @@ function renderCast() {
     <div class="char">
       <label>Name<input data-path="characters.${i}.name" lang="hi" value="${esc(c.name)}"></label>
       <label>Look<select data-path="characters.${i}.look">${opts(A.looks, c.look)}</select></label>
+      ${c.look === "narrator" ? "" : `<div class="full body-row">
+        <select aria-label="Height" data-path="characters.${i}.height">${opts(A.heights || [], c.height || "")}</select>
+        <select aria-label="Build" data-path="characters.${i}.build">${opts(A.builds || [], c.build || "")}</select>
+        <select aria-label="Outfit colour" data-path="characters.${i}.outfit">${opts(A.outfits || [], c.outfit || "")}</select>
+      </div>`}
       <div class="full">
         <label>Voice<select data-path="characters.${i}.voice">${opts(A.voices, c.voice)}</select></label>
         <button class="secondary" data-act="sample-char" data-i="${i}">Hear voice</button>
@@ -235,9 +263,10 @@ function renderScenes() {
             <input type="number" min="0" step="0.5" aria-label="Seconds on screen (for a line with no words)" title="The line lasts at least this long; a line with no words is a silent action moment" placeholder="Seconds (auto)" data-path="scenes.${si}.lines.${li}.hold" value="${ln.hold || ""}">
           </div>
           <div class="line-sub four extras">
+            <select aria-label="Prop the speaker holds from this line on" title="Something the speaker holds or has with them from this line on" data-path="scenes.${si}.lines.${li}.prop">${opts([{ id: "", label: "Prop: no change" }, { id: "none", label: "Prop: put it away" }].concat((A.props || []).filter(p => p.id).map(p => ({ id: p.id, label: "Prop: " + p.label }))), ln.prop || "")}</select>
             <select aria-label="Kadhai on the stove (kitchen)" data-path="scenes.${si}.lines.${li}.kadhai">${opts(KADHAI, ln.kadhai || "")}</select>
             <select aria-label="Cut-away picture (B-roll)" data-path="scenes.${si}.lines.${li}.broll">${opts(brollOpts(), ln.broll || "")}</select>
-            <input aria-label="Big text on screen (optional)" lang="hi" placeholder="Big text on screen (line 1 | line 2)" data-path="scenes.${si}.lines.${li}.overlay" value="${esc(ln.overlay || "")}" style="grid-column: span 2">
+            <input aria-label="Big text on screen (optional)" lang="hi" placeholder="Big text on screen (line 1 | line 2)" data-path="scenes.${si}.lines.${li}.overlay" value="${esc(ln.overlay || "")}">
           </div>
           ${file ? `<div class="line-time">
             <label>Spoken from (seconds in the audio)<input type="number" min="0" step="0.05" data-path="scenes.${si}.lines.${li}.start" value="${ln.start ?? ""}"></label>
@@ -415,10 +444,40 @@ const ACTIONS = {
       Object.assign(S, { title: r.title || S.title, hook: r.hook || "", scenario: text.slice(0, 500),
                          characters: r.characters, scenes: r.scenes.map(ensureScene), sel: { scene: 0, line: 0 } });
       S.audio.musicBuiltin = r.music || S.audio.musicBuiltin;
+      if (r.language) S.language = r.language;
       S.counter = r.characters.length + 1;
       save(); init(true); showStep(3);
-      toast(`Imported: ${r.characters.length} characters, ${r.scenes.length} scenes. Check them, then make the video.`);
+      const how = r.exact ? "read exactly from the Shorts Studio format" : "read by Gemini";
+      toast(`Imported (${how}): ${r.characters.length} characters, ${r.scenes.length} scenes.` +
+            (r.warnings && r.warnings.length ? ` ${r.warnings.length} note(s): ${r.warnings.slice(0, 3).join(" ")}` : " Check them, then make the video."),
+            !!(r.warnings && r.warnings.length));
     } catch (e) { toast(e.message, true); } finally { el.disabled = false; el.textContent = label; }
+  },
+  "get-format": async () => {
+    const q = new URLSearchParams({ idea: $("#fmt-idea").value, language: $("#fmt-lang").value, seconds: $("#fmt-secs").value || 45 });
+    const r = await fetch("/api/script_format?" + q).then(x => x.json());
+    $("#fmt-text").value = r.text; $("#fmt-out").hidden = false;
+    toast("Format ready: copy it into ChatGPT / Gemini / any AI app, then paste its answer in the box below.");
+  },
+  "export-format": async () => {
+    if (!S.scenes.length) return toast("Your project has no scenes yet.", true);
+    const r = await api("/api/export_format", { timeline: timeline() });
+    $("#fmt-text").value = r.text; $("#fmt-out").hidden = false;
+  },
+  "copy-format": async () => {
+    const t = $("#fmt-text");
+    try { await navigator.clipboard.writeText(t.value); } catch (e) { t.select(); document.execCommand("copy"); }
+    toast("Copied.");
+  },
+  "save-format": () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([$("#fmt-text").value], { type: "text/plain;charset=utf-8" }));
+    a.download = "shorts-studio-script-format.txt"; a.click();
+  },
+  "refresh-bgs": () => refreshBackgrounds(true),
+  "open-bg-folder": async () => {
+    const r = await api("/api/open_backgrounds", {});
+    if (!r.opened) toast("Put your pictures in: " + r.folder + " (in Codespaces: drag them into that folder in the file list).");
   },
   "add-scene": () => {
     const last = S.scenes[S.scenes.length - 1], cast = last?.cast?.length ? [...last.cast] : S.characters.map(c => c.id);
