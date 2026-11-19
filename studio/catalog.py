@@ -149,10 +149,13 @@ PROP_LABELS = {"": "Prop: none", "phone": "Mobile phone (in the hand)", "glass":
                "watermelon": "Watermelon slice",
                # vegetables
                "tomato": "Tomato", "onion": "Onion", "potato": "Potato", "carrot": "Carrot", "brinjal": "Brinjal (baingan)",
-               "chilli": "Green chilli", "cabbage": "Cabbage", "veg_basket": "Basket of vegetables",
+               "chilli": "Green chilli", "cabbage": "Cabbage", "cucumber": "Cucumber (kheera)", "lemon": "Lemon (nimbu)",
+               "cauliflower": "Cauliflower (gobhi)", "bhindi": "Bhindi (lady finger)", "garlic": "Garlic", "peas": "Peas (matar pod)",
+               "bhutta": "Bhutta (roasted corn)", "coconut": "Coconut", "veg_basket": "Basket of vegetables",
                "sabzi_bag": "Cloth bag of vegetables"}
 FOOD_PROPS = {"samosa", "jalebi", "vada_pav", "banana", "apple", "mango", "orange", "grapes", "watermelon", "tomato",
-              "onion", "potato", "carrot", "brinjal", "chilli", "cabbage"}
+              "onion", "potato", "carrot", "brinjal", "chilli", "cabbage", "cucumber", "lemon", "cauliflower", "bhindi",
+              "garlic", "peas", "bhutta", "coconut"}
 DRINK_PROPS = {"cutting_chai", "kulhad", "glass", "bottle"}
 PROPS = [k for k in PROP_LABELS if k]
 

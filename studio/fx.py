@@ -427,6 +427,12 @@ def fx_wav(fx_id: str) -> Path:
     user = _user("sounds", fx_id)
     if user:
         return _convert(user, CACHE / f"user_{fx_id}.wav", 5)
+    if fx_id not in MAKERS:                       # a voice sound (laugh, gasp, scream...) used as an effect, e.g. on a card
+        from .sfx import MAKERS as VOICE_SOUNDS, _synth_cached, _user_file
+        if fx_id not in VOICE_SOUNDS:
+            raise KeyError(fx_id)
+        src = _user_file(fx_id, "male") or _synth_cached(fx_id, "male")
+        return _convert(src, CACHE / f"voice_{fx_id}.wav")
     path = CACHE / f"{VERSION}_{fx_id}.wav"
     if not path.exists():
         _write(path, MAKERS[fx_id]())
@@ -620,10 +626,19 @@ def build_track(events: list, total: float, path: Path):
     cache: dict = {}
     for t, fid, vol in events:
         if fid not in cache:
-            with wave.open(str(fx_wav(fid)), "rb") as w:
-                s = array.array("h")
-                s.frombytes(w.readframes(w.getnframes()))
-                cache[fid] = s
+            try:
+                p = fx_wav(fid)
+                with wave.open(str(p), "rb") as w:
+                    ok = w.getframerate() == RATE and w.getnchannels() == 1 and w.getsampwidth() == 2
+                if not ok:                            # another sample rate: convert it once
+                    p = _convert(p, CACHE / f"conv_{fid}.wav")
+                with wave.open(str(p), "rb") as w:
+                    s = array.array("h")
+                    s.frombytes(w.readframes(w.getnframes()))
+                    cache[fid] = s
+            except Exception as e:  # noqa: BLE001  a missing sound must never stop the video
+                print(f"Sound effect '{fid}' could not be made ({e}); it is left out.")
+                cache[fid] = array.array("h")
         s, off = cache[fid], int(t * RATE)
         for i in range(min(len(s), n - off)):
             if off + i < 0:

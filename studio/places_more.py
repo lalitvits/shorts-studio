@@ -63,6 +63,8 @@ def _veg_pile(d, P, L, x, y, kind, w=300, rows=3):
             "potato": ((176, 130, 80), 22, "oval"), "carrot": ((240, 130, 40), 0, "carrot"),
             "brinjal": ((110, 60, 140), 0, "brinjal"), "cabbage": ((120, 190, 90), 30, "round"),
             "banana": ((246, 206, 60), 0, "banana"), "orange": ((246, 150, 40), 22, "round"),
+            "cucumber": ((60, 140, 60), 0, "cucumber"), "lemon": ((246, 226, 70), 16, "round"),
+            "cauliflower": ((246, 242, 226), 28, "round"),
             "apple": ((200, 40, 50), 22, "round"), "chilli": ((60, 160, 60), 0, "chilli")}[kind]
     col, r, shape = look
     for row in range(rows):
@@ -86,6 +88,9 @@ def _veg_pile(d, P, L, x, y, kind, w=300, rows=3):
                 d.ellipse(P(cx + 16, cy - 10, cx + 34, cy + 10), fill=(80, 140, 60))
             elif shape == "banana":
                 d.arc(P(cx - 34, cy - 30, cx + 34, cy + 20), 20, 160, fill=c, width=L(14))
+            elif shape == "cucumber":
+                d.ellipse(P(cx - 34, cy - 12, cx + 34, cy + 12), fill=c, outline=OUT, width=L(2.5))
+                d.line(P(cx - 24, cy - 3, cx + 24, cy - 3), fill=(130, 196, 110), width=L(3))
             elif shape == "chilli":
                 d.arc(P(cx - 30, cy - 20, cx + 30, cy + 14), 10, 170, fill=c, width=L(8))
 
@@ -179,7 +184,7 @@ def _sabzi_mandi(im, d, P, L, PW, ps, rnd):
         for px_ in (x + 10, x + 600):
             d.rectangle(P(px_, 900, px_ + 14, 1290), fill=(110, 80, 50))
     kinds = [("tomato", "onion", "potato"), ("carrot", "brinjal", "cabbage"), ("banana", "orange", "apple"),
-             ("chilli", "tomato", "onion")]
+             ("cucumber", "lemon", "cauliflower")]
     for i, x in enumerate((60, 700, 1340, 1980)):
         _thela(d, P, L, x, kinds[i], rnd)
     for x, col in ((620, (180, 150, 100)), (1270, (176, 140, 96)), (1920, (186, 156, 110))):      # gunny sacks

@@ -33,7 +33,8 @@ SHOTS = ("auto", "wide", "single", "ots", "close")
 PHONE_ACTIONS = {"use_phone", "sit_phone", "phone_call"}
 # actions a character keeps doing while someone else talks (on top of the rig's long activities)
 FLAT_PERSIST = PERSISTENT | {"cook", "hold_jug", "lower_jug", "hand_on_shoulder", "look_camera"}
-TWO_PERSON = {"grab_hand", "hand_on_shoulder"}            # the actor walks up to the nearest other character
+TWO_PERSON = {"grab_hand", "hand_on_shoulder"}
+SMOOTH_ACTIONS = {"eat", "sit_eat", "drink_tea", "sit_tea", "cook"}   # drawn at 15 poses a second even when silent            # the actor walks up to the nearest other character
 MOVE_S = 0.5                                              # seconds that walk-up takes
 
 
@@ -97,7 +98,8 @@ ONE_HAND = {"phone": ("ik", 62, -650), "glass": ("ik", 62, -640), "bottle": ("ik
             "cutting_chai": ("ik", 56, -660), "kulhad": ("ik", 56, -660), "veg_basket": ("fk", 18, 6),
             "sabzi_bag": ("fk", 14, 4)}
 FOODS = {"samosa", "jalebi", "vada_pav", "banana", "apple", "mango", "orange", "grapes", "watermelon", "tomato", "onion",
-         "potato", "carrot", "brinjal", "chilli", "cabbage"}
+         "potato", "carrot", "brinjal", "chilli", "cabbage", "cucumber", "lemon", "cauliflower", "bhindi", "garlic", "peas",
+         "bhutta", "coconut"}
 for _f in FOODS:
     ONE_HAND[_f] = ("ik", 62, -660)
 # (the left arm's x is mirrored: a positive x is out to the left)
@@ -203,15 +205,16 @@ def _sup(cx, cy, a, b, n=2.6, steps=56):
     return pts
 
 
-def _ik(sx, sy, tx, ty, l1, l2, side):
-    """Elbow position for a two-bone arm reaching (tx, ty); the elbow bends outward."""
+def _ik(sx, sy, tx, ty, l1, l2, side, down=False):
+    """Elbow position for a two-bone arm reaching (tx, ty); the elbow bends outward (or down, for hand-to-mouth:
+    the elbow drops in front of the chest and the forearm comes up from below, not across the face)."""
     dx, dy = tx - sx, ty - sy
     d = max(abs(l1 - l2) + 1, min(l1 + l2 - 0.5, math.hypot(dx, dy)))
     base = math.atan2(dy, dx)
     a = math.acos(max(-1, min(1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d))))
     c1 = (sx + l1 * math.cos(base + a), sy + l1 * math.sin(base + a))
     c2 = (sx + l1 * math.cos(base - a), sy + l1 * math.sin(base - a))
-    e = c1 if c1[0] * side > c2[0] * side else c2
+    e = (c1 if c1[1] > c2[1] else c2) if down else (c1 if c1[0] * side > c2[0] * side else c2)
     k = d / max(1e-6, math.hypot(dx, dy))
     return e, (sx + dx * k, sy + dy * k)
 
@@ -347,16 +350,32 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
         p["prop"] = "phone_ear"
     elif action in ("drink_tea", "sit_tea"):
         lift = 0.5 + 0.5 * s(t * 1.3)
-        p["R"] = ("ik", 40, -700 - 120 * lift ** 6)
+        p["R"] = ("ikd", 40, -700 - 110 * lift ** 6)       # elbow down: the cup comes up to the mouth from below
         p["prop"] = "cup"
     elif action in ("read_book", "sit_read"):
         p["L"] = ("ik", -55, -700)
         p["R"] = ("ik", 55, -700)
         p["prop"] = "book"
         p["head_dy"] = 10
-    elif action in ("eat", "sit_eat"):
-        p["R"] = ("ik", 25, -720 - 100 * max(0, s(t * 2.5)))
+    elif action in ("eat", "sit_eat"):     # lift to the mouth, open wide, bite, lower it, chew (a 2.4 s cycle)
+        per = 2.4
+        u, n = (t % per) / per, int(t // per)
+        sm = lambda v: v * v * (3 - 2 * v)          # noqa: E731
+        if u < 0.28:
+            e = sm(u / 0.28)
+            x, y = 72 - 32 * e, -640 - 136 * e
+        elif u < 0.48:
+            x, y = 40, -776
+        elif u < 0.7:
+            e = sm((u - 0.48) / 0.22)
+            x, y = 40 + 32 * e, -776 + 136 * e
+        else:
+            x, y = 72, -640
+        p["R"] = ("ikd", x, y)                          # elbow down: the hand comes up to the mouth from below
         p["prop"] = "snack"
+        p["bite"] = n + (1 if u >= 0.42 else 0)        # the food gets smaller with every bite
+        p["chew"] = (0.62 if 0.2 <= u < 0.42 else 0.0 if u < 0.48 else 0.24 * abs(s((u - 0.48) * per * 13)))
+        p["head_dy"] = 6 if 0.28 <= u < 0.48 else 0
     elif action in ("sit", "sit_sleep"):
         p["L"] = p["R"] = HIP_T if action == "sit" else ("fk", 12, -6)
     elif action == "cook":                  # stirring the kadhai with a jhara
@@ -711,8 +730,8 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         for side, key in ((-1, "L"), (1, "R")):
             spec = pose[key]
             sx, sy = side * 110 * (1 + 0.5 * (bw - 1)), -742
-            if spec[0] == "ik":
-                elbow, hand = _ik(sx, sy, side * spec[1], spec[2], 150, 142, side)
+            if spec[0] in ("ik", "ikd"):
+                elbow, hand = _ik(sx, sy, side * spec[1], spec[2], 150, 142, side, down=spec[0] == "ikd")
             else:
                 elbow, hand = _fk(sx, sy, spec[1], spec[2], 150, 142, side)
             pen.limb([(sx, sy), elbow, hand], 30, skin)
@@ -739,7 +758,7 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
                 ang = math.atan2(hand[1] - elbow[1], hand[0] - elbow[0])
                 pen.limb([hand, (hand[0] + 40 * math.cos(ang), hand[1] + 40 * math.sin(ang))], 11, skin, 4)
             if key == "R" and not back and pose["prop"] and pose["prop"] != "phone_ear":
-                _prop(pen, pose["prop"], hand, hands.get("L"), skin)
+                _prop(pen, pose["prop"], hand, hands.get("L"), skin, pose.get("bite", 0))
 
 
     # body (arms hidden behind the back are drawn first)
@@ -800,6 +819,8 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         pen.arc(fx_ - 12, hy + 8, fx_ + 14, hy + 34, 300, 110, 4.5, _mix(skin, 0.6))
         if sp.get("bindi"):
             pen.circle(fx_, hy - 52, 6, (200, 30, 40), 0)
+        if pose.get("chew") is not None and mouth < 0.05:     # eating: open for the bite, then chewing
+            mouth = pose["chew"]
         _mouth(pen, fx_, hy + 72, cfg["mouth"], mouth, t)
         if sp.get("mustache"):
             mc = sp.get("hair_color", (60, 38, 30))
@@ -939,16 +960,65 @@ def _food(pen, kind, x, y):
     elif kind == "chilli":
         pen.line([(x - 8, y - 46), (x + 6, y - 10), (x - 2, y + 30), (x - 16, y + 44)], (60, 160, 60), 10)
         pen.line([(x - 8, y - 46), (x - 4, y - 58)], (90, 120, 50), 4)
+    elif kind == "cucumber":                # kheera: long, dark green, light stripes
+        pen.ellipse(x - 22, y - 62, x + 22, y + 52, (60, 140, 60), 4)
+        for dx in (-9, 0, 9):
+            pen.line([(x + dx, y - 44), (x + dx * 1.1, y + 36)], (130, 196, 110), 3)
+        pen.ellipse(x - 8, y - 66, x + 8, y - 54, (200, 210, 120), 0)
+    elif kind == "lemon":
+        pen.ellipse(x - 30, y - 24, x + 30, y + 24, (246, 226, 70), 4)
+        pen.circle(x + 30, y, 5, (220, 200, 50), 0)
+        pen.circle(x - 30, y, 5, (220, 200, 50), 0)
+    elif kind == "cauliflower":             # gobhi: white florets in green leaves
+        pen.pie(x - 52, y - 30, x + 52, y + 50, 0, 180, (90, 160, 80), 4)
+        for dx, dy in ((-24, -6), (0, -16), (24, -6), (-12, 10), (12, 10)):
+            pen.circle(x + dx, y + dy, 18, (246, 242, 226), 3)
+    elif kind == "bhindi":                  # lady finger: thin, ridged, green
+        pen.poly([(x - 8, y - 58), (x + 10, y - 50), (x + 6, y + 40), (x, y + 52), (x - 6, y + 40)], (100, 170, 70), 4)
+        pen.line([(x - 6, y - 60), (x - 2, y - 72)], (80, 120, 50), 5)
+        pen.line([(x + 2, y - 46), (x + 1, y + 40)], (70, 140, 50), 2)
+    elif kind == "garlic":
+        pen.poly([(x, y - 46), (x + 30, y - 4), (x + 26, y + 24), (x - 26, y + 24), (x - 30, y - 4)], (246, 240, 226), 4)
+        for dx in (-12, 0, 12):
+            pen.line([(x + dx * 0.4, y - 36), (x + dx, y + 20)], (210, 200, 186), 3)
+    elif kind == "peas":                    # a matar pod, opened a little
+        pen.ellipse(x - 52, y - 20, x + 52, y + 20, (110, 180, 80), 4)
+        for dx in (-30, -10, 10, 30):
+            pen.circle(x + dx, y, 9, (150, 210, 100), 2)
+    elif kind == "bhutta":                  # roasted corn on the cob
+        pen.ellipse(x - 20, y - 64, x + 20, y + 44, (232, 190, 70), 4)
+        for k in range(6):
+            yy = y - 50 + k * 16
+            pen.line([(x - 14, yy), (x + 14, yy)], (200, 150, 50), 3)
+        for dx, dy in ((-6, -30), (8, -4), (-4, 20)):
+            pen.circle(x + dx, y + dy, 6, (110, 70, 40), 0)                       # roasted spots
+        pen.poly([(x - 20, y + 30), (x + 20, y + 30), (x + 30, y + 64), (x - 30, y + 64)], (190, 210, 120), 3)  # husk
+    elif kind == "coconut":
+        pen.circle(x, y, 40, (130, 90, 50), 4)
+        for dx, dy in ((-10, -14), (8, -16), (0, -2)):
+            pen.circle(x + dx, y + dy, 5, (70, 46, 30), 0)
     elif kind == "cabbage":
         pen.circle(x, y, 40, (130, 196, 100), 4)
         pen.arc(x - 30, y - 30, x + 30, y + 30, 200, 340, 3, (90, 150, 70))
         pen.arc(x - 20, y - 14, x + 20, y + 26, 200, 340, 3, (90, 150, 70))
 
 
-def _prop(pen, kind, hand, other=None, skin=None):
+def _scaled(pen, cx, cy, k):
+    """The same pen drawing k times bigger around (cx, cy)."""
+    q = Pen.__new__(Pen)
+    q.d, q.s = pen.d, pen.s * k
+    q.ox, q.oy = pen.ox + cx * pen.s * (1 - k), pen.oy + cy * pen.s * (1 - k)
+    return q
+
+
+def _prop(pen, kind, hand, other=None, skin=None, bite=0):
     x, y = hand
+    k = max(0.45, 1 - 0.14 * bite)          # eaten a bit more with every bite
+    if kind == "snack" and bite:
+        pen.circle(x, y - 18, 22 * k, (230, 180, 80), 4)
+        return
     if kind in FOODS:                       # held up in the fingers
-        _food(pen, kind, x, y - 44)
+        _food(_scaled(pen, x, y - 44, k) if k < 1 else pen, kind, x, y - 44)
         pen.circle(x, y, 24, skin or (200, 140, 95), 4)
         return
     if kind in ("cutting_chai", "kulhad"):
@@ -1195,7 +1265,7 @@ def draw_brain(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t, speaking
     for side, key in ((-1, "L"), (1, "R")):
         spec = pose.get(key, ("fk", 20, -10))
         sx, sy = side * (rx - 10), cy + 40
-        if spec[0] == "ik":
+        if spec[0] in ("ik", "ikd"):
             spec = ("fk", 35, 60) if speaking else ("fk", 20, -10)
         a, e = spec[1], spec[2]
         elbow, hand = _fk(sx, sy, min(150, a), e, 70, 62, side)
@@ -1863,7 +1933,8 @@ class FlatComposer:
             blink = blink_amount(t, phase)
             # quantize so repeated drawings come from the cache
             mq = round(mouth * 6) / 6
-            tq = round(t_act * (15 if speaking else 6)) / (15 if speaking else 6)
+            fq = 15 if speaking or action in SMOOTH_ACTIONS else 6
+            tq = round(t_act * fq) / fq
             if sp["kind"] == "3d":                  # real 3D model, rendered by the hidden browser
                 spr3 = self._sprite_3d(a, sp, action, emotion, speaking, still, mq, blink, tq, k)
                 if spr3 is not None:
