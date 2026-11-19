@@ -474,6 +474,13 @@ const ACTIONS = {
     a.href = URL.createObjectURL(new Blob([$("#fmt-text").value], { type: "text/plain;charset=utf-8" }));
     a.download = "shorts-studio-script-format.txt"; a.click();
   },
+  "cancel-job": async el => {
+    const id = RUNNING[el.dataset.box];
+    if (!id) return;
+    el.disabled = true;
+    await api("/api/jobs/" + id + "/cancel", {});
+    toast("Stopping...");
+  },
   "refresh-bgs": () => refreshBackgrounds(true),
   "open-bg-folder": async () => {
     const r = await api("/api/open_backgrounds", {});
@@ -666,7 +673,10 @@ const ACTIONS = {
     await api("/api/projects", { name, data: S }); toast("Project saved."); loadProjects();
   },
 };
+const RUNNING = {};                                // progress box -> the job it shows (for Cancel)
 function pollJob(id) {
+  RUNNING["#progress"] = id;
+  $("#progress .cancel-btn").disabled = false;
   return new Promise((resolve, reject) => {
     const tick = async () => {
       try {
@@ -674,7 +684,8 @@ function pollJob(id) {
         $("#bar-fill").style.width = Math.round((j.progress || 0) * 100) + "%";
         $("#stage").textContent = j.stage || "";
         if (j.status === "running") return setTimeout(tick, 700);
-        $("#progress").hidden = true;
+        $("#progress").hidden = true; delete RUNNING["#progress"];
+        if (j.status === "cancelled") { toast("Stopped. No video was saved."); return resolve(); }
         if (j.status === "error") { toast(j.error, true); return resolve(); }
         const r = j.result;
         $("#result").innerHTML = (r.warnings || []).map(w => `<div class="banner">${esc(w)}</div>`).join("") + resultCard(r) +
@@ -694,13 +705,16 @@ function apOptions() {
 }
 function watchJob(id, box, bar, stage) {          // progress bar for a background job; resolves with its result
   $(box).hidden = false; $(bar).style.width = "0%";
+  RUNNING[box] = id;
+  const cb = $(box + " .cancel-btn"); if (cb) cb.disabled = false;
   return new Promise((resolve, reject) => {
     const tick = async () => {
       try {
         const j = await api("/api/jobs/" + id);
         $(bar).style.width = Math.round((j.progress || 0) * 100) + "%"; $(stage).textContent = j.stage || "";
         if (j.status === "running") return setTimeout(tick, 800);
-        $(box).hidden = true;
+        $(box).hidden = true; delete RUNNING[box];
+        if (j.status === "cancelled") { toast("Stopped. Videos finished before you pressed Cancel are kept."); return resolve(null); }
         if (j.status === "error") { toast(j.error, true); return resolve(null); }
         resolve(j.result);
       } catch (e) { reject(e); }

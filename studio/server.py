@@ -16,7 +16,7 @@ from . import script as script_mod
 from .backgrounds import folder_info, list_backgrounds
 from .catalog import ACTION_LABELS, DEFAULT_VOICE, EMOTIONS, LOOKS, SHOT_LABELS, SOUND_EMOTIONS, SOUND_LABELS, VOICES
 from .config import OUTPUT_DIR, PROJECTS_DIR, UPLOADS_DIR, WEB_DIR, find_devanagari_font, find_ffmpeg
-from .render import RenderError, make_clip, normalize, render_still, render_video
+from .render import RenderCancelled, RenderError, make_clip, normalize, render_still, render_video
 from .sfx import SoundError, get_sound
 from .tts import TTSError, get_clip
 
@@ -66,14 +66,16 @@ def _start_job(fn, *args) -> str:
         JOBS[job_id] = {"status": "running", "stage": "Starting", "progress": 0.0}
 
     def progress(stage, frac):
-        with LOCK:
-            JOBS[job_id].update(stage=stage, progress=round(frac, 3))
+        _progress(job_id, stage, frac)
 
     def run():
         try:
             res = fn(*args, progress)
             with LOCK:
                 JOBS[job_id].update(status="done", result=res, progress=1.0, stage="Done")
+        except RenderCancelled:
+            with LOCK:
+                JOBS[job_id].update(status="cancelled", stage="Cancelled")
         except Exception as e:  # shown in the UI
             traceback.print_exc()
             with LOCK:
@@ -82,14 +84,25 @@ def _start_job(fn, *args) -> str:
     return job_id
 
 
+def _progress(job_id: str, stage: str, frac: float):
+    """Report progress; stops the job (RenderCancelled) when you pressed Cancel."""
+    with LOCK:
+        job = JOBS[job_id]
+        if job.get("cancel"):
+            raise RenderCancelled()
+        job.update(stage=stage, progress=round(frac, 3))
+
+
 def _run_job(job_id: str, tl: dict, quality: str):
     def progress(stage, frac):
-        with LOCK:
-            JOBS[job_id].update(stage=stage, progress=round(frac, 3))
+        _progress(job_id, stage, frac)
     try:
         res = render_video(tl, quality, progress)
         with LOCK:
             JOBS[job_id].update(status="done", result=res, progress=1.0, stage="Done")
+    except RenderCancelled:
+        with LOCK:
+            JOBS[job_id].update(status="cancelled", stage="Cancelled")
     except Exception as e:  # shown in the UI
         traceback.print_exc()
         with LOCK:
@@ -269,6 +282,12 @@ class Handler(BaseHTTPRequestHandler):
                 if not ideas:
                     return self._json({"error": "Write at least one idea, one per line."}, 400)
                 return self._json({"job": _start_job(autopilot.make_batch, ideas, chars, opts)})
+            if path.startswith("/api/jobs/") and path.endswith("/cancel"):     # the Cancel button
+                with LOCK:
+                    job = JOBS.get(path.split("/")[3])
+                    if job and job.get("status") == "running":
+                        job.update(cancel=True, stage="Stopping...")
+                return self._json({"ok": bool(job)}, 200 if job else 404)
             if path == "/api/render":
                 normalize(data["timeline"])  # fail fast with a readable message
                 job_id = uuid.uuid4().hex[:10]

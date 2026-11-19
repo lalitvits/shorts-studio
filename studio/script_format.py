@@ -62,11 +62,36 @@ SYN = {
              "slipper": "chappal", "luggage": "suitcase", "trolley": "suitcase", "trolley_bag": "suitcase",
              "backpack": "bag", "handbag": "bag", "purse": "bag", "flower": "flowers", "bouquet": "flowers",
              "computer": "laptop", "paper": "newspaper", "food_parcel": "parcel", "parcel_box": "parcel",
-             "nothing": "none", "no": "none", "put_away": "none"},
+             "nothing": "none", "no": "none", "put_away": "none",
+             # food, fruit and vegetables (English plurals and Hindi names too)
+             "samosas": "samosa", "समोसा": "samosa", "jalebis": "jalebi", "जलेबी": "jalebi", "vadapav": "vada_pav",
+             "वड़ा_पाव": "vada_pav", "वडा_पाव": "vada_pav", "chai": "cutting_chai", "chai_glass": "cutting_chai",
+             "cutting": "cutting_chai", "चाय": "cutting_chai", "कटिंग_चाय": "cutting_chai", "kulhad_chai": "kulhad",
+             "कुल्हड़": "kulhad", "clay_cup": "kulhad", "samosa_plate": "plate_samosa", "plate_of_samosas": "plate_samosa",
+             "bananas": "banana", "केला": "banana", "apples": "apple", "सेब": "apple", "mangoes": "mango", "आम": "mango",
+             "oranges": "orange", "संतरा": "orange", "grape": "grapes", "अंगूर": "grapes", "तरबूज": "watermelon",
+             "watermelon_slice": "watermelon", "tomatoes": "tomato", "टमाटर": "tomato", "onions": "onion",
+             "प्याज": "onion", "potatoes": "potato", "आलू": "potato", "carrots": "carrot", "गाजर": "carrot",
+             "eggplant": "brinjal", "aubergine": "brinjal", "baingan": "brinjal", "बैंगन": "brinjal", "chillies": "chilli",
+             "chilies": "chilli", "chili": "chilli", "green_chilli": "chilli", "मिर्च": "chilli", "हरी_मिर्च": "chilli",
+             "पत्तागोभी": "cabbage", "basket": "veg_basket", "vegetable_basket": "veg_basket", "टोकरी": "veg_basket",
+             "sabzi": "sabzi_bag", "vegetables": "sabzi_bag", "thaila": "sabzi_bag", "थैला": "sabzi_bag",
+             "सब्ज़ी": "sabzi_bag", "सब्जी": "sabzi_bag", "मोबाइल": "phone", "फोन": "phone", "फ़ोन": "phone",
+             "साइकिल": "cycle", "पानी": "glass", "गिलास": "glass", "बोतल": "bottle"},
     "height": {"small": "short", "kid": "child", "very_short": "child", "big": "tall", "giant": "very_tall",
                "average": "normal", "medium": "normal"},
     "build": {"slim": "thin", "skinny": "thin", "lean": "thin", "chubby": "fat", "heavy": "fat", "healthy": "fat",
               "obese": "very_fat", "medium": "normal", "average": "normal", "fit": "normal"},
+    "background": {"chai_ki_tapri": "flat_chai_tapri", "chai_tapri": "flat_chai_tapri", "tapri": "flat_chai_tapri",
+                   "tea_stall": "flat_chai_tapri", "tea_shop": "flat_chai_tapri", "चाय_की_टपरी": "flat_chai_tapri",
+                   "sabzi_mandi": "flat_sabzi_mandi", "mandi": "flat_sabzi_mandi", "vegetable_market": "flat_sabzi_mandi",
+                   "सब्ज़ी_मंडी": "flat_sabzi_mandi", "सब्जी_मंडी": "flat_sabzi_mandi", "fruit_market": "flat_market",
+                   "market": "flat_market", "bazaar": "flat_market", "बाज़ार": "flat_market", "airport": "flat_airport",
+                   "एयरपोर्ट": "flat_airport", "departure_hall": "flat_airport", "bus_stop": "flat_bus_stop",
+                   "bus_stand": "flat_bus_stop", "बस_स्टॉप": "flat_bus_stop", "street": "flat_city_street",
+                   "road": "flat_city_street", "kitchen": "flat_kitchen", "रसोई": "flat_kitchen", "bedroom": "flat_bedroom",
+                   "office": "flat_office", "school": "flat_school", "village": "flat_village", "गाँव": "flat_village",
+                   "park": "flat_park", "heaven": "flat_swarg", "hell": "flat_nark"},
     "look": {"man": "flat_man", "young_man": "flat_man", "woman": "flat_aunty", "lady": "flat_aunty",
              "aunty": "flat_aunty", "mother": "flat_aunty", "mom": "flat_aunty", "mummy": "flat_aunty",
              "wife": "flat_girl", "girl": "flat_girl", "young_woman": "flat_girl", "boy": "flat_boy",
@@ -285,6 +310,12 @@ def _bg(v, warn) -> str:
     for cand in (k, "flat_" + k):
         if cand in ids:
             return cand
+    mine = [b for b in bgs if b.get("mine")]               # your own picture with that name wins
+    for b in mine:
+        if k == _key(b["id"]):
+            return b["id"]
+    if SYN["background"].get(k) in ids:                    # "chai ki tapri" -> the flat chai tapri
+        return SYN["background"][k]
     for b in bgs:                                          # "airport" -> "Your picture: Airport"
         if k in _key(b["id"]) or k in _key(b["label"]):
             return b["id"]

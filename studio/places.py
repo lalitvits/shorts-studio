@@ -16,7 +16,9 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from .realms import OUT, _glow, _h, _sky
 
-PLACES = ("flat_village", "flat_school", "flat_kitchen", "flat_office", "flat_market", "flat_bedroom")
+from . import places_more
+
+PLACES = ("flat_village", "flat_school", "flat_kitchen", "flat_office", "flat_market", "flat_bedroom") + places_more.MORE
 
 
 def _mix(c, k):
@@ -29,6 +31,8 @@ def draw_static(bid: str, im: Image.Image, ps: float, PW: int):
     P = lambda *v: [x * ps for x in v]     # noqa: E731
     L = lambda w: max(1, round(w * ps))     # noqa: E731
     rnd = random.Random(_h(bid))
+    if bid in places_more.MORE:                     # chai tapri, sabzi mandi, airport, bus stop
+        return places_more.draw(bid, im, d, P, L, PW, ps, rnd)
     {"flat_village": _village, "flat_school": _school, "flat_kitchen": _kitchen,
      "flat_office": _office, "flat_market": _market, "flat_bedroom": _bedroom}[bid](im, d, P, L, PW, ps, rnd)
 
@@ -317,7 +321,9 @@ def animate(im: Image.Image, bid: str, t: float, x0: float, y0: float, z: float,
     ov = Image.new("RGBA", im.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(ov)
     it = _items(bid, PW)
-    if bid == "flat_village":
+    if bid in places_more.MORE:
+        places_more.animate(d, bid, t, px, s, visible, x0, vw, PW, _birds, it)
+    elif bid == "flat_village":
         for cx, cy in it["smoke"]:                               # chimney smoke
             if not visible(cx):
                 continue

@@ -42,7 +42,7 @@ In the Story step, open **Paste a full script**:
 What the format can say:
 - **Characters**: look, gender, **height** (child, short, normal, tall, very tall, or a number), **build** (thin, normal, fat, very fat), **outfit colour**, voice and voice effect, or a narrator.
 - **Scenes**: background (also your own pictures), lighting, music changes, length in seconds; **cards** (text screens and black endings).
-- **Lines**: emotion, action and **movement** (walk / run / ride a cycle in or out, appear, step back...), **props** (mobile, glass of water, bottle, cup, cycle, suitcase, bag, umbrella, laptop, newspaper, flowers, parcel, jug, thali, chappal, lathi; a prop stays with the character until "prop: none"), **camera angle** (wide, single, over the shoulder, close-up, stove), sound effect, notification pop-up, sticker, big on-screen text, light switch, kadhai, cut-away, silent acting moments, and **meanwhile** (someone else acts while a line is spoken).
+- **Lines**: emotion, action and **movement** (walk / run / ride a cycle in or out, appear, step back...), **props** (mobile, glass of water, bottle, cup, cycle, suitcase, bag, umbrella, laptop, newspaper, flowers, parcel, jug, thali, chappal, lathi; food: samosa, plate of samosas, jalebi, vada pav, cutting chai, kulhad chai; fruit: banana, apple, mango, orange, grapes, watermelon; vegetables: tomato, onion, potato, carrot, brinjal, green chilli, cabbage, basket of vegetables, cloth bag of sabzi; a prop stays with the character until "prop: none"; eating or drinking with a food or chai prop uses it), **camera angle** (wide, single, over the shoulder, close-up, stove), sound effect, notification pop-up, sticker, big on-screen text, light switch, kadhai, cut-away, silent acting moments, and **meanwhile** (someone else acts while a line is spoken).
 - Common words other AI apps use are understood too ("close-up", "mobile", "bicycle", "chubby", "enter"...), and speakers can be written by name ("दोस्त").
 
 **My project in this format** writes your current project in the format, so you can edit it in another AI app and bring it back. The Cast step also has **height, build and outfit colour** for each character, and each line has a **Prop** menu.
@@ -158,6 +158,8 @@ To use sharper pictures of your own, replace the files:
 
 ## Backgrounds
 
+**Flat cartoon places** (they move): city street (day and night), park, village, school, kitchen, office, market (fruit stalls and string lights), bedroom at night, Swarg, Nark, and new: **chai ki tapri** (tea stall with a steaming chai pot, glasses of chai, samosas, biscuit jars, swinging chips packets, a bench), **sabzi mandi** (vegetable and fruit thelas, tarpaulin shades, sacks, a swinging scale, shoppers), **airport** (departure board with BOARDING blinking, planes taking off outside the windows, seats) and **bus stop** (shelter, bench, a bus driving past). In the script format you can also write them as "chai ki tapri", "sabzi mandi", "airport" or "bus stand".
+
 The app has nine backgrounds, all in `assets/backgrounds/`: classroom, garden park, kitchen, living room, office, railway platform, school playground, street market and village tea stall. Each picture file is one background, and its file name is its name in the dropdown.
 
 - **Add your own:** put pictures in the **`my_backgrounds/`** folder (next to `run.py`). They appear in the Background menus as "Your picture: ..." within a few seconds, with no restart; the Scenes step shows the folder, an **Open the folder** button and **Refresh pictures**. Pictures in that folder stay on your computer (they are not pushed to GitHub).
@@ -228,6 +230,8 @@ Notes: your audio files are kept in `data/uploads` on your computer. A video lon
 ## Quality choices
 
 In **Make video**: **Low quality** is 270 x 480 and renders fastest (good for checking timing, but small), **Quick preview** is 540 x 960, and **Full quality** is 1080 x 1920.
+
+**Cancel**: while a video is being made, press **Cancel** next to the progress bar. It stops within a second or two (while voices or frames are being made), stops FFmpeg and deletes the half-made file. "Make it for me" and batch videos have a Cancel button too; there, videos already finished are kept. Once all frames are drawn, the last few seconds of encoding finish anyway.
 
 ## Make it yours
 

@@ -93,11 +93,17 @@ def char_spec(c: dict) -> dict:
 # things a character holds (PROP_LABELS): which hand pose goes with each
 ONE_HAND = {"phone": ("ik", 62, -650), "glass": ("ik", 62, -640), "bottle": ("ik", 62, -640), "cup": ("ik", 50, -690),
             "flowers": ("ik", 60, -680), "thali": ("ik", 80, -690), "chappal": ("fk", 30, 20),
-            "umbrella": ("ik", 36, -790), "suitcase": ("fk", 14, 4), "lathi": ("fk", 12, -6), "bag": None}
+            "umbrella": ("ik", 36, -790), "suitcase": ("fk", 14, 4), "lathi": ("fk", 12, -6), "bag": None,
+            "cutting_chai": ("ik", 56, -660), "kulhad": ("ik", 56, -660), "veg_basket": ("fk", 18, 6),
+            "sabzi_bag": ("fk", 14, 4)}
+FOODS = {"samosa", "jalebi", "vada_pav", "banana", "apple", "mango", "orange", "grapes", "watermelon", "tomato", "onion",
+         "potato", "carrot", "brinjal", "chilli", "cabbage"}
+for _f in FOODS:
+    ONE_HAND[_f] = ("ik", 62, -660)
 # (the left arm's x is mirrored: a positive x is out to the left)
 TWO_HAND = {"book": (("ik", -55, -700), ("ik", 55, -700)), "newspaper": (("ik", 130, -720), ("ik", 130, -720)),
             "laptop": (("ik", 70, -690), ("ik", 70, -690)), "parcel": (("ik", -48, -610), ("ik", 48, -610)),
-            "jug": (("ik", 0, -690), ("ik", 110, -720))}
+            "jug": (("ik", 0, -690), ("ik", 110, -720)), "plate_samosa": (("ik", 20, -640), ("ik", 80, -640))}
 BUSY_HANDS = {"clap", "cry", "facepalm", "wipe_tears", "punch", "slap", "throw", "grab_hand", "cover_kadhai",
               "hold_jug", "lower_jug", "turn_off_gas", "cook", "use_phone", "sit_phone", "phone_call", "read_book",
               "sit_read", "drink_tea", "sit_tea", "eat", "sit_eat", "hold_parcel", "hide_behind", "think",
@@ -106,7 +112,10 @@ BUSY_HANDS = {"clap", "cry", "facepalm", "wipe_tears", "punch", "slap", "throw",
 
 def hold_prop(pose: dict, prop: str, action: str):
     """Put the held prop in the character's hands (keeps the action's own prop when it has one)."""
-    if prop in ("glass", "bottle") and pose.get("prop") == "cup":       # drinking from a glass / bottle
+    if prop in ("glass", "bottle", "cutting_chai", "kulhad") and pose.get("prop") == "cup":   # drinking from it
+        pose["prop"] = prop
+        return
+    if prop in FOODS and pose.get("prop") == "snack":                  # eating it
         pose["prop"] = prop
         return
     if prop == "cycle":
@@ -867,8 +876,114 @@ def _jug(pen, x, y, tilt=0.0, k=1.0):
     pen.arc(*[v for v in (x - 110 * k, y - 50 * k, x - 30 * k, y + 50 * k)], 90, 270, 7, OUT)
 
 
+def _food(pen, kind, x, y):
+    """A food / fruit / vegetable, about hand-sized, centred at (x, y)."""
+    if kind == "samosa":
+        pen.poly([(x - 44, y + 26), (x + 44, y + 26), (x, y - 56)], (226, 172, 84), 4)
+        pen.line([(x - 30, y + 14), (x + 30, y + 14)], (196, 140, 60), 4)
+        for dx, dy in ((-10, -4), (8, 4), (0, -24)):
+            pen.circle(x + dx, y + dy, 3, (180, 120, 50), 0)
+    elif kind == "jalebi":
+        pts = [(x + (4 + 2.6 * a) * math.cos(a), y + (4 + 2.6 * a) * math.sin(a)) for a in [i * 0.35 for i in range(48)]]
+        pen.line(pts, (176, 90, 20), 13)
+        pen.line(pts, (246, 150, 40), 8)
+    elif kind == "vada_pav":
+        pen.pie(x - 46, y - 46, x + 46, y + 20, 180, 360, (214, 160, 90), 4)
+        pen.ellipse(x - 44, y - 16, x + 44, y + 6, (150, 110, 40), 3)
+        pen.line([(x - 40, y + 2), (x + 40, y + 2)], (90, 170, 70), 6)
+        pen.ellipse(x - 46, y + 2, x + 46, y + 30, (214, 160, 90), 4)
+    elif kind == "banana":
+        pen.poly([(x - 50, y - 30), (x - 30, y + 10), (x + 10, y + 26), (x + 50, y + 16), (x + 52, y + 6),
+                  (x + 10, y + 8), (x - 26, y - 8), (x - 40, y - 34)], (246, 208, 60), 4)
+        pen.circle(x - 46, y - 34, 6, (90, 70, 40), 0)
+    elif kind == "apple":
+        pen.circle(x, y, 32, (204, 40, 50), 4)
+        pen.line([(x, y - 30), (x + 4, y - 48)], (100, 70, 40), 5)
+        pen.ellipse(x + 4, y - 50, x + 26, y - 38, (80, 160, 70), 2)
+        pen.circle(x - 12, y - 10, 6, (240, 120, 120), 0)
+    elif kind == "mango":
+        pen.ellipse(x - 30, y - 40, x + 34, y + 34, (250, 184, 50), 4)
+        pen.ellipse(x - 6, y - 46, x + 14, y - 34, (90, 160, 60), 2)
+        pen.circle(x + 12, y + 10, 10, (240, 120, 50), 0)
+    elif kind == "orange":
+        pen.circle(x, y, 32, (246, 150, 40), 4)
+        for dx, dy in ((-10, -8), (8, 4), (-4, 12), (12, -14)):
+            pen.circle(x + dx, y + dy, 2.5, (220, 120, 30), 0)
+        pen.ellipse(x - 4, y - 36, x + 10, y - 26, (80, 150, 60), 0)
+    elif kind == "grapes":
+        for k, (dx, dy) in enumerate(((-20, -24), (0, -26), (20, -24), (-12, -6), (10, -6), (0, 12), (-22, -8), (22, -8))):
+            pen.circle(x + dx, y + dy, 13, (120, 60, 140), 2.5)
+        pen.line([(x, y - 40), (x + 6, y - 56)], (90, 120, 50), 4)
+    elif kind == "watermelon":
+        pen.pie(x - 54, y - 50, x + 54, y + 58, 180, 360, (70, 150, 70), 4)
+        pen.pie(x - 46, y - 42, x + 46, y + 50, 180, 360, (236, 70, 70), 0)
+        for dx in (-22, 0, 22):
+            pen.ellipse(x + dx - 3, y - 20, x + dx + 3, y - 10, (30, 30, 30), 0)
+    elif kind == "tomato":
+        pen.circle(x, y, 30, (214, 52, 44), 4)
+        pen.poly([(x - 12, y - 30), (x, y - 38), (x + 12, y - 30), (x, y - 24)], (70, 150, 60), 2)
+    elif kind == "onion":
+        pen.poly([(x, y - 46), (x + 30, y - 4), (x + 22, y + 26), (x - 22, y + 26), (x - 30, y - 4)], (186, 90, 130), 4)
+        pen.line([(x, y - 40), (x, y + 22)], (150, 60, 100), 3)
+    elif kind == "potato":
+        pen.ellipse(x - 36, y - 26, x + 36, y + 26, (184, 140, 86), 4)
+        for dx, dy in ((-14, -6), (10, 6), (16, -10)):
+            pen.circle(x + dx, y + dy, 3, (140, 100, 60), 0)
+    elif kind == "carrot":
+        pen.poly([(x - 18, y - 40), (x + 18, y - 40), (x + 2, y + 50)], (240, 130, 40), 4)
+        for dx in (-10, 0, 10):
+            pen.line([(x + dx * 0.5, y - 40), (x + dx, y - 64)], (70, 150, 60), 5)
+    elif kind == "brinjal":
+        pen.ellipse(x - 26, y - 34, x + 26, y + 46, (110, 60, 140), 4)
+        pen.poly([(x - 18, y - 30), (x + 18, y - 30), (x, y - 48)], (80, 140, 60), 2)
+    elif kind == "chilli":
+        pen.line([(x - 8, y - 46), (x + 6, y - 10), (x - 2, y + 30), (x - 16, y + 44)], (60, 160, 60), 10)
+        pen.line([(x - 8, y - 46), (x - 4, y - 58)], (90, 120, 50), 4)
+    elif kind == "cabbage":
+        pen.circle(x, y, 40, (130, 196, 100), 4)
+        pen.arc(x - 30, y - 30, x + 30, y + 30, 200, 340, 3, (90, 150, 70))
+        pen.arc(x - 20, y - 14, x + 20, y + 26, 200, 340, 3, (90, 150, 70))
+
+
 def _prop(pen, kind, hand, other=None, skin=None):
     x, y = hand
+    if kind in FOODS:                       # held up in the fingers
+        _food(pen, kind, x, y - 44)
+        pen.circle(x, y, 24, skin or (200, 140, 95), 4)
+        return
+    if kind in ("cutting_chai", "kulhad"):
+        if kind == "cutting_chai":          # a small glass of chai
+            pen.poly([(x - 20, y - 60), (x + 20, y - 60), (x + 15, y + 6), (x - 15, y + 6)], (236, 244, 248), 4)
+            pen.poly([(x - 17, y - 44), (x + 17, y - 44), (x + 14, y + 4), (x - 14, y + 4)], (176, 110, 56), 0)
+            pen.line([(x - 16, y - 44), (x + 16, y - 44)], (236, 214, 180), 4)
+        else:                               # a clay cup
+            pen.poly([(x - 24, y - 56), (x + 24, y - 56), (x + 16, y + 8), (x - 16, y + 8)], (178, 92, 58), 4)
+            pen.ellipse(x - 22, y - 62, x + 22, y - 50, (176, 110, 56), 2)
+        pen.circle(x, y - 4, 22, skin or (200, 140, 95), 4)
+        return
+    if kind == "plate_samosa" and other is not None:
+        cx, cy = (hand[0] + other[0]) / 2, (hand[1] + other[1]) / 2
+        pen.ellipse(cx - 110, cy - 20, cx + 110, cy + 16, (226, 230, 236), 4)
+        for dx, dy in ((-50, -6), (0, -14), (50, -6), (-24, -40), (24, -40)):
+            _food(pen, "samosa", cx + dx, cy + dy - 16)
+        return
+    if kind in ("veg_basket", "sabzi_bag"):  # carried at the side
+        bx, by = x + 40, y + 70
+        if kind == "veg_basket":
+            pen.arc(bx - 70, by - 110, bx + 70, by + 20, 180, 360, 7, (130, 90, 50))
+            for dx, dy, col in ((-40, -20, (214, 52, 44)), (0, -26, (240, 130, 40)), (40, -18, (120, 190, 90)),
+                                (-18, -38, (110, 60, 140)), (22, -40, (186, 90, 130))):
+                pen.circle(bx + dx, by + dy, 20, col, 2.5)
+            pen.poly([(bx - 80, by - 20), (bx + 80, by - 20), (bx + 60, by + 70), (bx - 60, by + 70)], (196, 150, 90), 4)
+            for k in range(4):
+                pen.line([(bx - 70 + k * 46, by - 16), (bx - 50 + k * 40, by + 66)], (160, 116, 66), 3)
+        else:
+            pen.line([(x, y), (bx - 40, by - 20)], (120, 90, 60), 6)
+            pen.line([(x, y), (bx + 40, by - 20)], (120, 90, 60), 6)
+            pen.circle(bx + 30, by - 30, 18, (90, 160, 60), 2)                       # leaves sticking out
+            pen.line([(bx - 20, by - 20), (bx - 30, by - 60)], (240, 130, 40), 10)    # a carrot
+            pen.poly([(bx - 60, by - 20), (bx + 60, by - 20), (bx + 52, by + 90), (bx - 52, by + 90)], (226, 214, 180), 4)
+        return
     if kind == "glass":                     # a glass of water
         pen.poly([(x - 26, y - 70), (x + 26, y - 70), (x + 20, y + 16), (x - 20, y + 16)], (225, 240, 250), 4)
         pen.poly([(x - 23, y - 40), (x + 23, y - 40), (x + 19, y + 12), (x - 19, y + 12)], (130, 190, 240), 0)

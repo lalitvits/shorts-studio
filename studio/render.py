@@ -43,6 +43,10 @@ class RenderError(Exception):
     pass
 
 
+class RenderCancelled(BaseException):
+    """You pressed Cancel. (Not an Exception, so nothing on the way swallows it as an ordinary error.)"""
+
+
 # ----------------------------------------------------------------- model
 def _num(v):
     try:
@@ -789,6 +793,15 @@ def build_audio(sched: list, total: float, path: Path):
         w.writeframes(buf.tobytes())
 
 
+def _no_cancel(progress):
+    def p(stage, frac):
+        try:
+            progress(stage, frac)
+        except RenderCancelled:
+            pass
+    return p
+
+
 # ------------------------------------------------------------------ parallel drawing
 _WCOMP = None
 
@@ -831,7 +844,7 @@ def _draw_all(comp, tl, sched, w, h, ss, fps, frames, write, progress):
             return
         except BrokenPipeError:
             raise
-        except Exception as e:                     # noqa: BLE001  fall back to one process
+        except Exception as e:                     # noqa: BLE001  fall back to one process (Cancel is not caught)
             print("Parallel drawing failed, drawing in one process:", e)
             return _draw_range(comp, fps, frames, write, progress, start=getattr(write, "count", 0))
     _draw_range(comp, fps, frames, write, progress)
@@ -878,8 +891,12 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
     else:
         progress("Making voices", 0.0)
         engine = choose_engine(tl, warnings)
+        n_lines = max(1, sum(len(sc["lines"]) for sc in tl["scenes"]))
+        done = [0]
 
         def clip_for(ln, ch):
+            progress("Making voices", done[0] / n_lines)      # (also where Cancel is noticed)
+            done[0] += 1
             return make_clip(ln, ch, engine, warnings)
 
         try:
@@ -1020,6 +1037,13 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
             proc.stdin.close()
         except BrokenPipeError:
             pass
+        except BaseException:                       # cancelled (or failed): stop FFmpeg, remove the half-made file
+            proc.kill()
+            proc.wait()
+            log.close()
+            out.unlink(missing_ok=True)
+            raise
+        progress = _no_cancel(progress)             # the frames are done: finish the video even if Cancel comes now
         if any(LOOKS.get(c["look"], {}).get("style") == "3d" for c in tl["characters"]):
             from . import three_d
             if three_d.status() and three_d.status() not in comp.flat.warnings:

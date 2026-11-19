@@ -70,7 +70,9 @@
           <label>Music<select id="ap-music"><option value="auto">Pick for the story</option><option value="">No music</option></select></label>
         </div>
         <div class="actions" style="justify-content:flex-start"><button class="primary" data-act="autopilot">Make it for me</button></div>
-        <div id="ap-progress" hidden><div class="bar"><div id="ap-bar"></div></div><p class="hint" id="ap-stage"></p></div>
+        <div id="ap-progress" hidden><div class="bar"><div id="ap-bar"></div></div>
+          <div class="progress-row"><p class="hint" id="ap-stage"></p>
+            <button class="secondary cancel-btn" data-act="cancel-job" data-box="#ap-progress">Cancel</button></div></div>
         <div id="ap-result"></div>
         <details><summary><b>Batch mode</b>: many ideas, one video each</summary>
           <label>Ideas, one per line (up to 20)<textarea id="batch-ideas" rows="5" lang="hi" placeholder="दादाजी को मोबाइल चलाना सिखाना&#10;गोलू का होमवर्क कुत्ता खा गया&#10;आंटी और सब्ज़ीवाले की बहस"></textarea></label>
@@ -181,7 +183,8 @@
       <div class="actions"><button class="primary" data-act="render">Make video</button></div>
       <div id="progress" hidden>
         <div class="bar"><div id="bar-fill"></div></div>
-        <p class="hint" id="stage"></p>
+        <div class="progress-row"><p class="hint" id="stage"></p>
+          <button class="secondary cancel-btn" data-act="cancel-job" data-box="#progress">Cancel</button></div>
       </div>
       <div id="result"></div>
       <h2>Your recent videos</h2>

@@ -140,7 +140,20 @@ PROP_LABELS = {"": "Prop: none", "phone": "Mobile phone (in the hand)", "glass":
                "cup": "Tea cup", "book": "Book", "newspaper": "Newspaper", "suitcase": "Suitcase (rolling)",
                "bag": "Bag", "umbrella": "Umbrella (open)", "laptop": "Laptop", "flowers": "Flowers",
                "cycle": "Cycle (bicycle, standing with it)", "parcel": "Food parcel", "jug": "Water jug",
-               "thali": "Steel thali (plate)", "chappal": "Chappal", "lathi": "Lathi (stick)"}
+               "thali": "Steel thali (plate)", "chappal": "Chappal", "lathi": "Lathi (stick)",
+               # food
+               "samosa": "Samosa", "jalebi": "Jalebi", "vada_pav": "Vada pav", "cutting_chai": "Cutting chai (small glass)",
+               "kulhad": "Kulhad chai (clay cup)", "plate_samosa": "Plate of samosas (both hands)",
+               # fruit
+               "banana": "Banana", "apple": "Apple", "mango": "Mango", "orange": "Orange", "grapes": "Grapes",
+               "watermelon": "Watermelon slice",
+               # vegetables
+               "tomato": "Tomato", "onion": "Onion", "potato": "Potato", "carrot": "Carrot", "brinjal": "Brinjal (baingan)",
+               "chilli": "Green chilli", "cabbage": "Cabbage", "veg_basket": "Basket of vegetables",
+               "sabzi_bag": "Cloth bag of vegetables"}
+FOOD_PROPS = {"samosa", "jalebi", "vada_pav", "banana", "apple", "mango", "orange", "grapes", "watermelon", "tomato",
+              "onion", "potato", "carrot", "brinjal", "chilli", "cabbage"}
+DRINK_PROPS = {"cutting_chai", "kulhad", "glass", "bottle"}
 PROPS = [k for k in PROP_LABELS if k]
 
 # Procedural flat-cartoon backgrounds (animated: cars, birds). id -> dropdown label.
@@ -156,6 +169,10 @@ FLAT_BACKGROUNDS = {
     "flat_office": "Flat cartoon: office (computers, city window)",
     "flat_market": "Flat cartoon: market (stalls, lights, shoppers)",
     "flat_bedroom": "Flat cartoon: bedroom at night (bed, window, fan)",
+    "flat_chai_tapri": "Flat cartoon: chai ki tapri (tea stall, samosa, steam)",
+    "flat_sabzi_mandi": "Flat cartoon: sabzi mandi (vegetable and fruit carts)",
+    "flat_airport": "Flat cartoon: airport (departure board, planes)",
+    "flat_bus_stop": "Flat cartoon: bus stop (shelter, passing bus)",
 }
 
 # Camera shot for a line (flat cartoon style). "auto" picks one like a cartoon editor would.
