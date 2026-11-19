@@ -160,6 +160,7 @@ Length: about {seconds} seconds. Dialogue language: {lang}. Keep each spoken lin
 
 Reply with ONLY the script in the exact format below (start with the {HEADER} line, no other text).
 Use only the allowed values listed further down; English ids for everything except the names and the dialogue.
+Write plain text: no Markdown (no **bold**, no code blocks, no numbered or bulleted dialogue lines).
 
 === FORMAT ===
 {HEADER}
@@ -285,6 +286,34 @@ def _kv(part: str):
     if not m:
         return None, part.strip()
     return _key(m.group(1)), m.group(2).strip().strip('"“”').strip()
+
+
+def _clean(raw: str) -> str:
+    """One line without the Markdown that AI chat apps like to add: **bold**, *italics*, `code`, ``` fences,
+    > quotes and numbered lists ("1. ..."). Bullets for characters ("- " / "* " / "• ") become "- "."""
+    line = (raw or "").strip()
+    if line.startswith("```") or line.startswith("~~~") or set(line) <= set("-=_*~ "):   # fences, --- rules
+        return ""
+    line = re.sub(r"^>+\s*", "", line)
+    bullet = bool(re.match(r"^([-*•])\s+", line))
+    if bullet:
+        line = re.sub(r"^([-*•])\s+", "", line)
+    line = re.sub(r"^\d{1,2}[.)]\s+", "", line)
+    line = line.replace("**", "").replace("__", "").replace("`", "")
+    line = re.sub(r"(?<![\w*])\*(?=\S)|(?<=\S)\*(?![\w*])", "", line)   # *italic* -> italic
+    line = line.strip()
+    return ("- " + line) if bullet and line else line
+
+
+def _is_header(line: str) -> bool:
+    """## CHARACTERS / ## SCENE | ... / ## CARD | ... (any number of #, or none: "SCENE 2 | background: ...",
+    "Characters:")."""
+    if line.startswith("#"):
+        return True
+    head = _key(line.split("|", 1)[0].rstrip(":"))
+    if head in ("characters", "character", "cast_list"):
+        return True
+    return bool(re.match(r"^(scene|card)(_\d+)?(_|$)", head)) and ("|" in line or re.fullmatch(r"(scene|card)(_\d+)?", head))
 
 
 def _fields(rest: str) -> dict:
@@ -493,11 +522,11 @@ def parse(text: str) -> dict:
         cur["lines"].append(ln)
 
     for raw in (text or "").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("###"):
+        line = _clean(raw)
+        if not line or "SHORTS STUDIO SCRIPT" in line.upper():
             continue
         low = line.lower()
-        if line.startswith("##"):
+        if _is_header(line):
             body = line.lstrip("#").strip()
             name, _, rest = body.partition("|")
             name = _key(name)
@@ -531,7 +560,7 @@ def parse(text: str) -> dict:
                 continue
             warn.append(f"Unknown section: {line[:50]}")
             continue
-        if section == "chars" and line.startswith(("-", "*", "•")):
+        if section == "chars" and (line.startswith(("-", "*", "•")) or re.match(r"^id\s*[:=]", low)):
             add_char(_fields(line.lstrip("-*• ")))
             continue
         if section is None or (section == "chars" and not line.startswith(("-", "*"))):
@@ -543,6 +572,9 @@ def parse(text: str) -> dict:
                 section = "scene"
             else:
                 continue
+        if section != "chars":                     # a dialogue line written as a list item
+            line = re.sub(r"^[-*•]\s+", "", line)
+            low = line.lower()
         if low.startswith("cast:") and cur is not None and "card" not in cur:
             for w in _split_top(line.split(":", 1)[1], ","):
                 c = char_by(w) or add_char({"id": w, "name": w})
