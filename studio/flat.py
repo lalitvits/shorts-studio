@@ -549,6 +549,31 @@ def _hair_back(pen, sp, hx, hy, r):
 
 def _hair_front(pen, sp, hx, hy, r, back):
     hc = sp["hair_color"]
+    if sp["hair"] in ("quiff", "side", "spiky"):          # young styles: short sides, styled top
+        if back:
+            pen.pie(hx - r * 1.02, hy - r * 1.06, hx + r * 1.02, hy + r * 0.95, 180, 360, hc)
+            pen.ellipse(hx - r * 1.02, hy - r * 0.35, hx + r * 1.02, hy + r * 0.55, hc, 0)
+            return
+        pen.pie(hx - r * 1.04, hy - r * 1.08, hx + r * 1.04, hy + r * 0.42, 180, 360, hc)
+        hl = _mix(hc, 1.6)
+        if sp["hair"] == "quiff":                           # swept up and back at the front
+            pen.poly([(hx - r * 0.75, hy - r * 0.62), (hx - r * 0.45, hy - r * 1.32), (hx + r * 0.1, hy - r * 1.55),
+                      (hx + r * 0.7, hy - r * 1.38), (hx + r * 0.98, hy - r * 0.86), (hx + r * 0.35, hy - r * 0.95),
+                      (hx - r * 0.2, hy - r * 0.78)], hc)
+            pen.arc(hx - r * 0.3, hy - r * 1.5, hx + r * 0.7, hy - r * 0.9, 200, 300, 5, hl)
+        elif sp["hair"] == "side":                          # a fringe swept to one side
+            pen.poly([(hx - r * 1.0, hy - r * 0.42), (hx - r * 0.55, hy - r * 1.18), (hx + r * 0.3, hy - r * 1.25),
+                      (hx + r * 1.0, hy - r * 0.78), (hx + r * 0.72, hy - r * 0.32), (hx + r * 0.05, hy - r * 0.58),
+                      (hx - r * 0.62, hy - r * 0.2)], hc)
+            pen.arc(hx - r * 0.6, hy - r * 1.15, hx + r * 0.9, hy - r * 0.4, 210, 320, 4.5, hl)
+        else:                                               # spiky
+            for k in range(-3, 4):
+                a = math.radians(-90 + k * 24)
+                bx, by = hx + r * 0.78 * math.cos(a), hy + r * 0.78 * math.sin(a)
+                tx, ty = hx + r * 1.42 * math.cos(a), hy + r * 1.42 * math.sin(a)
+                nx, ny = -math.sin(a) * r * 0.22, math.cos(a) * r * 0.22
+                pen.poly([(bx - nx, by - ny), (tx, ty), (bx + nx, by + ny)], hc)
+        return
     if sp["hair"] == "short":
         if back:
             pen.pie(hx - r * 1.02, hy - r * 1.06, hx + r * 1.02, hy + r * 0.95, 180, 360, hc)
@@ -725,7 +750,8 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         pen.ellipse(side * 50 + sw - 42 + side * 8, -46, side * 50 + sw + 42 + side * 8, -6, sp.get("shoe", (44, 40, 42)))
 
     def _arms():
-        sleeve = sp["top"] in ("tshirt", "kurta", "uniform")
+        sleeve = sp["top"] in ("tshirt", "kurta", "uniform", "hoodie", "open_shirt", "tee_print")
+        stc = sp.get("shirt_color", tc) if sp["top"] == "open_shirt" else tc      # sleeve colour
         hands = {}
         for side, key in ((-1, "L"), (1, "R")):
             spec = pose[key]
@@ -736,15 +762,20 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
                 elbow, hand = _fk(sx, sy, spec[1], spec[2], 150, 142, side)
             pen.limb([(sx, sy), elbow, hand], 30, skin)
             if sleeve:
-                k = {"tshirt": 0.42, "uniform": 0.55}.get(sp["top"], 0.95)
+                k = {"tshirt": 0.42, "uniform": 0.55, "tee_print": 0.42}.get(sp["top"], 0.95)
                 mid = (sx + (elbow[0] - sx) * k, sy + (elbow[1] - sy) * k)
-                pen.limb([(sx, sy), mid], 44, tc)
+                pen.limb([(sx, sy), mid], 44, stc)
                 if sp["top"] == "uniform":                     # folded cuff and shoulder strap
                     pen.limb([(sx + (mid[0] - sx) * 0.82, sy + (mid[1] - sy) * 0.82), mid], 46, _mix(tc, 0.85))
                     pen.d.rounded_rectangle(pen.box(sx - 30, sy - 18, sx + 30, sy + 4), radius=5 * pen.s,
                                             fill=_mix(tc, 0.78), outline=OUT, width=pen.wd(3))
-                if sp["top"] == "kurta":
-                    pen.limb([elbow, (elbow[0] + (hand[0] - elbow[0]) * 0.55, elbow[1] + (hand[1] - elbow[1]) * 0.55)], 40, tc)
+                if sp["top"] in ("kurta", "hoodie", "open_shirt"):
+                    f = {"hoodie": 0.8, "open_shirt": 0.45}.get(sp["top"], 0.55)       # hoodie: long; shirt: rolled up
+                    pen.limb([elbow, (elbow[0] + (hand[0] - elbow[0]) * f, elbow[1] + (hand[1] - elbow[1]) * f)],
+                             40 if sp["top"] != "open_shirt" else 44, stc)
+                    if sp["top"] == "open_shirt":                    # the rolled cuff
+                        cx_, cy_ = elbow[0] + (hand[0] - elbow[0]) * f, elbow[1] + (hand[1] - elbow[1]) * f
+                        pen.circle(cx_, cy_, 23, _mix(stc, 0.8), 3)
             if key == "R" and (sp.get("holds") == "lathi" or pose.get("lathi")) and not pose["prop"]:
                 _lathi(pen, elbow, hand)
             if key == "R" and not back and pose["prop"] == "phone_ear":      # the phone goes behind the hand
@@ -753,6 +784,10 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
             if female:
                 bx, by = elbow[0] + (hand[0] - elbow[0]) * 0.8, elbow[1] + (hand[1] - elbow[1]) * 0.8
                 pen.circle(bx, by, 14, (226, 180, 60), 3)
+            if key == "L" and sp.get("watch"):                   # a wristwatch
+                wx, wy = elbow[0] + (hand[0] - elbow[0]) * 0.8, elbow[1] + (hand[1] - elbow[1]) * 0.8
+                pen.circle(wx, wy, 17, (40, 40, 48), 3)
+                pen.circle(wx, wy, 9, (210, 230, 246), 0)
             pen.circle(hand[0], hand[1], 24, skin)
             if key == "R" and spec[0] == "fk" and 80 < spec[1] < 120 and spec[2] < 20 and not back:   # pointing finger
                 ang = math.atan2(hand[1] - elbow[1], hand[0] - elbow[0])
@@ -790,6 +825,42 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
                     pen.line([(-half, yy), (half, yy)], sp["stripes"], 18)
         if sp["top"] == "tshirt" and not back:
             pen.pie(-38, -812, 38, -752, 0, 180, skin, 4)
+        if sp["top"] == "tee_print" and not back:          # a graphic tee
+            pen.pie(-38, -812, 38, -752, 0, 180, skin, 4)
+            ac = sp.get("accent", (250, 250, 250))
+            pen.circle(0, -640, 50 * bw, ac, 4)
+            pen.poly([(-12, -676), (16, -676), (2, -646), (20, -646), (-14, -598), (-4, -634), (-20, -634)],
+                     sp.get("accent2", (230, 60, 60)), 2.5)
+        if sp["top"] == "hoodie":                           # hood at the neck, kangaroo pocket, strings
+            hood = _mix(tc, 0.82)
+            if back:
+                pen.poly([(-90, -800), (90, -800), (70, -690), (0, -650), (-70, -690)], hood, 4)
+            else:
+                pen.ellipse(-104, -830, 104, -742, hood, 4)
+                pen.pie(-50, -816, 50, -760, 0, 180, skin, 3)
+                for sx_ in (-24, 24):
+                    pen.line([(sx_, -770), (sx_ * 1.1, -680)], (245, 245, 245), 5)
+                    pen.circle(sx_ * 1.1, -676, 6, (245, 245, 245), 2)
+                pen.poly([(-86 * bw, -560), (86 * bw, -560), (104 * bw, -470), (-104 * bw, -470)], hood, 4)
+        if sp["top"] == "open_shirt":                       # an open check shirt over the tee
+            shc, dark = sp.get("shirt_color", (200, 50, 50)), _mix(sp.get("shirt_color", (200, 50, 50)), 0.6)
+            if back:
+                pen.poly(_sup(0, -615 + 30 * max(0.0, bw - 1), 138 * bw, 170, n=2.6), shc)
+                for x in range(-110, 120, 44):
+                    pen.line([(x, -760), (x, -470)], dark, 5)
+            else:
+                pen.pie(-38, -812, 38, -752, 0, 180, skin, 4)
+                for side in (-1, 1):
+                    ax = 138 * bw
+                    panel = [(side * 60, -776), (side * (ax - 4), -742), (side * ax, -620), (side * (ax - 14), -470),
+                             (side * 46, -452), (side * 40, -620)]
+                    pen.poly(panel, shc, 4)
+                    for x in (side * 70, side * 98):                         # checks
+                        pen.line([(x, -750), (x, -470)], dark, 5)
+                    for y in (-700, -640, -580, -520):
+                        pen.line([(side * 44, y), (side * (ax - 10), y)], dark, 5)
+                    pen.poly([(side * 30, -790), (side * 72, -800), (side * 76, -730)], shc, 4)     # collar
+
 
     # head (drawn before arms, so hands can touch the face)
     if not back:
@@ -808,6 +879,9 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
     elif sp.get("hat") == "beret":
         _beret(pen, sp, hx, hy, r, back)
 
+    if not back and sp.get("stubble"):                      # a light beard shadow
+        pen.pie(hx - r * 0.8, hy - r * 0.02, hx + r * 0.8, hy + r * 1.0, 0, 180, _mix(skin, 0.86), 0)
+        pen.ellipse(hx - r * 0.5, hy + r * 0.48, hx + r * 0.5, hy + r * 0.92, _mix(skin, 0.8), 0)
     if not back:
         cfg = _face_cfg(emotion)
         look = pose.get("eyes_dir", 0.0)

@@ -32,7 +32,7 @@ SUPPORTED_TEXT = "JPG, JPEG, PNG, WebP, BMP, GIF (first frame) and TIFF"
 # ids used by older projects -> the closest picture that exists now
 ALIASES = {"room": "living_room", "room_night": "living_room", "street": "street_market",
            "street_night": "street_market", "classroom_night": "classroom", "park": "garden_park",
-           "park_night": "garden_park", "village": "village_tea_stall", "village_night": "village_tea_stall"}
+           "park_night": "garden_park", "village": "garden_park", "village_night": "garden_park"}
 
 _SCAN = {"at": 0.0, "files": {}, "mine": set(), "bad": []}
 

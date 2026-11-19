@@ -30,7 +30,7 @@ SAMPLE = {
             {"speaker": "rahul", "text": "चाय पीते हुए सोचते हैं।", "emotion": "neutral", "action": "sit_tea"},
             {"speaker": "priya", "text": "देखो, फ़ोन पर चाबी की फ़ोटो है!", "emotion": "excited", "action": "sit_phone"},
             {"speaker": "rahul", "text": "हा हा, मैं भूल गया था!", "emotion": "laughing", "action": "sit_tea"}]},
-        {"background": "village_tea_stall", "lines": [
+        {"background": "flat_chai_tapri", "lines": [
             {"speaker": "rahul", "text": "मिल गई! चलो, दरवाज़ा खोलें।", "emotion": "happy", "action": "thumbs_up"},
             {"speaker": "priya", "text": "शाबाश! हम जीत गए!", "emotion": "proud", "action": "cheer"},
             {"speaker": "maa", "text": "शाबाश बच्चो!", "emotion": "happy", "action": "talk"},

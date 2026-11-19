@@ -83,6 +83,19 @@ _FLAT = {
         kind="human", skin=(198, 140, 96), top="tshirt", top_color=(230, 80, 70), bottom="shorts",
         bottom_color=(50, 80, 140), hat=None, hair="short", hair_color=(30, 26, 26), mustache=False,
         female=False, height=0.66, stripes=(250, 236, 220))),
+    "flat_youth_a": ("Flat: Young man, 20 (open check shirt, quiff)", False, dict(
+        kind="human", skin=(206, 150, 104), top="open_shirt", top_color=(250, 250, 246), shirt_color=(200, 46, 52),
+        bottom="pants", bottom_color=(46, 86, 160), hat=None, hair="quiff", hair_color=(34, 26, 24), mustache=False,
+        stubble=True, watch=True, female=False, height=1.0, build=0.92, shoe=(245, 245, 245))),
+    "flat_youth_b": ("Flat: Young man, 20 (hoodie, spiky hair)", False, dict(
+        kind="human", skin=(196, 140, 96), top="hoodie", top_color=(60, 66, 84), bottom="pants",
+        bottom_color=(36, 38, 46), hat=None, hair="spiky", hair_color=(28, 24, 24), mustache=False, stubble=False,
+        female=False, height=1.0, build=0.92, shoe=(245, 245, 245))),
+    "flat_youth_c": ("Flat: Young man, 20 (graphic tee, side fringe)", False, dict(
+        kind="human", skin=(184, 124, 82), top="tee_print", top_color=(250, 190, 40), accent=(36, 40, 60),
+        accent2=(250, 250, 250), bottom="pants", bottom_color=(60, 96, 150), hat=None, hair="side",
+        hair_color=(40, 28, 24), mustache=False, stubble=True, watch=True, female=False, height=1.0, build=0.95,
+        shoe=(40, 40, 46))),
     "flat_brain": ("Flat: My brain (inner voice, little devil)", False, dict(
         kind="brain", color=(244, 150, 172), glow=(255, 110, 140), horns=True, height=1.0)),
     "flat_dog": ("Flat: Dog (brown)", False, dict(kind="dog", color=(146, 94, 58), light=(196, 150, 104), height=1.0)),
@@ -172,7 +185,7 @@ FLAT_BACKGROUNDS = {
     "flat_office": "Flat cartoon: office (computers, city window)",
     "flat_market": "Flat cartoon: market (stalls, lights, shoppers)",
     "flat_bedroom": "Flat cartoon: bedroom at night (bed, window, fan)",
-    "flat_chai_tapri": "Flat cartoon: chai ki tapri (tea stall, samosa, steam)",
+    "flat_chai_tapri": "Flat cartoon: chai ki tapri (chaiwala pouring chai, neem tree)",
     "flat_sabzi_mandi": "Flat cartoon: sabzi mandi (vegetable and fruit carts)",
     "flat_airport": "Flat cartoon: airport (departure board, planes)",
     "flat_bus_stop": "Flat cartoon: bus stop (shelter, passing bus)",
@@ -214,7 +227,8 @@ EDGE_FOR_GENDER = {"male": "hi-IN-MadhurNeural", "female": "hi-IN-SwaraNeural"}
 VOICE_TUNE = {"3d_oldman": (-10, -10), "flat_uncle": (-6, -4), "flat_police": (-8, -6), "maa": (-4, -10),
               "flat_aunty": (-2, -4), "flat_boy": (28, 8), "3d_boy": (20, 6), "flat_girl": (12, 4),
               "3d_woman": (6, 2), "flat_man": (0, 2), "3d_youngman": (0, 2), "flat_dog": (8, 10), "flat_cat": (24, 6),
-              "flat_kid": (34, 10), "narrator": (-4, -4),
+              "flat_kid": (34, 10), "narrator": (-4, -4), "flat_youth_a": (6, 4), "flat_youth_b": (4, 6),
+              "flat_youth_c": (8, 4),
               "clay": (14, 4)}
 # Voice effects (tts.VOICE_FX) and the look that gets one by default
 VOICE_FX_LABELS = {"": "No effect", "echo": "Echo", "devil": "Devil (deep, with echo)",
@@ -222,7 +236,7 @@ VOICE_FX_LABELS = {"": "No effect", "echo": "Echo", "devil": "Devil (deep, with 
                    "phone": "Phone call"}
 VOICE_FX_FOR_LOOK = {"flat_brain": "devil_whisper"}
 # Gemini voice for each look when the engine picks Gemini for a character that has a Microsoft voice
-GEMINI_FOR_LOOK = {"narrator": "Charon", "flat_kid": "Sadachbia", "flat_brain": "Fenrir", "3d_oldman": "Algenib", "flat_uncle": "Algenib", "flat_police": "Orus", "flat_boy": "Sadachbia",
+GEMINI_FOR_LOOK = {"flat_youth_a": "Puck", "flat_youth_b": "Sadachbia", "flat_youth_c": "Achird", "narrator": "Charon", "flat_kid": "Sadachbia", "flat_brain": "Fenrir", "3d_oldman": "Algenib", "flat_uncle": "Algenib", "flat_police": "Orus", "flat_boy": "Sadachbia",
                    "3d_boy": "Sadachbia", "3d_youngman": "Puck", "flat_man": "Achird", "3d_woman": "Leda",
                    "flat_girl": "Leda", "flat_aunty": "Sulafat", "maa": "Gacrux", "priya": "Kore", "rahul": "Charon",
                    "aman": "Puck"}

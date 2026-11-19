@@ -61,6 +61,10 @@ LIGHTING = ("day", "dark", "phone")
 STICKERS = ("pizza", "burger", "money", "heart", "idea", "angry", "laugh", "question", "exclaim", "sleep", "fire")
 
 
+RENAMED_BG = {"village_tea_stall": "flat_chai_tapri", "village": "flat_village",
+              "village_night": "flat_village"}   # removed pictures -> what older projects show instead
+
+
 def _broll(v) -> str:
     """A line's cut-away picture: one of the explainer animations, or "pic:<background id>" (your own picture)."""
     v = str(v or "")
@@ -167,7 +171,8 @@ def normalize(tl: dict) -> dict:
                                card_sound=snd, card_seconds=_num(sc.get("card_seconds")) or 0.0,
                                music=_scene_music(sc.get("music"))))
         elif cast:
-            scenes.append(dict(background=sc.get("background") or "living_room", cast=cast, lines=lines,
+            scenes.append(dict(background=RENAMED_BG.get(sc.get("background"), sc.get("background")) or "living_room",
+                               cast=cast, lines=lines,
                                audio_from=_num(sc.get("audio_from")), audio_to=_num(sc.get("audio_to")),
                                lighting=sc.get("lighting") if sc.get("lighting") in LIGHTING else "day",
                                music=_scene_music(sc.get("music")), seconds=min(60.0, _num(sc.get("seconds")) or 0.0),

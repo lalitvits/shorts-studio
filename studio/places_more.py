@@ -1,7 +1,8 @@
 """More everyday flat-cartoon places: chai ki tapri, sabzi mandi, airport and bus stop.
 
 Same idea as places.py: draw() paints the wide picture once (2600 x 1920 units); animate() adds the moving parts.
-Chai tapri:  steam from the chai pot, swinging chips packets, birds.
+Chai tapri:  steam and bubbles, the chaiwala pouring chai from high up, swinging chips packets, a diya,
+             a sleeping dog breathing and wagging, leaves drifting down, birds.
 Sabzi mandi: shoppers walking behind the thelas, the hanging scale swinging, birds.
 Airport:     a plane taking off past the big windows, the departure board blinking "BOARDING".
 Bus stop:    a bus driving past now and then, birds.
@@ -112,61 +113,219 @@ def _thela(d, P, L, x, kinds, rnd):
 
 
 def _chai_tapri(im, d, P, L, PW, ps, rnd):
-    _sky(d, im.width, ps, [(0, (150, 196, 236)), (1000, (250, 226, 196))])
-    d.ellipse(P(2200, 220, 2360, 380), fill=(255, 222, 120))                                      # morning sun
-    _buildings(d, P, L, PW, rnd)
-    _ground(d, im, ps, 1290, (214, 196, 166), (186, 166, 136))                                    # dusty road
-    d.line(P(0, 1290, PW, 1290), fill=OUT, width=L(5))
-    d.rectangle(P(160, 620, 230, 1300), fill=(120, 84, 56), outline=OUT, width=L(5))              # neem tree
-    for cx, cy, r in ((120, 560, 190), (300, 520, 170), (200, 420, 160)):
-        d.ellipse(P(cx - r, cy - r, cx + r, cy + r), fill=(80, 150, 80), outline=OUT, width=L(5))
-    x0, x1 = 980, 1780                                                                            # the tapri
-    d.rectangle(P(x0, 760, x1, 1300), fill=(120, 150, 170), outline=OUT, width=L(6))              # tin back wall
-    for x in range(x0, x1, 40):
-        d.line(P(x, 760, x, 1300), fill=(100, 128, 148), width=L(3))
-    for y, row in ((830, ((236, 200, 90), (220, 90, 70), (120, 180, 90))), (930, ((240, 170, 60), (180, 120, 200), (90, 160, 220)))):
-        d.rectangle(P(x0 + 60, y + 70, x1 - 60, y + 82), fill=(150, 100, 60), outline=OUT, width=L(3))   # shelves
-        for k, xx in enumerate(range(x0 + 90, x1 - 100, 95)):                                      # biscuit jars
-            col = row[k % 3]
-            d.rounded_rectangle(P(xx, y, xx + 70, y + 70), radius=L(10), fill=(230, 240, 246), outline=OUT, width=L(3))
-            d.rectangle(P(xx + 6, y + 26, xx + 64, y + 66), fill=col)
-            d.rectangle(P(xx + 10, y - 10, xx + 60, y + 4), fill=(200, 60, 50), outline=OUT, width=L(2))
-    d.polygon([tuple(P(x0 - 100, 700)), tuple(P(x1 + 100, 700)), tuple(P(x1 + 60, 770)), tuple(P(x0 - 60, 770))],
-              fill=(150, 170, 190), outline=OUT)                                                  # tin roof
-    for x in range(x0 - 90, x1 + 90, 34):
-        d.line(P(x, 702, x + 4, 768), fill=(120, 140, 160), width=L(3))
-    d.rectangle(P(x0 + 100, 560, x1 - 100, 700), fill=(250, 210, 60), outline=OUT, width=L(6))    # signboard
-    _text(d, P, ps, (x0 + x1) / 2, 615, "CHAI  TAPRI", 70, (200, 40, 30), (255, 250, 230))
-    _text(d, P, ps, (x0 + x1) / 2, 672, "TEA  -  SAMOSA  -  BUN", 30, (60, 40, 30))
-    d.rectangle(P(x0 - 40, 1090, x1 + 40, 1300), fill=(170, 116, 70), outline=OUT, width=L(6))    # counter
-    for x in range(x0, x1 + 40, 120):
-        d.line(P(x, 1100, x, 1290), fill=(140, 96, 58), width=L(3))
-    d.rectangle(P(x0 + 60, 1050, x0 + 300, 1090), fill=(60, 60, 66), outline=OUT, width=L(4))     # stove
-    d.polygon([tuple(P(x0 + 80, 950)), tuple(P(x0 + 280, 950)), tuple(P(x0 + 270, 1050)), tuple(P(x0 + 90, 1050))],
-              fill=(196, 200, 210), outline=OUT)                                                  # chai pateela
-    d.ellipse(P(x0 + 80, 930, x0 + 280, 970), fill=(150, 90, 50), outline=OUT, width=L(4))
-    d.line(P(x0 + 280, 990, x0 + 340, 970), fill=(150, 150, 160), width=L(8))
-    tx = x0 + 380                                                                                 # tray of glasses
-    d.rectangle(P(tx, 1078, tx + 300, 1090), fill=(180, 184, 196), outline=OUT, width=L(2))
-    for k in range(6):
-        gx = tx + 25 + k * 46
-        d.polygon([tuple(P(gx - 16, 1020)), tuple(P(gx + 16, 1020)), tuple(P(gx + 12, 1078)), tuple(P(gx - 12, 1078))],
-                  fill=(236, 244, 248), outline=OUT)
-        d.polygon([tuple(P(gx - 14, 1036)), tuple(P(gx + 14, 1036)), tuple(P(gx + 11, 1076)), tuple(P(gx - 11, 1076))],
-                  fill=(176, 110, 56))
-    px_ = x1 - 260                                                                                # samosa plate
-    d.ellipse(P(px_ - 120, 1062, px_ + 120, 1092), fill=(230, 232, 236), outline=OUT, width=L(3))
-    for k, (dx, dy) in enumerate(((-60, 0), (0, -10), (60, 0), (-30, -40), (30, -40))):
-        cx, cy = px_ + dx, 1066 + dy
-        d.polygon([tuple(P(cx - 36, cy)), tuple(P(cx + 36, cy)), tuple(P(cx, cy - 52))], fill=(226, 172, 84), outline=OUT)
-    for x in range(x0 - 60, x1 + 60, 9):                                                          # string for packets
-        d.ellipse(P(x - 2, 776, x + 2, 780), fill=(60, 50, 40))
-    bx = 300                                                                                      # bench
-    d.rectangle(P(bx, 1360, bx + 560, 1395), fill=(150, 100, 60), outline=OUT, width=L(5))
-    for lx in (bx + 30, bx + 500):
-        d.rectangle(P(lx, 1395, lx + 26, 1480), fill=(120, 80, 50), outline=OUT, width=L(3))
-    d.rectangle(P(2050, 1180, 2200, 1300), fill=(80, 140, 200), outline=OUT, width=L(5))          # water drum
-    d.ellipse(P(2050, 1160, 2200, 1200), fill=(110, 170, 220), outline=OUT, width=L(4))
+    """A busy, colourful chai ki tapri under a big neem tree, in front of a street of painted houses."""
+    from PIL import Image, ImageDraw
+    _sky(d, im.width, ps, [(0, (64, 156, 238)), (520, (130, 200, 246)), (1000, (255, 214, 170))])
+    d.ellipse(P(2140, 170, 2330, 360), fill=(255, 236, 140))                                       # sun
+    for cx, cy, w in ((420, 260, 160), (1500, 200, 200), (2450, 330, 130)):                        # clouds
+        for dx, r in ((-w * 0.6, w * 0.45), (0, w * 0.6), (w * 0.6, w * 0.42)):
+            d.ellipse(P(cx + dx - r, cy - r * 0.7, cx + dx + r, cy + r * 0.7), fill=(255, 255, 255))
+    # a street of painted houses with balconies and water tanks
+    houses = [(214, 74, 120), (40, 170, 170), (250, 196, 50), (130, 190, 70), (240, 120, 60), (110, 120, 220)]
+    for i, x in enumerate(range(-60, PW, 330)):
+        col = houses[i % len(houses)]
+        top = 520 + (i * 53 % 4) * 45
+        d.rectangle(P(x, top, x + 320, 1180), fill=col, outline=OUT, width=L(5))
+        d.rectangle(P(x - 10, top - 18, x + 330, top), fill=_mix(col, 0.75), outline=OUT, width=L(4))
+        for wy in range(top + 50, 1100, 170):
+            for wx in (x + 40, x + 190):
+                d.rectangle(P(wx, wy, wx + 90, wy + 100), fill=(255, 240, 200), outline=OUT, width=L(4))
+                d.line(P(wx + 45, wy, wx + 45, wy + 100), fill=OUT, width=L(3))
+                d.rectangle(P(wx - 8, wy + 100, wx + 98, wy + 112), fill=_mix(col, 0.7), outline=OUT, width=L(3))
+        if i % 2 == 0:                                                                                  # water tank
+            d.rounded_rectangle(P(x + 200, top - 90, x + 290, top - 18), radius=L(14), fill=(40, 40, 50),
+                                outline=OUT, width=L(4))
+    d.line(P(0, 640, PW, 600), fill=(40, 40, 46), width=L(3))                                         # cable wires
+    d.line(P(0, 690, PW, 660), fill=(40, 40, 46), width=L(3))
+    _ground(d, im, ps, 1180, (246, 196, 130), (226, 162, 98))                                         # warm dusty ground
+    d.line(P(0, 1180, PW, 1180), fill=OUT, width=L(5))
+    ov = Image.new("RGBA", im.size, (0, 0, 0, 0))                                                    # leaf shadows
+    o = ImageDraw.Draw(ov)
+    for _ in range(70):
+        x, y = rnd.uniform(0, 1100), rnd.uniform(1220, 1900)
+        r = rnd.uniform(20, 60)
+        o.ellipse(P(x - r * 1.6, y - r * 0.5, x + r * 1.6, y + r * 0.5), fill=(120, 70, 30, 60))
+    im.paste(ov, (0, 0), ov)
+    # the big neem tree on the left
+    d.polygon([tuple(P(150, 1300)), tuple(P(300, 1300)), tuple(P(270, 700)), tuple(P(330, 520)), tuple(P(250, 560)),
+               tuple(P(200, 700))], fill=(130, 84, 50), outline=OUT)
+    d.line(P(260, 760, 470, 600), fill=(130, 84, 50), width=L(36))
+    for cx, cy, r, col in ((120, 470, 230, (40, 140, 60)), (380, 420, 220, (60, 170, 70)), (230, 300, 200, (80, 190, 80)),
+                           (520, 560, 170, (50, 156, 64)), (40, 650, 150, (60, 170, 70))):
+        d.ellipse(P(cx - r, cy - r, cx + r, cy + r), fill=col, outline=OUT, width=L(5))
+    for _ in range(40):
+        x, y = rnd.uniform(-60, 680), rnd.uniform(200, 760)
+        d.ellipse(P(x - 18, y - 9, x + 18, y + 9), fill=(150, 220, 110))
+    # ---------------------------------------------------------------- the tapri
+    x0, x1 = 820, 1880
+    d.rectangle(P(x0, 720, x1, 1300), fill=(26, 150, 166), outline=OUT, width=L(7))                  # turquoise stall
+    for x in range(x0 + 40, x1, 60):
+        d.line(P(x, 720, x, 1300), fill=(20, 126, 140), width=L(4))
+    d.rectangle(P(x0 + 40, 760, x1 - 40, 1060), fill=(20, 90, 110), outline=OUT, width=L(5))          # inside, darker
+    for y in (850, 960):                                                                              # shelves + jars
+        d.rectangle(P(x0 + 50, y + 70, x1 - 50, y + 84), fill=(176, 116, 64), outline=OUT, width=L(3))
+        for k, xx in enumerate(range(x0 + 80, x1 - 120, 92)):
+            lid = [(240, 70, 60), (250, 200, 40), (70, 180, 90), (60, 140, 230), (220, 90, 200)][k % 5]
+            fill = [(236, 180, 90), (250, 222, 140), (210, 140, 70), (246, 200, 110)][k % 4]
+            d.rounded_rectangle(P(xx, y, xx + 70, y + 70), radius=L(12), fill=(214, 236, 246), outline=OUT, width=L(3))
+            d.rectangle(P(xx + 7, y + 24, xx + 63, y + 64), fill=fill)
+            d.rounded_rectangle(P(xx + 8, y - 12, xx + 62, y + 4), radius=L(4), fill=lid, outline=OUT, width=L(2))
+    # god's picture with a marigold garland (a diya flickers in the animation)
+    gx = x1 - 120
+    d.rectangle(P(gx - 50, 770, gx + 50, 840), fill=(250, 220, 120), outline=OUT, width=L(4))
+    d.ellipse(P(gx - 26, 778, gx + 26, 832), fill=(240, 120, 40))
+    for k in range(9):
+        a = math.pi * k / 8
+        d.ellipse(P(gx - 50 + 100 * k / 8 - 9, 840 + 18 * math.sin(a) - 9, gx - 50 + 100 * k / 8 + 9, 840 + 18 * math.sin(a) + 9),
+                  fill=(255, 150, 20) if k % 2 else (255, 200, 30))
+    # the chaiwala behind the counter (his pouring arm moves: animate)
+    cx = 1140
+    d.rounded_rectangle(P(cx - 95, 900, cx + 95, 1100), radius=L(50), fill=(250, 250, 244), outline=OUT, width=L(5))
+    d.ellipse(P(cx - 62, 760, cx + 62, 890), fill=(176, 116, 74), outline=OUT, width=L(5))           # head
+    d.pieslice(P(cx - 66, 740, cx + 66, 840), 180, 360, fill=(40, 30, 28), outline=OUT, width=L(4))   # hair
+    d.ellipse(P(cx - 30, 806, cx - 14, 822), fill=(30, 26, 26))
+    d.ellipse(P(cx + 14, 806, cx + 30, 822), fill=(30, 26, 26))
+    d.polygon([tuple(P(cx - 36, 846)), tuple(P(cx, 834)), tuple(P(cx + 36, 846)), tuple(P(cx, 852))], fill=(40, 30, 28))
+    d.arc(P(cx - 22, 846, cx + 22, 872), 20, 160, fill=OUT, width=L(4))
+    d.rectangle(P(cx - 110, 930, cx - 80, 960), fill=(240, 70, 60))                                   # red gamchha
+    d.line(P(cx - 95, 905, cx + 70, 1000), fill=(240, 70, 60), width=L(14))
+    # counter
+    d.rectangle(P(x0 - 40, 1080, x1 + 40, 1110), fill=(186, 120, 62), outline=OUT, width=L(5))
+    d.rectangle(P(x0, 1110, x1, 1300), fill=(240, 120, 40), outline=OUT, width=L(6))                 # orange front
+    for x in range(x0, x1, 106):
+        d.rectangle(P(x + 8, 1124, x + 98, 1286), fill=(250, 150, 60), outline=OUT, width=L(3))
+    _text(d, P, ps, (x0 + x1) / 2, 1200, "MASALA CHAI  Rs 10", 54, (255, 255, 255), (150, 50, 20))
+    d.rectangle(P(x0 + 280, 1040, x0 + 520, 1080), fill=(50, 50, 56), outline=OUT, width=L(4))       # stove
+    d.polygon([tuple(P(x0 + 300, 960)), tuple(P(x0 + 500, 960)), tuple(P(x0 + 488, 1040)), tuple(P(x0 + 312, 1040))],
+              fill=(210, 214, 224), outline=OUT)                                                      # chai pateela
+    d.ellipse(P(x0 + 300, 942, x0 + 500, 978), fill=(176, 104, 50), outline=OUT, width=L(4))
+    tx = x0 + 600                                                                                     # tray of glasses
+    d.rectangle(P(tx, 1068, tx + 330, 1080), fill=(200, 204, 214), outline=OUT, width=L(2))
+    for k in range(7):
+        gx_ = tx + 25 + k * 46
+        d.polygon([tuple(P(gx_ - 16, 1010)), tuple(P(gx_ + 16, 1010)), tuple(P(gx_ + 12, 1068)), tuple(P(gx_ - 12, 1068))],
+                  fill=(236, 246, 250), outline=OUT)
+        d.polygon([tuple(P(gx_ - 14, 1026)), tuple(P(gx_ + 14, 1026)), tuple(P(gx_ + 11, 1066)), tuple(P(gx_ - 11, 1066))],
+                  fill=(186, 112, 52))
+    px_ = x1 - 200                                                                                    # samosa plate
+    d.ellipse(P(px_ - 110, 1052, px_ + 110, 1082), fill=(240, 242, 246), outline=OUT, width=L(3))
+    for dx, dy in ((-55, 0), (0, -8), (55, 0), (-28, -38), (28, -38)):
+        sx, sy = px_ + dx, 1058 + dy
+        d.polygon([tuple(P(sx - 34, sy)), tuple(P(sx + 34, sy)), tuple(P(sx, sy - 50))], fill=(236, 176, 80), outline=OUT)
+    for k in range(5):                                                                                # kulhads
+        kx = x0 + 60 + k * 44
+        d.polygon([tuple(P(kx - 18, 1030)), tuple(P(kx + 18, 1030)), tuple(P(kx + 12, 1078)), tuple(P(kx - 12, 1078))],
+                  fill=(190, 96, 58), outline=OUT)
+    # striped awning with a scalloped edge, and the signboard
+    stripes = [(240, 60, 60), (255, 250, 240)]
+    d.polygon([tuple(P(x0 - 120, 640)), tuple(P(x1 + 120, 640)), tuple(P(x1 + 80, 740)), tuple(P(x0 - 80, 740))],
+              fill=stripes[0], outline=OUT)
+    for k in range(14):
+        xa = x0 - 120 + k * (x1 - x0 + 240) / 14
+        xb = xa + (x1 - x0 + 240) / 28
+        d.polygon([tuple(P(xa + 3, 642)), tuple(P(xb, 642)), tuple(P(xb - 3, 738)), tuple(P(xa + 6, 738))], fill=stripes[1])
+    for k in range(14):
+        xa = x0 - 80 + k * (x1 - x0 + 160) / 14
+        d.pieslice(P(xa, 712, xa + (x1 - x0 + 160) / 14, 776), 0, 180, fill=stripes[k % 2], outline=OUT, width=L(3))
+    d.line(P(x0 - 120, 640, x1 + 120, 640), fill=OUT, width=L(6))
+    d.rounded_rectangle(P(x0 + 90, 470, x1 - 90, 630), radius=L(22), fill=(255, 214, 40), outline=OUT, width=L(7))
+    _text(d, P, ps, (x0 + x1) / 2, 530, "CHAI  KI  TAPRI", 76, (220, 40, 40), (255, 250, 230))
+    _text(d, P, ps, (x0 + x1) / 2, 598, "CHAI - SAMOSA - BUN MASKA", 32, (90, 40, 20))
+    for x in range(x0 - 70, x1 + 80, 9):                                                              # string for packets
+        d.ellipse(P(x - 2, 778, x + 2, 782), fill=(60, 50, 40))
+    for k, (bx, by) in enumerate(((x0 + 60, 800), (x0 + 90, 806), (x0 + 120, 800))):                  # banana bunch
+        d.arc(P(bx - 30, by - 10, bx + 30, by + 70), 200, 340, fill=(250, 210, 40), width=L(16))
+    # bench on the left, red plastic stools on the right
+    bx = 360
+    d.rectangle(P(bx, 1330, bx + 420, 1368), fill=(176, 110, 56), outline=OUT, width=L(5))
+    for lx in (bx + 26, bx + 370):
+        d.rectangle(P(lx, 1368, lx + 26, 1450), fill=(140, 86, 44), outline=OUT, width=L(3))
+    for sx in (2020, 2210):
+        d.polygon([tuple(P(sx - 60, 1300)), tuple(P(sx + 60, 1300)), tuple(P(sx + 46, 1420)), tuple(P(sx - 46, 1420))],
+                  fill=(226, 40, 40), outline=OUT)
+        d.ellipse(P(sx - 66, 1286, sx + 66, 1316), fill=(246, 70, 60), outline=OUT, width=L(4))
+    d.rectangle(P(2380, 1150, 2520, 1300), fill=(60, 150, 220), outline=OUT, width=L(5))              # water drum
+    d.ellipse(P(2380, 1130, 2520, 1170), fill=(100, 180, 236), outline=OUT, width=L(4))
+
+
+def _tapri_animate(d, t, px, s, visible, x0, vw, PW, birds):
+    """Steam, the chaiwala pouring chai from high up, swinging packets, a flickering diya, a sleeping dog, birds."""
+    import random as _r
+    if visible(1050):
+        for j in range(7):                                                               # steam from the pateela
+            u = (t * 0.5 + j / 7) % 1
+            x, y = px(1020 + 40 * math.sin(t * 1.4 + j) + 25 * u, 940 - 360 * u)
+            r = (18 + 46 * u) * s
+            d.ellipse([x - r, y - r, x + r, y + r], fill=(255, 255, 255, int(150 * (1 - u))))
+        for j in range(4):                                                               # bubbles on the boil
+            u = (t * 3 + j * 0.27) % 1
+            x, y = px(1080 + j * 40, 958 - 8 * u)
+            r = (4 + 6 * u) * s
+            d.ellipse([x - r, y - r, x + r, y + r], outline=(240, 214, 170, int(255 * (1 - u))), width=max(1, round(2 * s)))
+    if visible(1140):                                                                    # pouring chai from high up
+        ph = (t % 3.2) / 3.2
+        lift = math.sin(math.pi * min(1.0, ph / 0.8)) if ph < 0.8 else 0.0
+        hx, hy = 1240, 960 - 150 * lift                                                  # the hand with the kettle
+        sx_, sy_ = px(1160, 930)
+        ex, ey = px(hx, hy)
+        d.line([(sx_, sy_), (ex, ey)], fill=(176, 116, 74, 255), width=max(2, round(26 * s)))
+        d.ellipse([ex - 18 * s, ey - 18 * s, ex + 18 * s, ey + 18 * s], fill=(176, 116, 74, 255))
+        k = s
+        kx, ky = ex + 10 * k, ey - 10 * k
+        d.polygon([(kx - 34 * k, ky - 40 * k), (kx + 34 * k, ky - 40 * k), (kx + 40 * k, ky + 20 * k), (kx - 40 * k, ky + 20 * k)],
+                  fill=(206, 210, 222, 255), outline=(36, 31, 32, 255))
+        d.line([(kx + 36 * k, ky), (kx + 70 * k, ky - 22 * k)], fill=(170, 174, 186, 255), width=max(2, round(9 * k)))
+        if lift > 0.15:                                                                  # the stream of chai
+            gx_, gy_ = px(1290, 1020)
+            pts = []
+            for i in range(9):
+                v = i / 8
+                pts.append((kx + 70 * k + (gx_ - kx - 70 * k) * v, ky - 22 * k + (gy_ - ky + 22 * k) * v * v + 4 * math.sin(t * 30 + i) * k))
+            d.line(pts, fill=(186, 112, 52, 240), width=max(2, round(7 * k)))
+        gx_, gy_ = px(1290, 1050)                                                        # the glass under it
+        d.polygon([(gx_ - 16 * s, gy_ - 30 * s), (gx_ + 16 * s, gy_ - 30 * s), (gx_ + 12 * s, gy_ + 28 * s),
+                   (gx_ - 12 * s, gy_ + 28 * s)], fill=(236, 246, 250, 255), outline=(36, 31, 32, 255))
+        lvl = min(1.0, (t % 3.2) / 2.6)
+        d.polygon([(gx_ - 14 * s + 2 * s * (1 - lvl), gy_ + 26 * s - 52 * s * lvl), (gx_ + 14 * s - 2 * s * (1 - lvl), gy_ + 26 * s - 52 * s * lvl),
+                   (gx_ + 11 * s, gy_ + 26 * s), (gx_ - 11 * s, gy_ + 26 * s)], fill=(186, 112, 52, 255))
+    cols = [(240, 70, 60), (250, 200, 40), (40, 160, 230), (120, 200, 80), (230, 110, 210), (250, 130, 40)]
+    for k, X in enumerate(range(760, 1960, 64)):                                         # chips packets swinging
+        if not visible(X) or 1030 < X < 1350:                                            # (not in front of the chaiwala)
+            continue
+        a = 0.14 * math.sin(t * 2.4 + k * 0.8)
+        x, y = px(X, 782)
+        w, h = 24 * s, 76 * s
+        pts = [(x - w, y), (x + w, y), (x + w + h * math.sin(a), y + h), (x - w + h * math.sin(a), y + h)]
+        d.polygon(pts, fill=cols[k % 6] + (255,), outline=(36, 31, 32, 255))
+        d.line([(x - w * 0.6 + h * 0.5 * math.sin(a), y + h * 0.5), (x + w * 0.6 + h * 0.5 * math.sin(a), y + h * 0.5)],
+               fill=(255, 255, 255, 220), width=max(1, round(4 * s)))
+    if visible(1760):                                                                    # diya flame under the picture
+        x, y = px(1760, 862)
+        f = 1 + 0.25 * math.sin(t * 17) + 0.15 * math.sin(t * 29)
+        d.ellipse([x - 26 * s * f, y - 30 * s * f, x + 26 * s * f, y + 10 * s], fill=(255, 200, 80, 80))
+        d.polygon([(x - 7 * s, y), (x + 7 * s, y), (x, y - 26 * s * f)], fill=(255, 170, 40, 255))
+    if visible(2250):                                                                    # a dog sleeping, breathing, tail wagging
+        x, y = px(2250, 1520)
+        b = 1 + 0.04 * math.sin(t * 2.2)
+        d.ellipse([x - 110 * s, y - 50 * s * b, x + 90 * s, y + 30 * s], fill=(196, 140, 84, 255), outline=(36, 31, 32, 255),
+                  width=max(1, round(4 * s)))
+        d.ellipse([x + 60 * s, y - 40 * s, x + 140 * s, y + 20 * s], fill=(196, 140, 84, 255), outline=(36, 31, 32, 255),
+                  width=max(1, round(4 * s)))
+        d.polygon([(x + 120 * s, y - 34 * s), (x + 150 * s, y - 20 * s), (x + 118 * s, y - 6 * s)], fill=(150, 100, 60, 255))
+        d.line([(x + 100 * s, y - 12 * s), (x + 112 * s, y - 12 * s)], fill=(36, 31, 32, 255), width=max(1, round(3 * s)))
+        wag = 0.5 * math.sin(t * 5)
+        d.line([(x - 104 * s, y - 10 * s), (x - 150 * s, y - 40 * s - 30 * s * wag)], fill=(196, 140, 84, 255),
+               width=max(2, round(12 * s)))
+    rnd = _r.Random(int(t // 6))                                                         # leaves drifting down
+    for j in range(3):
+        u = ((t + j * 2.1) % 6) / 6
+        X = 150 + j * 230 + 60 * math.sin(t * 1.3 + j) + 200 * u
+        if not visible(X):
+            continue
+        x, y = px(X, 500 + 1100 * u)
+        a = t * 3 + j
+        d.ellipse([x - 14 * s, y - 6 * s, x + 14 * s, y + 6 * s], fill=(110, 190, 80, 230))
+    birds(d, x0, vw, t, px, s, 3, 300)
 
 
 def _sabzi_mandi(im, d, P, L, PW, ps, rnd):
@@ -276,22 +435,7 @@ def draw(bid, im, d, P, L, PW, ps, rnd):
 # ===================================================================== moving parts
 def animate(d, bid: str, t: float, px, s: float, visible, x0: float, vw: float, PW: int, birds, items):
     if bid == "flat_chai_tapri":
-        if visible(1160):
-            for j in range(6):                                                           # steam from the chai
-                u = (t * 0.45 + j / 6) % 1
-                x, y = px(1160 + 30 * math.sin(t * 1.3 + j) + 20 * u, 930 - 330 * u)
-                r = (16 + 40 * u) * s
-                d.ellipse([x - r, y - r, x + r, y + r], fill=(255, 255, 255, int(140 * (1 - u))))
-        cols = [(240, 80, 60), (250, 200, 50), (60, 160, 220), (120, 200, 90), (230, 120, 200)]
-        for k, X in enumerate(range(940, 1840, 70)):                                     # chips packets swinging
-            if not visible(X):
-                continue
-            a = 0.12 * math.sin(t * 2.2 + k * 0.9)
-            x, y = px(X, 780)
-            w, h = 22 * s, 70 * s
-            pts = [(x - w, y), (x + w, y), (x + w + h * math.sin(a), y + h), (x - w + h * math.sin(a), y + h)]
-            d.polygon(pts, fill=cols[k % 5] + (255,), outline=OUT + (255,))
-        birds(d, x0, vw, t, px, s, 3, 300)
+        _tapri_animate(d, t, px, s, visible, x0, vw, PW, birds)
     elif bid == "flat_sabzi_mandi":
         for X, spd, col in items["walkers"]:                                             # shoppers behind the carts
             Xw = (X + t * spd) % (PW + 400) - 200
