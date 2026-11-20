@@ -475,11 +475,15 @@ const ACTIONS = {
     a.download = "shorts-studio-script-format.txt"; a.click();
   },
   "cancel-job": async el => {
-    const id = RUNNING[el.dataset.box];
-    if (!id) return;
+    const box = el.dataset.box, id = RUNNING[box];
+    if (!id) { stopWatching(box); return; }
     el.disabled = true;
-    await api("/api/jobs/" + id + "/cancel", {});
-    toast("Stopping...");
+    try {
+      const r = await fetch("/api/jobs/" + id + "/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      if (r.ok) { toast("Stopping..."); setTimeout(() => { if (RUNNING[box] === id) { stopWatching(box); toast("Stopped."); } }, 15000); return; }
+    } catch (e) { /* the app is not answering */ }
+    stopWatching(box);                                  // the job is gone already: just close the progress bar
+    toast("That video was already stopped (the app was closed or restarted). You can make it again.");
   },
   "refresh-bgs": () => refreshBackgrounds(true),
   "open-bg-folder": async () => {
@@ -616,6 +620,9 @@ const ACTIONS = {
     try {
       const { job } = await api("/api/render", { timeline: timeline(), quality: $("#quality").value });
       await pollJob(job);
+    } catch (e) {                                    // it could not start: do not leave the progress bar up
+      stopWatching("#progress");
+      throw e;
     } finally { el.disabled = false; }
   },
   autopilot: async el => {
@@ -674,17 +681,38 @@ const ACTIONS = {
   },
 };
 const RUNNING = {};                                // progress box -> the job it shows (for Cancel)
+const LOST_MSG = "The app stopped while making this video (it was closed or restarted), so the video was not " +
+  "finished. Start the app again if needed, then press Make video again.";
+async function jobStatus(id, misses) {             // the job, or {status: "lost"} when the app is gone / restarted
+  try {
+    const r = await fetch("/api/jobs/" + id);
+    if (r.status === 404) return { status: "lost" };   // the app restarted: it no longer knows this job
+    const j = await r.json();
+    misses.n = 0;
+    return j;
+  } catch (e) {                                     // the app is not answering: wait a little, it may come back
+    misses.n += 1;
+    return misses.n >= 12 ? { status: "lost" } : { status: "running", stage: "Waiting for the app to answer..." };
+  }
+}
+function stopWatching(box) {                       // hide a progress box and forget its job
+  const el = $(box); if (el) el.hidden = true;
+  delete RUNNING[box];
+}
 function pollJob(id) {
   RUNNING["#progress"] = id;
   $("#progress .cancel-btn").disabled = false;
   return new Promise((resolve, reject) => {
+    const misses = { n: 0 };
     const tick = async () => {
       try {
-        const j = await api("/api/jobs/" + id);
-        $("#bar-fill").style.width = Math.round((j.progress || 0) * 100) + "%";
+        if (RUNNING["#progress"] !== id) return resolve();          // cancelled from the page
+        const j = await jobStatus(id, misses);
+        if (j.progress !== undefined) $("#bar-fill").style.width = Math.round((j.progress || 0) * 100) + "%";
         $("#stage").textContent = j.stage || "";
         if (j.status === "running") return setTimeout(tick, 700);
-        $("#progress").hidden = true; delete RUNNING["#progress"];
+        stopWatching("#progress");
+        if (j.status === "lost") { toast(LOST_MSG, true); return resolve(); }
         if (j.status === "cancelled") { toast("Stopped. No video was saved."); return resolve(); }
         if (j.status === "error") { toast(j.error, true); return resolve(); }
         const r = j.result;
@@ -708,12 +736,16 @@ function watchJob(id, box, bar, stage) {          // progress bar for a backgrou
   RUNNING[box] = id;
   const cb = $(box + " .cancel-btn"); if (cb) cb.disabled = false;
   return new Promise((resolve, reject) => {
+    const misses = { n: 0 };
     const tick = async () => {
       try {
-        const j = await api("/api/jobs/" + id);
-        $(bar).style.width = Math.round((j.progress || 0) * 100) + "%"; $(stage).textContent = j.stage || "";
+        if (RUNNING[box] !== id) return resolve(null);              // cancelled from the page
+        const j = await jobStatus(id, misses);
+        if (j.progress !== undefined) $(bar).style.width = Math.round((j.progress || 0) * 100) + "%";
+        $(stage).textContent = j.stage || "";
         if (j.status === "running") return setTimeout(tick, 800);
-        $(box).hidden = true; delete RUNNING[box];
+        stopWatching(box);
+        if (j.status === "lost") { toast(LOST_MSG, true); return resolve(null); }
         if (j.status === "cancelled") { toast("Stopped. Videos finished before you pressed Cancel are kept."); return resolve(null); }
         if (j.status === "error") { toast(j.error, true); return resolve(null); }
         resolve(j.result);
