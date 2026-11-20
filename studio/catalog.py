@@ -55,44 +55,44 @@ LOOKS["clay"] = dict(label="Golu (clay 3D toy)", skin=(240, 190, 150), shirt=(15
 HIDDEN_LOOKS: set[str] = set()   # looks kept out of the Cast menu (still usable by script import and tests)
 _FLAT = {
     "flat_uncle": ("Flat: Uncle (red cap, vest)", False, dict(
-        kind="human", skin=(186, 122, 78), top="vest", top_color=(240, 238, 230), bottom="pants",
+        kind="human", skin=(232, 180, 138), top="vest", top_color=(240, 238, 230), bottom="pants",
         bottom_color=(190, 168, 112), hat="cap", hat_color=(214, 60, 45), hair="none", hair_color=(58, 36, 28),
         mustache=True, female=False, height=1.0)),
     "flat_aunty": ("Flat: Aunty (kurta, hair bun)", True, dict(
-        kind="human", skin=(204, 142, 98), top="kurta", top_color=(226, 92, 120), accent=(250, 200, 70),
+        kind="human", skin=(242, 196, 158), top="kurta", top_color=(226, 92, 120), accent=(250, 200, 70),
         bottom="dress", bottom_color=(120, 40, 70), hat=None, hair="bun", hair_color=(40, 30, 30),
         mustache=False, female=True, height=0.95, bindi=True)),
     "flat_boy": ("Flat: Boy (blue t-shirt, shorts)", False, dict(
-        kind="human", skin=(196, 136, 92), top="tshirt", top_color=(60, 130, 214), bottom="shorts",
+        kind="human", skin=(240, 192, 150), top="tshirt", top_color=(60, 130, 214), bottom="shorts",
         bottom_color=(60, 66, 84), hat=None, hair="short", hair_color=(30, 26, 26), mustache=False,
         female=False, height=0.78)),
     "flat_man": ("Flat: Young man (yellow t-shirt)", False, dict(
-        kind="human", skin=(176, 116, 74), top="tshirt", top_color=(240, 196, 60), bottom="pants",
+        kind="human", skin=(234, 184, 140), top="tshirt", top_color=(240, 196, 60), bottom="pants",
         bottom_color=(52, 70, 110), hat=None, hair="short", hair_color=(30, 26, 26), mustache=False,
         female=False, height=1.0)),
     "flat_girl": ("Flat: Girl (green kurta, long hair)", True, dict(
-        kind="human", skin=(206, 150, 106), top="kurta", top_color=(70, 170, 120), accent=(240, 240, 230),
+        kind="human", skin=(246, 204, 168), top="kurta", top_color=(70, 170, 120), accent=(240, 240, 230),
         bottom="dress", bottom_color=(240, 236, 226), hat=None, hair="long", hair_color=(36, 28, 28),
         mustache=False, female=True, height=0.9, bindi=False)),
     "flat_police": ("Flat: Police havaldar (khaki uniform, lathi)", False, dict(
-        kind="human", skin=(176, 116, 74), top="uniform", top_color=(196, 168, 110), bottom="pants",
+        kind="human", skin=(228, 176, 132), top="uniform", top_color=(196, 168, 110), bottom="pants",
         bottom_color=(196, 168, 110), hat="police_cap", hat_color=(196, 168, 110), band_color=(196, 40, 40),
         hair="none", hair_color=(40, 30, 28), mustache=True, female=False, height=1.0, belly=1.0, holds="lathi",
         shoe=(30, 28, 30))),
     "flat_kid": ("Flat: Kid, about 10 (striped t-shirt, shorts)", False, dict(
-        kind="human", skin=(198, 140, 96), top="tshirt", top_color=(230, 80, 70), bottom="shorts",
+        kind="human", skin=(242, 196, 156), top="tshirt", top_color=(230, 80, 70), bottom="shorts",
         bottom_color=(50, 80, 140), hat=None, hair="short", hair_color=(30, 26, 26), mustache=False,
         female=False, height=0.66, stripes=(250, 236, 220))),
     "flat_youth_a": ("Flat: Young man, 20 (open check shirt, quiff)", False, dict(
-        kind="human", skin=(206, 150, 104), top="open_shirt", top_color=(250, 250, 246), shirt_color=(200, 46, 52),
+        kind="human", skin=(244, 200, 160), top="open_shirt", top_color=(250, 250, 246), shirt_color=(200, 46, 52),
         bottom="pants", bottom_color=(46, 86, 160), hat=None, hair="quiff", hair_color=(34, 26, 24), mustache=False,
         stubble=True, watch=True, female=False, height=1.0, build=0.92, shoe=(245, 245, 245))),
     "flat_youth_b": ("Flat: Young man, 20 (hoodie, spiky hair)", False, dict(
-        kind="human", skin=(196, 140, 96), top="hoodie", top_color=(60, 66, 84), bottom="pants",
+        kind="human", skin=(238, 190, 148), top="hoodie", top_color=(60, 66, 84), bottom="pants",
         bottom_color=(36, 38, 46), hat=None, hair="spiky", hair_color=(28, 24, 24), mustache=False, stubble=False,
         female=False, height=1.0, build=0.92, shoe=(245, 245, 245))),
     "flat_youth_c": ("Flat: Young man, 20 (graphic tee, side fringe)", False, dict(
-        kind="human", skin=(184, 124, 82), top="tee_print", top_color=(250, 190, 40), accent=(36, 40, 60),
+        kind="human", skin=(232, 182, 140), top="tee_print", top_color=(250, 190, 40), accent=(36, 40, 60),
         accent2=(250, 250, 250), bottom="pants", bottom_color=(60, 96, 150), hat=None, hair="side",
         hair_color=(40, 28, 24), mustache=False, stubble=True, watch=True, female=False, height=1.0, build=0.95,
         shoe=(40, 40, 46))),

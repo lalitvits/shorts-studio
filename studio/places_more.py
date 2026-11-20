@@ -181,7 +181,7 @@ def _chai_tapri(im, d, P, L, PW, ps, rnd):
     # the chaiwala behind the counter (his pouring arm moves: animate)
     cx = 1140
     d.rounded_rectangle(P(cx - 95, 900, cx + 95, 1100), radius=L(50), fill=(250, 250, 244), outline=OUT, width=L(5))
-    d.ellipse(P(cx - 62, 760, cx + 62, 890), fill=(176, 116, 74), outline=OUT, width=L(5))           # head
+    d.ellipse(P(cx - 62, 760, cx + 62, 890), fill=(232, 182, 138), outline=OUT, width=L(5))           # head
     d.pieslice(P(cx - 66, 740, cx + 66, 840), 180, 360, fill=(40, 30, 28), outline=OUT, width=L(4))   # hair
     d.ellipse(P(cx - 30, 806, cx - 14, 822), fill=(30, 26, 26))
     d.ellipse(P(cx + 14, 806, cx + 30, 822), fill=(30, 26, 26))
@@ -268,8 +268,8 @@ def _tapri_animate(d, t, px, s, visible, x0, vw, PW, birds):
         hx, hy = 1240, 960 - 150 * lift                                                  # the hand with the kettle
         sx_, sy_ = px(1160, 930)
         ex, ey = px(hx, hy)
-        d.line([(sx_, sy_), (ex, ey)], fill=(176, 116, 74, 255), width=max(2, round(26 * s)))
-        d.ellipse([ex - 18 * s, ey - 18 * s, ex + 18 * s, ey + 18 * s], fill=(176, 116, 74, 255))
+        d.line([(sx_, sy_), (ex, ey)], fill=(232, 182, 138, 255), width=max(2, round(26 * s)))
+        d.ellipse([ex - 18 * s, ey - 18 * s, ex + 18 * s, ey + 18 * s], fill=(232, 182, 138, 255))
         k = s
         kx, ky = ex + 10 * k, ey - 10 * k
         d.polygon([(kx - 34 * k, ky - 40 * k), (kx + 34 * k, ky - 40 * k), (kx + 40 * k, ky + 20 * k), (kx - 40 * k, ky + 20 * k)],

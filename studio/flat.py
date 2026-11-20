@@ -58,7 +58,7 @@ def flat_spec(look: dict) -> dict:
         return look["flat"]
     fem = bool(look.get("female"))
     if look.get("outfit") == "saree":
-        return dict(kind="human", skin=look["skin"], top="kurta", top_color=(236, 222, 190), accent=(150, 40, 50),
+        return dict(kind="human", skin=(240, 192, 152), top="kurta", top_color=(236, 222, 190), accent=(150, 40, 50),
                     bottom="dress", bottom_color=(150, 40, 50), hat=None, hair="bun", hair_color=(150, 150, 160),
                     mustache=False, female=True, height=0.95, bindi=True)
     return dict(kind="human", skin=look.get("skin", (200, 140, 95)),
