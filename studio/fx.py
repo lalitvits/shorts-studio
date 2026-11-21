@@ -33,7 +33,16 @@ FX_LABELS = {"punch": "Punch hit (effect)", "slap": "Slap (effect)", "whoosh": "
              "tick": "Clock ticking (effect)", "scratch": "Record scratch (effect)",
              "sizzle": "Oil sizzling, chhann (effect)", "fire": "Fire flaring up (effect)",
              "splash": "Water splash (effect)", "footsteps": "Running footsteps (effect)",
-             "clang": "Metal clang, thali (effect)"}
+             "clang": "Metal clang, thali (effect)",
+             "slip": "Cartoon slip, wheee (effect)", "slide_up": "Slide whistle up (effect)",
+             "slide_down": "Slide whistle down, falling (effect)", "zip": "Cartoon zip, fast run (effect)",
+             "bonk": "Bonk on the head (effect)", "tweet": "Dizzy birds tweeting (effect)",
+             "crash": "Crash, smash (effect)", "glass_break": "Glass breaking (effect)",
+             "crickets": "Crickets, awkward silence (effect)", "wah_wah": "Sad trombone, wah wah waaah (effect)",
+             "tiptoe": "Sneaky tiptoe music (effect)", "awooga": "Awooga horn, eyes pop (effect)",
+             "spring": "Spring boing, doing (effect)", "fight": "Cartoon fight cloud (effect)",
+             "alarm": "Alarm clock ringing (effect)", "buzz": "Fly buzzing (effect)", "snore": "Snoring (effect)",
+             "boop": "Poke, boop (effect)"}
 MUSIC_LABELS = {"happy": "Happy (ukulele-style)", "comedy": "Comedy (bouncy)", "suspense": "Suspense",
                 "emotional": "Emotional (slow)", "heaven": "Heavenly (Swarg)", "hell": "Dark drums (Nark)",
                 "panic": "Panic (fast, tense)", "calm": "Calm, explaining (soft)"}
@@ -415,11 +424,228 @@ def _clang():
             + rnd.uniform(-1, 1) * math.exp(-(i / RATE) * 80) * 0.8 for i in range(n)]
 
 
+# ----------------------------------------------------------------- cartoon comedy sounds (stickman slapstick)
+def _glide(f0, f1, dur, vib=0.0, shape="sine", amp_env=None):
+    """A tone sliding from f0 to f1 Hz (a slide whistle when sine with a little vibrato)."""
+    n, ph, out = int(dur * RATE), 0.0, []
+    for i in range(n):
+        u = i / n
+        f = f0 * (f1 / f0) ** u
+        f *= 1 + vib * math.sin(TWO_PI * 6 * i / RATE)
+        ph += f / RATE
+        v = math.sin(TWO_PI * ph)
+        if shape == "brass":                                  # rich, buzzy (trombone / horn)
+            v = sum(math.sin(TWO_PI * ph * h) / h ** 0.8 for h in range(1, 8))
+        a = amp_env(u) if amp_env else min(1.0, u * 30) * min(1.0, (1 - u) * 12)
+        out.append(v * a)
+    return out
+
+
+def _slide_up():
+    return _glide(380, 1500, 0.55, vib=0.012)
+
+
+def _slide_down():
+    return _glide(1500, 300, 0.8, vib=0.012)
+
+
+def _slip():
+    """A banana-peel slip: a quick rising whistle with a squeak."""
+    a = _glide(500, 2200, 0.32, vib=0.03)
+    rnd = random.Random(21)
+    sq = [math.sin(TWO_PI * (2600 + 300 * math.sin(i / 90)) * i / RATE) * math.exp(-i / RATE * 18) * 0.5
+          + rnd.uniform(-1, 1) * 0.05 for i in range(int(0.15 * RATE))]
+    return sq + a
+
+
+def _zip():
+    """A cartoon zoom-off: a fast rising whoosh with a whistle on top."""
+    n, rnd, out, ph = int(0.45 * RATE), random.Random(5), [], 0.0
+    y = 0.0
+    for i in range(n):
+        u = i / n
+        y += 0.25 * (rnd.uniform(-1, 1) - y)
+        ph += (600 + 2600 * u * u) / RATE
+        env = math.sin(math.pi * min(1.0, u * 1.15)) ** 1.5
+        out.append(env * (y * 0.9 + 0.45 * math.sin(TWO_PI * ph)))
+    return out
+
+
+def _bonk():
+    """A hollow wooden bonk on the head."""
+    n, out = int(0.35 * RATE), []
+    for i in range(n):
+        t = i / RATE
+        f = 520 * (1 + 0.6 * math.exp(-t * 40))
+        out.append(math.sin(TWO_PI * f * t) * math.exp(-t * 16) + 0.5 * math.sin(TWO_PI * 2.7 * f * t) * math.exp(-t * 40))
+    return out
+
+
+def _tweet():
+    """Little birds tweeting around a dizzy head."""
+    out = [0.0] * int(1.4 * RATE)
+    for k in range(6):
+        s0 = int((0.05 + k * 0.21) * RATE)
+        n = int(0.12 * RATE)
+        ph = 0.0
+        for i in range(n):
+            u = i / n
+            ph += (3200 + 900 * math.sin(math.pi * u) + (k % 2) * 400) / RATE
+            out[s0 + i] += math.sin(TWO_PI * ph) * math.sin(math.pi * u) * 0.6
+    return out
+
+
+def _crash():
+    """A big smash: a thump plus bright crashing noise and rattling bits."""
+    n, rnd, out = int(1.1 * RATE), random.Random(9), []
+    y = 0.0
+    for i in range(n):
+        t = i / RATE
+        y += 0.6 * (rnd.uniform(-1, 1) - y)
+        boom = math.sin(TWO_PI * (60 + 50 * math.exp(-t * 25)) * t) * math.exp(-t * 9)
+        rattle = rnd.uniform(-1, 1) * (math.exp(-t * 4) * 0.4 if rnd.random() < 0.25 else 0)
+        out.append(boom + y * math.exp(-t * 6) * 0.8 + rattle)
+    return out
+
+
+def _glass_break():
+    rnd, out = random.Random(17), [0.0] * int(1.2 * RATE)
+    for k in range(26):                                      # many little glass pieces ringing
+        s0 = int(rnd.uniform(0, 0.6) ** 2 * RATE)
+        f = rnd.uniform(2500, 7000)
+        a = rnd.uniform(0.2, 0.6)
+        for i in range(min(int(0.25 * RATE), len(out) - s0)):
+            t = i / RATE
+            out[s0 + i] += a * math.sin(TWO_PI * f * t) * math.exp(-t * 30)
+    for i in range(int(0.2 * RATE)):                         # the first crack
+        out[i] += rnd.uniform(-1, 1) * math.exp(-i / RATE * 25)
+    return out
+
+
+def _crickets():
+    out = [0.0] * int(2.4 * RATE)
+    for k in range(8):
+        s0 = int((0.1 + k * 0.3) * RATE)
+        for c in range(3):                                   # one chirp = 3 fast pulses
+            for i in range(int(0.03 * RATE)):
+                j = s0 + int(c * 0.045 * RATE) + i
+                if j < len(out):
+                    out[j] += math.sin(TWO_PI * 4300 * i / RATE) * math.sin(math.pi * i / (0.03 * RATE)) * 0.5
+    return out
+
+
+def _wah_wah():
+    """The sad trombone: wah wah wah waaaah."""
+    out = []
+    for f, dur, vib in ((311, 0.45, 0.0), (294, 0.45, 0.0), (277, 0.45, 0.0), (262, 1.3, 0.03)):
+        out += _glide(f * 1.02, f * 0.97, dur, vib=vib, shape="brass",
+                      amp_env=lambda u: min(1.0, u * 8) * (1 - u) ** 0.6)
+    return out
+
+
+def _tiptoe():
+    """Sneaky pizzicato steps (plink ... plonk ... plink ...)."""
+    out = [0.0] * int(2.6 * RATE)
+    notes = (55, 59, 62, 59, 55, 58, 62, 58)
+    for k, m in enumerate(notes):
+        s0 = int(k * 0.3 * RATE)
+        f = _note(m)
+        for i in range(int(0.25 * RATE)):
+            t = i / RATE
+            out[s0 + i] += (math.sin(TWO_PI * f * t) + 0.3 * math.sin(TWO_PI * 2 * f * t)) * math.exp(-t * 18)
+    return out
+
+
+def _awooga():
+    """The old car horn: a-WOO-ga."""
+    out = _glide(220, 330, 0.4, shape="brass", amp_env=lambda u: min(1.0, u * 10) * (1 - 0.3 * u))
+    out += _glide(330, 300, 0.35, shape="brass", amp_env=lambda u: (1 - u) ** 0.5)
+    return out
+
+
+def _spring():
+    """A spring: doi-oi-oing."""
+    n, ph, out = int(0.8 * RATE), 0.0, []
+    for i in range(n):
+        t = i / RATE
+        ph += (260 + 180 * math.sin(TWO_PI * 18 * t) * math.exp(-t * 4)) / RATE
+        out.append((math.sin(TWO_PI * ph) + 0.3 * math.sin(TWO_PI * ph * 3.01)) * math.exp(-t * 4))
+    return out
+
+
+def _fight():
+    """A cartoon brawl in a dust cloud: punches, slaps and whooshes all mixed up."""
+    rnd = random.Random(33)
+    out = [0.0] * int(2.4 * RATE)
+    parts = [_punch(), _slap(), _boing(), _whoosh(), _bonk()]
+    t = 0.0
+    while t < 2.1:
+        snd = parts[rnd.randrange(len(parts))]
+        s0 = int(t * RATE)
+        a = rnd.uniform(0.35, 0.7)
+        for i in range(min(len(snd), len(out) - s0)):
+            out[s0 + i] += snd[i] * a
+        t += rnd.uniform(0.09, 0.22)
+    return out
+
+
+def _alarm():
+    """An old alarm clock: a hammer rattling between two bells, in bursts."""
+    n, out = int(2.4 * RATE), []
+    for i in range(n):
+        t = i / RATE
+        on = (t % 0.6) < 0.45
+        hit = (t * 28) % 1.0
+        env = math.exp(-hit * 6) if on else 0.0
+        v = (math.sin(TWO_PI * 2350 * t) + 0.7 * math.sin(TWO_PI * 3120 * t) + 0.4 * math.sin(TWO_PI * 5400 * t))
+        out.append(v * env)
+    return out
+
+
+def _buzz():
+    """A fly buzzing around: a raspy hum that swells and fades as it circles."""
+    n, ph, out = int(2.2 * RATE), 0.0, []
+    for i in range(n):
+        t = i / RATE
+        ph += (210 + 25 * math.sin(TWO_PI * 1.7 * t) + 8 * math.sin(TWO_PI * 23 * t)) / RATE
+        saw = 2 * (ph % 1.0) - 1
+        out.append(saw * (0.45 + 0.55 * math.sin(math.pi * t / 2.2) * (0.6 + 0.4 * math.sin(TWO_PI * 1.1 * t))))
+    return _lowpass(out, 0.35)
+
+
+def _snore():
+    """One big cartoon snore: a rattly breath in, then a whistling breath out."""
+    rnd, out = random.Random(41), []
+    n1 = int(0.9 * RATE)
+    y = 0.0
+    for i in range(n1):                                   # zzzrrrk (in)
+        t = i / RATE
+        y += 0.2 * (rnd.uniform(-1, 1) - y)
+        rattle = 0.5 + 0.5 * math.sin(TWO_PI * 32 * t)
+        out.append((y * 2 + 0.5 * math.sin(TWO_PI * 85 * t)) * rattle * math.sin(math.pi * i / n1))
+    out += [0.0] * int(0.15 * RATE)
+    out += [v * 0.5 for v in _glide(900, 600, 0.7, vib=0.01)]   # pheeew (out)
+    return out
+
+
+def _boop():
+    """A cartoon poke: a short, round boop."""
+    n, ph, out = int(0.18 * RATE), 0.0, []
+    for i in range(n):
+        t = i / RATE
+        ph += (700 + 500 * math.exp(-t * 40)) / RATE
+        out.append(math.sin(TWO_PI * ph) * math.exp(-t * 22))
+    return out
+
+
 MAKERS = {"punch": _punch, "slap": _slap, "whoosh": _whoosh, "pop": _pop, "ding": _ding, "boing": _boing,
           "thud": _thud, "growl": _growl, "ping": _ping, "doorbell": _doorbell, "chappal": _chappal,
           "laugh_track": _laugh_track, "boom": _boom, "dun_dun": _dun_dun, "click": _click, "tick": _tick,
           "scratch": _scratch, "sizzle": _sizzle, "fire": _fire, "splash": _splash, "footsteps": _footsteps,
-          "clang": _clang}
+          "clang": _clang, "slip": _slip, "slide_up": _slide_up, "slide_down": _slide_down, "zip": _zip,
+          "bonk": _bonk, "tweet": _tweet, "crash": _crash, "glass_break": _glass_break, "crickets": _crickets,
+          "wah_wah": _wah_wah, "tiptoe": _tiptoe, "awooga": _awooga, "spring": _spring, "fight": _fight,
+          "alarm": _alarm, "buzz": _buzz, "snore": _snore, "boop": _boop}
 
 
 def fx_wav(fx_id: str) -> Path:

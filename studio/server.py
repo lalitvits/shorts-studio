@@ -51,7 +51,10 @@ def assets_payload() -> dict:
         "explainers": [{"id": k, "label": v} for k, v in __import__("studio.kitchen", fromlist=["x"]).EXPLAINERS.items()],
         "voices": VOICES, "default_voice": DEFAULT_VOICE,
         "voice_tune": {k: list(v) for k, v in __import__("studio.catalog", fromlist=["x"]).VOICE_TUNE.items()},
-        "emotions": EMOTIONS, "actions": [{"id": k, "label": v} for k, v in ACTION_LABELS.items()],
+        "emotions": EMOTIONS,
+        "actions": [{"id": k, "label": ("Comedy: " + v) if k in __import__("studio.catalog", fromlist=["x"]).SLAPSTICK_LABELS
+                     else v} for k, v in ACTION_LABELS.items()],
+        "effects": [{"id": k, "label": v} for k, v in __import__("studio.catalog", fromlist=["x"]).EFFECT_LABELS.items()],
         "sounds": [{"id": k, "label": v} for k, v in SOUND_LABELS.items()], "sound_emotions": SOUND_EMOTIONS,
         "script_providers": script_mod.provider_status(),
         "system": {"gemini_voices_left": __import__("studio.gemini_tts", fromlist=["x"]).lines_left(),
@@ -172,8 +175,12 @@ class Handler(BaseHTTPRequestHandler):
                 from urllib.parse import parse_qs, urlparse
                 from . import script_format
                 q = parse_qs(urlparse(self.path).query)
-                text = script_format.build_format(q.get("idea", [""])[0], q.get("language", ["hi"])[0],
-                                                  int(float(q.get("seconds", ["45"])[0] or 45)))
+                if q.get("kind", [""])[0] == "stickman":      # no-dialogue stickman comedy
+                    text = script_format.build_stick_format(q.get("idea", [""])[0],
+                                                            int(float(q.get("seconds", ["30"])[0] or 30)))
+                else:
+                    text = script_format.build_format(q.get("idea", [""])[0], q.get("language", ["hi"])[0],
+                                                      int(float(q.get("seconds", ["45"])[0] or 45)))
                 return self._json({"text": text})
             if path == "/api/backgrounds":                      # look in the backgrounds folders again
                 return self._json({"backgrounds": list_backgrounds(True), "bg_folder": folder_info()})

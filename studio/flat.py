@@ -23,7 +23,7 @@ from .catalog import BUILD_VALUES, FLAT_BACKGROUNDS, HEIGHT_VALUES, LOOKS, OUTFI
 from .places import PLACES, animate as animate_place, draw_static as draw_place
 from .realms import REALMS, animate as animate_realm, draw_static as draw_realm
 from .rig import KEEP_EMOTION, PERSISTENT, blink_amount
-from . import kitchen
+from . import kitchen, stick
 
 OUT = (36, 31, 32)          # outline colour
 OL = 5.5                    # outline width (world units)
@@ -32,9 +32,10 @@ STRONG = {"angry", "shocked", "surprised", "crying", "laughing", "scared", "exci
 SHOTS = ("auto", "wide", "single", "ots", "close")
 PHONE_ACTIONS = {"use_phone", "sit_phone", "phone_call"}
 # actions a character keeps doing while someone else talks (on top of the rig's long activities)
-FLAT_PERSIST = PERSISTENT | {"cook", "hold_jug", "lower_jug", "hand_on_shoulder", "look_camera"}
-TWO_PERSON = {"grab_hand", "hand_on_shoulder"}
-SMOOTH_ACTIONS = {"eat", "sit_eat", "drink_tea", "sit_tea", "cook"}   # drawn at 15 poses a second even when silent            # the actor walks up to the nearest other character
+FLAT_PERSIST = PERSISTENT | {"cook", "hold_jug", "lower_jug", "hand_on_shoulder", "look_camera"} | stick.STAYS | \
+    stick.LOOPS
+TWO_PERSON = {"grab_hand", "hand_on_shoulder"} | stick.TWO_PERSON
+SMOOTH_ACTIONS = {"eat", "sit_eat", "drink_tea", "sit_tea", "cook"} | set(stick.SLAPSTICK)   # drawn at 15 poses a second even when silent            # the actor walks up to the nearest other character
 MOVE_S = 0.5                                              # seconds that walk-up takes
 
 
@@ -319,6 +320,7 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
         p["head_dy"] = 8
         p["dy"] += 4 * s(t * 16)
     elif action in ("use_phone", "sit_phone"):
+        p["sit"] = action == "sit_phone"
         p["R"] = ("ik", 30, -700)
         p["L"] = ("ik", -10, -690)
         p["prop"] = "phone"
@@ -378,6 +380,7 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
         p["head_dy"] = 6 if 0.28 <= u < 0.48 else 0
     elif action in ("sit", "sit_sleep"):
         p["L"] = p["R"] = HIP_T if action == "sit" else ("fk", 12, -6)
+        p["sit"] = True
     elif action == "cook":                  # stirring the kadhai with a jhara
         p["R"] = ("fk", 64 + 7 * s(t * 4), 28 + 8 * s(t * 4 + 1))
         p["L"] = ("fk", 16, -10)
@@ -425,6 +428,8 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
     elif action == "look_camera":           # looks straight at the camera
         p["L"] = p["R"] = ("fk", 12, -6)
         p["eyes_dir"] = 0.0
+    elif action in stick.SLAPSTICK:         # slip, fall, fly off, faint, chase... (stick.py)
+        stick.slapstick_pose(p, action, emotion, t)
     if emotion == "laughing":
         p["dy"] += 6 * s(t * 22)
     if emotion in ("sad", "bored", "sleepy"):
@@ -708,6 +713,9 @@ def _cycle(pen, bx, f, t, spin, color=(214, 60, 52)):
 
 def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
     bw = sp.get("build", 1.0)                       # 0.86 thin .. 1.5 very fat
+    if pose.get("cloud"):                            # fighting inside a dust cloud: only the cloud shows
+        stick.cartoon_fx(Pen(im, ox, oy, s), set(pose.get("fx", ())), 0, -890, 104, t, sp["skin"])
+        return
     if pose.get("cycle") and view != "back":         # standing with a cycle: it is beside them
         _cycle(Pen(im, ox + pose["dx"] * s, oy, s), 300, -1, t, 0.0, sp.get("cycle_color", (214, 60, 52)))
     if pose.get("ride") is not None:                 # riding: the cycle under them
@@ -740,6 +748,10 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
     for side in ((-1, 1) if pose.get("ride") is None else ()):
         sw = 26 * math.sin(wk * 8) * side if wk else 0
         top, foot = (side * 44 * lw, hip_y), (side * 50 * lw + sw, -34)
+        if side > 0 and pose.get("kick"):              # a kick: the right leg swings forward
+            ka = math.radians(100 * pose["kick"])
+            ll = -34 - hip_y
+            foot = (top[0] + ll * math.sin(ka), hip_y + ll * math.cos(ka))
         if sp["bottom"] == "shorts":
             mid = (side * 47 + sw * 0.4, -330)
             pen.limb([mid, foot], 30, skin)
@@ -747,6 +759,9 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         else:
             pen.limb([top, foot], (36 if dress else 40) * lw ** 0.5,
                      sp["bottom_color"] if not dress else _mix(sp["bottom_color"], 1.1))
+        if side > 0 and pose.get("kick"):
+            pen.ellipse(foot[0] - 34, foot[1] - 20, foot[0] + 50, foot[1] + 20, sp.get("shoe", (44, 40, 42)))
+            continue
         pen.ellipse(side * 50 + sw - 42 + side * 8, -46, side * 50 + sw + 42 + side * 8, -6, sp.get("shoe", (44, 40, 42)))
 
     def _arms():
@@ -883,19 +898,30 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         pen.pie(hx - r * 0.8, hy - r * 0.02, hx + r * 0.8, hy + r * 1.0, 0, 180, _mix(skin, 0.86), 0)
         pen.ellipse(hx - r * 0.5, hy + r * 0.48, hx + r * 0.5, hy + r * 0.92, _mix(skin, 0.8), 0)
     if not back:
-        cfg = _face_cfg(emotion)
+        cfg = _face_cfg(pose.get("emo") or emotion)
+        if pose.get("eyes"):
+            cfg["eyes"] = pose["eyes"]
         look = pose.get("eyes_dir", 0.0)
         fx_ = hx + 6
         ey = hy - 4
-        _eye(pen, fx_ - 38, ey, cfg["eyes"], blink, look)
-        _eye(pen, fx_ + 38, ey, cfg["eyes"], blink, look)
+        popping = "eyes_pop" in pose.get("fx", ())
+        for ex in (fx_ - 38, fx_ + 38):
+            if popping:
+                pen.circle(ex, ey, 12, (40, 30, 30), 0)
+            elif not stick.eye_extra(pen, ex, ey, cfg["eyes"], t):
+                _eye(pen, ex, ey, cfg["eyes"], blink, look)
         _brows(pen, fx_, ey - 36 - (8 if cfg["eyes"] == "wide" else 0), cfg["brow"])
         pen.arc(fx_ - 12, hy + 8, fx_ + 14, hy + 34, 300, 110, 4.5, _mix(skin, 0.6))
         if sp.get("bindi"):
             pen.circle(fx_, hy - 52, 6, (200, 30, 40), 0)
         if pose.get("chew") is not None and mouth < 0.05:     # eating: open for the bite, then chewing
             mouth = pose["chew"]
-        _mouth(pen, fx_, hy + 72, cfg["mouth"], mouth, t)
+        if pose.get("jaw"):                                  # jaw drop: a huge open mouth
+            h = 30 + 80 * pose["jaw"]
+            pen.ellipse(fx_ - 40, hy + 46, fx_ + 40, hy + 46 + h, (110, 26, 34), 4.5)
+            pen.ellipse(fx_ - 22, hy + 46 + h * 0.55, fx_ + 22, hy + 46 + h * 0.95, (232, 110, 120), 0)
+        else:
+            _mouth(pen, fx_, hy + 72, cfg["mouth"], mouth, t)
         if sp.get("mustache"):
             mc = sp.get("hair_color", (60, 38, 30))
             pen.poly([(fx_ - 50, hy + 54), (fx_ - 30, hy + 36), (fx_, hy + 42), (fx_ + 30, hy + 36), (fx_ + 50, hy + 54),
@@ -903,6 +929,8 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         if female and cfg["mouth"] in ("smile", "smile_s", "flat") and mouth <= 0.08:
             pass
         _effects(pen, cfg["fx"], fx_, hy, r, t)
+        if popping:
+            stick.eyes_pop(pen, fx_, ey, t)
 
     if not pose.get("arms_behind"):
         _arms()
@@ -911,6 +939,8 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         pen.d.rounded_rectangle(pen.box(-170 * bw, -520, -60 * bw, -400), radius=12 * pen.s, fill=(150, 96, 56),
                                 outline=OUT, width=pen.wd(4))
         pen.line([(-160 * bw, -490), (-70 * bw, -490)], (110, 70, 40), 5)
+    if pose.get("fx"):
+        stick.cartoon_fx(pen, set(pose["fx"]), hx, hy, r, t, sp["skin"])
 
 def _phone_back(pen, cx, cy, w, h, skin=None):
     """A real-sized smartphone seen from the back (what you see when someone looks at their phone):
@@ -1403,8 +1433,14 @@ def render_sprite(sp, view, face_dir, scale_px, pose, emotion, mouth, blink, t, 
     the part of the character outside the frame is not drawn."""
     ss = 2
     s = scale_px * ss * sp.get("height", 1.0)
-    animal = sp["kind"] not in ("human", "brain")
-    x0, y0, x1, y1 = ANIMAL_BOX if animal else BRAIN_BOX if sp["kind"] == "brain" else HUMAN_BOX
+    animal = sp["kind"] in ("dog", "cat")
+    x0, y0, x1, y1 = ANIMAL_BOX if animal else BRAIN_BOX if sp["kind"] == "brain" else \
+        stick.STICK_BOX if sp["kind"] == "stick" else HUMAN_BOX
+    turned = any(pose.get(q) for q in ("rot", "tx", "ty", "sq"))
+    if turned:                              # falling over / rolling: room all round
+        x0, y0, x1, y1 = stick.TURN_BOX
+    elif pose.get("fx"):                    # effects above the head and beside the body
+        x0, y0, x1, y1 = min(x0, -720), min(y0, -1480), max(x1, 760), y1
     if below_px is not None:
         y1 = min(y1, below_px * ss / s + 8)
     W, H = max(4, int((x1 - x0) * s) // 2 * 2), max(4, int((y1 - y0) * s) // 2 * 2)
@@ -1414,8 +1450,18 @@ def render_sprite(sp, view, face_dir, scale_px, pose, emotion, mouth, blink, t, 
         draw_brain(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t, speaking)
     elif animal:
         draw_animal(im, ox, oy, s, sp, pose, emotion, mouth, blink, t, speaking)
+    elif sp["kind"] == "stick":
+        stick.draw_stick(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t)
     else:
         draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t)
+    if pose.get("sq"):                      # squashed (hit on the head, splat on a wall): around the feet
+        kx, ky = pose["sq"]
+        small = im.resize((max(1, round(W * kx)), max(1, round(H * ky))), Image.BICUBIC)
+        im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        im.alpha_composite(small, (max(0, round(ox - ox * kx)), max(0, round(oy - oy * ky))))
+    if pose.get("rot") or pose.get("tx") or pose.get("ty"):
+        im = im.rotate(pose.get("rot", 0.0), resample=Image.BICUBIC, center=(ox, oy + pose.get("piv", -450) * s),
+                       translate=(pose.get("tx", 0.0) * s, pose.get("ty", 0.0) * s))
     im = im.reduce(ss)                      # fast 2x box filter = smooth edges
     W, H = im.size
     ox, oy = ox / ss, oy / ss
@@ -1655,6 +1701,12 @@ class FlatComposer:
                 kind = "auto"
             auto = kind == "auto"
             acts = {ln.action, getattr(ln, "actor_action", "")}
+            if auto and self._stick_scene(sc) and len(cast) > 1:   # stickman comedy: everyone in view, always
+                kind = "close" if "jaw_drop" in acts and last_close.get(subj, -9) < i - 3 else "wide"
+                auto = False
+            if auto and acts & stick.NEED_WIDE:              # slapstick needs the whole body (and the floor) in view
+                kind = "wide" if len(cast) > 1 else "single"
+                auto = False
             if auto:
                 if len(cast) > 1 and (narr and not getattr(ln, "actor", "") or acts & TWO_PERSON
                                       or acts & (kitchen.STOVE_ACTIONS | {"look_camera"})):
@@ -1665,7 +1717,7 @@ class FlatComposer:
                     kind = "wide"
                 elif ln.emotion in STRONG and last_close.get(subj, -9) < i - 2:
                     kind = "close"
-                elif partner and len(cast) == 2 and not self._animal(partner) and self.specs[partner]["kind"] != "brain":
+                elif partner and len(cast) == 2 and not self._animal(partner) and                         self.specs[partner]["kind"] not in ("brain", "stick"):     # a stickman's back is just a circle
                     kind = "ots"
                 else:
                     kind = "single"
@@ -1709,7 +1761,11 @@ class FlatComposer:
         if t == "wide":
             n = len(cast)
             sc_ = 0.82 if n <= 2 else max(0.55, 0.82 - 0.09 * (n - 2))
+            if self._stick_scene(sc):                           # stickmen: a wider view, room to fall and run
+                sc_ = 0.68 if n <= 2 else max(0.5, 0.68 - 0.07 * (n - 2))
             xs = [540] if n == 1 else [FW * (0.2 + 0.6 * i / (n - 1)) for i in range(n)]
+            if self._stick_scene(sc) and n == 2:
+                xs = [FW * 0.2, FW * 0.86]
             if stove:                                          # everyone to the left of the stove
                 xs = [400] if n == 1 else [FW * (0.13 + 0.47 * i / (n - 1)) for i in range(n)]
             for i, cid in enumerate(cast):
@@ -1743,6 +1799,25 @@ class FlatComposer:
                     actors.append(dict(cid=partner, view="back", x=930, g=G + 1490, scale=2.1, face=1, back=True))
             bg = (base - 380, 1.0, True)
         return dict(bg=bg, actors=actors, ground=G, type=t)
+
+    def _stick_scene(self, sc) -> bool:
+        return bool(sc.cast) and all(self.specs[c]["kind"] == "stick" for c in sc.cast)
+
+    def _sleeping(self, sc, cid, t) -> bool:
+        """Lying asleep on the floor right now (their latest action is lie_sleep)."""
+        last = None
+        for m in self._acts(sc, cid):
+            if m[0] > t:
+                break
+            last = m[2]
+        return last in ("lie_sleep",)
+
+    def _lie_place(self, a, sp):
+        """Where someone asleep on the floor lies: feet near the frame edge, head toward the middle."""
+        su = a["scale"] * sp.get("height", 1.0)
+        if a["x"] < FW / 2:
+            return 0.03 * FW + 450 * su, -1, 0.03 * FW + 1040 * su           # (feet anchor x, face, head x)
+        return 0.97 * FW - 450 * su, 1, 0.97 * FW - 1040 * su
 
     def _stove_scene(self, sc) -> bool:
         """A kitchen scene where the kadhai matters: the camera keeps the stove in view."""
@@ -1803,9 +1878,12 @@ class FlatComposer:
                 others = [o for o in lay["actors"] if o["cid"] != cid and not o.get("back")]
                 if others:
                     o = min(others, key=lambda o: abs(o["x"] - a["x"]))
-                    side = 1 if o["x"] > a["x"] else -1
-                    dist = (300 if action == "grab_hand" else 250) * max(a["scale"], o["scale"])
-                    tgt, face = o["x"] - side * dist, side
+                    ox_ = o["x"]
+                    if self._sleeping(sc, o["cid"], t):          # asleep on the floor: go to their head
+                        ox_ = self._lie_place(o, self.specs[o["cid"]])[2]
+                    side = 1 if ox_ > a["x"] else -1
+                    dist = (300 if action == "grab_hand" or ox_ != o["x"] else 250) * max(a["scale"], o["scale"])
+                    tgt, face = ox_ - side * dist, side
             if tgt is None:
                 continue
             e = min(1.0, (t - start) / MOVE_S)
@@ -1872,11 +1950,30 @@ class FlatComposer:
         mine = self._acts(sc, cid)
         off = -330 if a["x"] < FW / 2 else FW + 330           # leave / enter on the nearer side of the frame
         for i, (start, _end, action, _em, _l, _sp) in enumerate(mine):
+            if i + 1 < len(mine) and mine[i + 1][0] <= t and action in ("run_across", "chase", "fly_away"):
+                continue                                      # came back for a later line
             dur = self.RUN_S if action in ("run_in", "run_out") else self.WALK_S * (0.8 if "ride" in action else 1.0)
             u = (t - start) / dur
             kind = "run" if action.startswith("run") else "ride" if action.startswith("ride") else "walk"
             if action == "appear" and u < 0 and i == 0:            # not there yet, then simply there
                 return "hidden"
+            if action in ("run_across", "chase"):                 # dashes across the whole screen, left to right
+                u = (t - start - (0.3 if action == "chase" else 0.0)) / 1.3
+                if u < 0:
+                    if i == 0:
+                        return "hidden"
+                    continue
+                if u >= 1:
+                    return "hidden"
+                return (-330 + (FW + 660) * u, 1, "dash")
+            if action == "fly_away" and u >= 0 and t - start >= 1.15:   # thrown off the screen: gone
+                return "hidden"
+            if action == "sneak_in":
+                u = (t - start) / 2.6
+                if u < 0 and i == 0:
+                    return "hidden"
+                if 0 <= u < 1:
+                    return (off + (a["x"] - off) * u, 1 if a["x"] > off else -1, "sneak")
             if action in ("walk_in", "run_in", "ride_in"):
                 if u < 0 and i == 0:
                     return "hidden"
@@ -1983,22 +2080,27 @@ class FlatComposer:
                 action = recent[2] if recent[2] in FLAT_PERSIST else "idle"
                 emotion = recent[3] if recent[3] in KEEP_EMOTION or recent[2] == "look_camera" else "neutral"
                 t_act, key = t - sc.start, cid
-            if action in ("step_back", "lower_jug") and now is None:
+            if action in ("step_back", "lower_jug") + tuple(stick.STAYS) and now is None:
                 t_act = 9.0                            # stays stepped back / jug down
             walk = self._walk(sc, cid, a, t)          # walking in or out of the frame
             if walk == "hidden":
                 continue
             if walk:
                 a = dict(a, x=walk[0], face=walk[1], travel=walk[1])
-                action = "ride" if walk[2] == "ride" else "walk"
+                action = {"ride": "ride", "dash": "cartoon_run", "sneak": "tiptoe"}.get(walk[2], "walk")
                 t_act = (t - sc.start) * (2.2 if walk[2] == "run" else 1.0)
-            elif action in ("walk_in", "walk_out", "appear", "run_in", "run_out", "ride_out"):
+            elif action in ("walk_in", "walk_out", "appear", "run_in", "run_out", "ride_out", "sneak_in"):
                 action = "talk" if speaking else "idle"
             elif action == "ride_in":                  # arrived on the cycle: stands with it
                 action = "talk" if speaking else "idle"
             mv = self._moved_x(sc, cid, a, lay, x0, z, t)       # walked up to the stove / to someone
             if mv is not None and not walk:
                 a = dict(a, x=mv[0], face=mv[1])
+            if action in ("lie_sleep", "wake_jolt") and not walk and lay.get("type") in ("wide", "single"):
+                lx, lf, _hx = self._lie_place(a, sp)           # asleep: head toward the middle, room for the alarm
+                a = dict(a, x=lx, face=lf)
+            reach_down = action in stick.TWO_PERSON and any(  # poking / shaking someone asleep on the floor
+                self._sleeping(sc, o["cid"], t) for o in lay["actors"] if o["cid"] != cid)
             still = speaking and line.action == "idle"
             mouth = line.clip.mouth_at(t - line.start) if speaking and not still else 0.0
             if not speaking:
@@ -2018,31 +2120,69 @@ class FlatComposer:
                         glows.append((a["x"] * k, (a["g"] - 1.45 * three_d_unit()) * k, a["scale"] * k, "phone"))
                     continue
                 sp = sp["fallback"]
-            if sp["kind"] in ("human", "brain"):
+            if sp["kind"] in ("human", "brain", "stick"):
                 pose = pose_for(action, emotion, tq, speaking, key)
             else:
                 pose = dict(dy=0.0, walk=tq if action == "walk" else 0.0)
-            held = self._held(sc, cid, t) if sp["kind"] == "human" else None
+            eff = ""                                   # the line's cartoon effect (dizzy stars, "!", hearts...)
+            if now is not None and getattr(now[4], "effect", "") and (now[5] or now[4].char not in sc.cast):
+                eff = now[4].effect
+                if sp["kind"] in ("human", "stick"):
+                    pose["fx"] = set(pose.get("fx", ())) | {eff}
+            held = self._held(sc, cid, t) if sp["kind"] in ("human", "stick") else None
+            if reach_down and sp["kind"] in ("human", "stick"):     # bend down to the one on the floor
+                pose["crouch"] = 0.55
+                pose["rot"], pose["piv"] = -12, -20
+                pose["R"] = ("ik", 250 + pose["dx"] * 1.5, -330)
+                if action == "shake_awake":
+                    pose["L"] = ("ik", -150 - pose["dx"], -300)
+                pose["dx"] = 0.0
             if held:                                   # something they carry (a line's "prop")
                 hold_prop(pose, held, action)
             if a.get("back"):                    # big foreground back: hardly moves, so it is drawn once
-                tq, mq, blink = (round(t_act * 6) / 6 if sp["kind"] != "human" else 0.0), 0.0, 0.0
-                if sp["kind"] == "human":
+                tq, mq, blink = (round(t_act * 6) / 6 if sp["kind"] not in ("human", "stick") else 0.0), 0.0, 0.0
+                if sp["kind"] in ("human", "stick"):
                     pose = pose_for("rest" if action in ("idle", "talk") else action, "neutral", 0.0, False, key)
                     pose["dy"] = 0.0
             scale_px = a["scale"] * k
             ck = (cid, a["view"], a["face"], round(scale_px, 3), action, emotion, mq, round(blink, 1), tq, speaking, key,
-                  held)
+                  held, eff, reach_down)
             below = (FH - a["g"]) * k
             spr, (ax, ay) = self.sprites.get(ck, lambda: render_sprite(sp, a["view"], a["face"], scale_px, pose,
                                                                      emotion, mq, blink, tq, speaking, below))
             fx, fy = a["x"] * k, a["g"] * k
-            if a["g"] < FH:   # feet in the frame: soft shadow on the ground
-                wpx = round((300 if sp["kind"] == "human" else 360) * scale_px)
+            rot = pose.get("rot", 0.0)
+            if rot and not pose.get("move"):          # lying down: keep the head and the feet inside the frame
+                hk = scale_px * sp.get("height", 1.0)
+                sr = math.sin(math.radians(rot)) * a["face"]
+                ends = (fx - 590 * sr * hk, fx + 450 * sr * hk)
+                lo, hi = 0.05 * self.w, 0.95 * self.w
+                if min(ends) < lo:
+                    fx += lo - min(ends)
+                elif max(ends) > hi:
+                    fx -= max(ends) - hi
+            if a["g"] < FH and not pose.get("cloud"):   # feet in the frame: soft shadow on the ground
+                wpx = round((300 if sp["kind"] in ("human", "stick") else 360) * scale_px)
                 sh = _shadow(wpx, max(2, round(wpx * 0.12)))
                 im.paste(sh, (round(fx - sh.width / 2), round(fy - sh.height / 2)), sh)
+            if action == "slip_fall" and t_act < 3:  # the banana peel that did it
+                stick.draw_peel(im, fx, fy, scale_px * sp.get("height", 1.0), a["face"], t_act)
+            if eff == "alarm":                        # a ringing alarm clock beside them (by the head when lying)
+                hk = scale_px * sp.get("height", 1.0)
+                lying = abs(math.sin(math.radians(pose.get("rot", 0.0)))) > 0.7
+                sr = math.sin(math.radians(pose.get("rot", 0.0))) * a["face"]
+                ax_ = fx - 590 * sr * hk - (130 if sr > 0 else -130) * hk if lying else fx - a["face"] * 300 * hk
+                ax_ = min(max(ax_, 90 * hk), self.w - 90 * hk)
+                stick.draw_alarm(im, ax_, fy, hk, t)
+            if action == "crash_wall":               # the wall they run into
+                hk = scale_px * sp.get("height", 1.0)
+                stick.draw_wall(im, fx + a["face"] * 330 * hk, fy, hk, a["face"])
+            if pose.get("move"):                     # thrown off the screen / running at a wall
+                hk = scale_px * sp.get("height", 1.0)
+                fx += a["face"] * pose["move"][0] * hk
+                fy += pose["move"][1] * hk
             im.paste(spr, (round(fx - ax), round(fy - ay)), spr)
-            if action in PHONE_ACTIONS and sp.get("kind") == "human":
+            if action in PHONE_ACTIONS and sp.get("kind") in ("human", "stick"):
                 glows.append((fx, fy - (900 - 120) * a["scale"] * k * sp.get("height", 1.0), a["scale"] * k, "phone"))
             if sp.get("kind") == "brain":                   # the inner voice glows on its own in the dark
                 glows.append((fx, fy - 830 * a["scale"] * k, a["scale"] * k, "self"))

@@ -254,6 +254,7 @@ function renderScenes() {
           <div class="line-sub four extras">
             <input aria-label="Phone notification on screen (optional)" lang="hi" placeholder="Notification pop-up (optional)" data-path="scenes.${si}.lines.${li}.popup" value="${esc(ln.popup || "")}">
             <select aria-label="Sticker" data-path="scenes.${si}.lines.${li}.sticker"><option value="">No sticker</option>${opts((A.stickers || []).map(x => ({ id: x, label: "Sticker: " + x })), ln.sticker || "")}</select>
+            <select aria-label="Cartoon effect around the speaker" title="Drawn around the speaker during this line: dizzy stars, !, ?, hearts, rain cloud..." data-path="scenes.${si}.lines.${li}.effect">${opts(A.effects || [{ id: "", label: "Effect: none" }], ln.effect || "")}</select>
             <select aria-label="Room light" data-path="scenes.${si}.lines.${li}.lights">${opts([{ id: "", label: "Light: no change" }, { id: "on", label: "Light switches ON" }, { id: "off", label: "Light switches OFF" }], ln.lights || "")}</select>
           </div>
           <div class="line-sub four extras">
@@ -458,6 +459,13 @@ const ACTIONS = {
     const r = await fetch("/api/script_format?" + q).then(x => x.json());
     $("#fmt-text").value = r.text; $("#fmt-out").hidden = false;
     toast("Format ready: copy it into ChatGPT / Gemini / any AI app, then paste its answer in the box below.");
+  },
+  "get-stick-format": async () => {
+    const q = new URLSearchParams({ kind: "stickman", idea: $("#stick-idea").value, seconds: $("#stick-secs").value || 30 });
+    const r = await fetch("/api/script_format?" + q).then(x => x.json());
+    $("#fmt-text").value = r.text; $("#fmt-out").hidden = false;
+    $("#fmt-text").scrollIntoView({ behavior: "smooth", block: "center" });
+    toast("Stickman format ready: copy it into ChatGPT / Gemini / any AI app, then paste its answer in the box below and press Import.");
   },
   "export-format": async () => {
     if (!S.scenes.length) return toast("Your project has no scenes yet.", true);

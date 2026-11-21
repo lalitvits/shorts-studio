@@ -32,6 +32,7 @@ from .flat import FlatComposer
 from . import fx as fx_mod
 from . import kitchen
 from . import overlays
+from . import stick
 from .config import GROUND_Y, OUTPUT_DIR, QUALITY, WORLD_W, find_devanagari_font, find_ffmpeg
 from .rig import (BOX_H, BOX_W, KEEP_EMOTION, ORG_X, ORG_Y, PERSISTENT, SIT_ACTIONS, blink_amount,
                   draw_character, draw_sofa, pose_for)
@@ -133,7 +134,7 @@ def normalize(tl: dict) -> dict:
                 if (ln.get("action") in ("talk", "idle", None, "") and not ln.get("kadhai") and not ln.get("actor")
                         and not ln.get("broll") and not ln.get("overlay")):
                     continue                                     # nothing to say, play or show
-                hold = 1.5                                       # an action with no words: a silent moment
+                hold = stick.MOVE_HOLD.get(ln.get("action"), 1.5)   # an action with no words: a silent moment
             actor = ln.get("actor") if ln.get("actor") in ids and ln.get("actor") not in narrators else ""
             lines.append(dict(speaker=ln.get("speaker") if ln.get("speaker") in ids else ids[0], text=text, sound=sound,
                               hold=hold, actor=actor,
@@ -149,6 +150,7 @@ def normalize(tl: dict) -> dict:
                               lights=ln.get("lights") if ln.get("lights") in ("on", "off") else "",
                               popup=" ".join(str(ln.get("popup") or "").split())[:90],
                               sticker=str(ln.get("sticker") or "") if str(ln.get("sticker") or "") in STICKERS else "",
+                              effect=ln.get("effect") if ln.get("effect") in stick.EFFECTS else "",
                               start=_num(ln.get("start")), end=_num(ln.get("end"))))
         # who is in the scene: the characters the user added (they stay in frame even with no dialogue)
         speakers = []
@@ -209,6 +211,7 @@ class LineT:
     broll: str = ""         # cut away to an explainer animation / your picture while this line plays
     overlay: str = ""       # big bold text over the picture, from this line to the end of the scene
     prop: str = ""          # something the speaker holds from this line on ("none" puts it away)
+    effect: str = ""        # a cartoon effect around the speaker: dizzy stars, "!", hearts, rain cloud...
 
 
 @dataclass
@@ -245,6 +248,7 @@ def _line_extras(lt, ln: dict):
     lt.actor_emotion = ln.get("actor_emotion", "neutral")
     lt.kadhai, lt.broll, lt.overlay = ln.get("kadhai", ""), ln.get("broll", ""), ln.get("overlay", "")
     lt.prop = ln.get("prop", "")
+    lt.effect = ln.get("effect", "")
     return lt
 
 
@@ -495,6 +499,7 @@ class Composer:
                             for h in fx_mod.hit_times(ln.action, ln.start, ln.end)] + overlays.throw_hits(sched)) \
             if fxon else []
         self.shakes = kitchen.shake_times(sched) if fxon else []           # the oil catching fire: a big shake
+        self.bumps = stick.impact_times(sched) if fxon else []             # a slapstick fall / hit lands
         self._pics: dict = {}
 
     def line_at(self, t: float):
@@ -551,6 +556,12 @@ class Composer:
                 dx += amp * math.sin(t * 97)
                 dy += amp * math.cos(t * 71)
                 zoom = max(zoom, 1.035)
+        for b in self.bumps:                                  # someone hits the floor / a wall
+            u = (t - b) / 0.3
+            if 0 <= u < 1:
+                amp = 20 * self.k * (1 - u)
+                dy += amp * math.cos(t * 90)
+                dx += 0.4 * amp * math.sin(t * 77)
         for sh in self.shakes:                                # the fire flaring up
             u = (t - sh) / 0.6
             if 0 <= u < 1:
@@ -966,6 +977,7 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
             if tl["hook"]:
                 events.append((0.1, "pop", 0.6))
             events += kitchen.sound_events(sched)          # sizzle, fire, thali clang, gas knob, footsteps, splash
+            events += stick.sound_events(sched)            # slip, thud, bonk, tweeting birds, zip, crash...
         events += [(sc.start + 0.05, sc.card_sound, 1.0) for sc in sched if sc.card is not None and sc.card_sound]
         events += [(ln.start, "click", 0.9) for sc in sched for ln in sc.lines if getattr(ln, "lights", "")]
         events += [(ln.start + 0.05, "ping", 0.9) for sc in sched for ln in sc.lines if ln.popup]

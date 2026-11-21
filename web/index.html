@@ -51,6 +51,17 @@
             <button class="secondary" data-act="get-format">Get the script format</button>
             <button class="secondary" data-act="export-format">My project in this format</button>
           </div>
+          <div class="stick-box">
+            <b>Stickman comedy script (no dialogue, works in every country)</b>
+            <p class="hint">A separate format just for stickman gags: the AI app tells the joke with slapstick moves, faces, cartoon effects and sounds only.</p>
+            <div class="line-sub four">
+              <input id="stick-idea" placeholder="Gag idea (optional), e.g. two friends fight over the last samosa" style="grid-column: span 3">
+              <input id="stick-secs" type="number" min="10" max="120" step="5" value="30" aria-label="Length in seconds" title="Length in seconds">
+            </div>
+            <div class="actions" style="justify-content:flex-start">
+              <button class="secondary" data-act="get-stick-format">Get the stickman script format</button>
+            </div>
+          </div>
           <div id="fmt-out" hidden>
             <textarea id="fmt-text" rows="10" readonly></textarea>
             <div class="actions" style="justify-content:flex-start">

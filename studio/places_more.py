@@ -17,7 +17,7 @@ from PIL import ImageFont
 
 from .realms import OUT, _sky
 
-MORE = ("flat_chai_tapri", "flat_sabzi_mandi", "flat_airport", "flat_bus_stop")
+MORE = ("flat_chai_tapri", "flat_sabzi_mandi", "flat_airport", "flat_bus_stop", "flat_white", "flat_doodle")
 
 
 def _mix(c, k):
@@ -424,8 +424,59 @@ def _bus_stop(im, d, P, L, PW, ps, rnd):
     _text(d, P, ps, 2160, 610, "BUS STOP", 38, (255, 255, 255))
 
 
+def _white(im, d, P, L, PW, ps, rnd):
+    """Plain white, the classic stickman look: only a faint floor line."""
+    d.rectangle(P(0, 0, PW, 1920), fill=(252, 252, 250))
+    d.rectangle(P(0, 1700, PW, 1920), fill=(244, 244, 240))
+    d.line(P(0, 1700, PW, 1700), fill=(206, 206, 200), width=L(4))
+
+
+def _wobbly(d, P, L, pts, width=6, color=OUT):
+    d.line([tuple(P(x, y)) for x, y in pts], fill=color, width=L(width), joint="curve")
+
+
+def _doodle(im, d, P, L, PW, ps, rnd):
+    """Doodle paper: notebook lines, hand-drawn hills, a sun, clouds, a tree and grass."""
+    d.rectangle(P(0, 0, PW, 1920), fill=(253, 249, 236))
+    for y in range(160, 1920, 90):                                   # notebook lines
+        d.line(P(0, y, PW, y), fill=(214, 228, 244), width=L(3))
+    d.line(P(150, 0, 150, 1920), fill=(244, 190, 190), width=L(3))   # margin
+    # sun with rays
+    cx, cy = 2250, 330
+    d.ellipse(P(cx - 110, cy - 110, cx + 110, cy + 110), fill=(255, 226, 120), outline=OUT, width=L(6))
+    for i in range(12):
+        a = i * math.pi / 6
+        _wobbly(d, P, L, [(cx + 150 * math.cos(a), cy + 150 * math.sin(a)), (cx + 215 * math.cos(a), cy + 215 * math.sin(a))])
+    # hills
+    for x0, w, h, col in ((-200, 1300, 380, (196, 230, 170)), (900, 1500, 300, (176, 220, 160)), (2000, 1000, 360, (196, 230, 170))):
+        pts = [(x0 + w * i / 30, 1450 - h * math.sin(math.pi * i / 30) + 8 * math.sin(i * 1.7)) for i in range(31)]
+        d.polygon([tuple(P(x, y)) for x, y in pts + [(x0 + w, 1460), (x0, 1460)]], fill=col)
+        _wobbly(d, P, L, pts)
+    # ground
+    d.rectangle(P(0, 1450, PW, 1920), fill=(232, 244, 214))
+    _wobbly(d, P, L, [(x, 1450 + 6 * math.sin(x / 70)) for x in range(0, PW + 40, 40)])
+    for _ in range(90):                                              # grass ticks
+        x, y = rnd.uniform(0, PW), rnd.uniform(1480, 1900)
+        _wobbly(d, P, L, [(x - 10, y), (x, y - 26), (x + 8, y - 4), (x + 18, y - 22)], 4, (90, 150, 80))
+    # tree and a flower or two
+    for tx in (480, 1750):
+        d.rectangle(P(tx - 22, 1100, tx + 22, 1460), fill=(196, 150, 104), outline=OUT, width=L(6))
+        for dx, dy, r in ((-90, -40, 120), (90, -40, 120), (0, -130, 140), (0, 20, 120)):
+            d.ellipse(P(tx + dx - r, 1080 + dy - r, tx + dx + r, 1080 + dy + r), fill=(150, 210, 120), outline=OUT,
+                      width=L(6))
+        for dx, dy, r in ((-90, -40, 114), (90, -40, 114), (0, -130, 134), (0, 20, 114)):
+            d.ellipse(P(tx + dx - r, 1080 + dy - r, tx + dx + r, 1080 + dy + r), fill=(150, 210, 120))
+    for fx_ in (900, 1300, 2300):
+        d.line(P(fx_, 1500, fx_, 1420), fill=(90, 150, 80), width=L(6))
+        for i in range(5):
+            a = i * 2 * math.pi / 5
+            d.ellipse(P(fx_ + 22 * math.cos(a) - 16, 1410 + 22 * math.sin(a) - 16, fx_ + 22 * math.cos(a) + 16,
+                        1410 + 22 * math.sin(a) + 16), fill=(250, 150, 180), outline=OUT, width=L(3))
+        d.ellipse(P(fx_ - 12, 1398, fx_ + 12, 1422), fill=(255, 220, 90), outline=OUT, width=L(3))
+
+
 DRAW = {"flat_chai_tapri": _chai_tapri, "flat_sabzi_mandi": _sabzi_mandi, "flat_airport": _airport,
-        "flat_bus_stop": _bus_stop}
+        "flat_bus_stop": _bus_stop, "flat_white": _white, "flat_doodle": _doodle}
 
 
 def draw(bid, im, d, P, L, PW, ps, rnd):
@@ -474,6 +525,19 @@ def animate(d, bid: str, t: float, px, s: float, visible, x0: float, vw: float, 
                 x, y = px(1420, 1050)
                 d.rectangle([x, y + 4 * s, x + 170 * s, y + 34 * s], fill=(60, 200, 90, 255))
                 d.text((x + 10 * s, y + 4 * s), "BOARDING", fill=(255, 255, 255, 255))
+    elif bid == "flat_doodle":
+        for j, (X, Y, sp) in enumerate(((300, 330, 22), (1200, 250, 16), (2000, 420, 19))):   # doodle clouds
+            Xc = (X + t * sp) % (PW + 600) - 300
+            if not visible(Xc, 400):
+                continue
+            x, y = px(Xc, Y)
+            for dx, dy, r in ((-90, 10, 70), (0, -30, 95), (95, 10, 70), (0, 30, 70)):
+                d.ellipse([x + (dx - r) * s, y + (dy - r) * s, x + (dx + r) * s, y + (dy + r) * s],
+                          fill=(255, 255, 255, 255), outline=OUT + (255,), width=max(1, round(5 * s)))
+            for dx, dy, r in ((-90, 10, 64), (0, -30, 89), (95, 10, 64), (0, 30, 64)):
+                d.ellipse([x + (dx - r) * s, y + (dy - r) * s, x + (dx + r) * s, y + (dy + r) * s],
+                          fill=(255, 255, 255, 255))
+        birds(d, x0, vw, t, px, s, 2, 560)
     elif bid == "flat_bus_stop":
         u = (t % 11) / 11                                                                # a bus driving past
         X = PW + 600 - u * (PW + 1400)

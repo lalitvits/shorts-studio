@@ -156,6 +156,8 @@ def _parse_json(text: str) -> dict:
 
 def _default_bg(chars: list[dict]) -> str | None:
     """Flat cartoon characters get the flat street; the others the usual first picture."""
+    if any(str(c.get("look", "")).startswith("stick_") for c in chars):
+        return "flat_white"
     if any(str(c.get("look", "")).startswith("flat_") for c in chars):
         return "flat_city_street"
     return resolve(None)
@@ -214,7 +216,8 @@ emotions, actions, sounds, lighting, pop-ups, stickers and text cards - they are
 
 Allowed character looks (use the "flat_" cartoon looks, pick the best fit for each character; "flat_brain" is a floating cartoon brain for an
 inner voice / "my mind" character; "narrator" is a voice-over (VO / वॉयसओवर) that is never on screen; "flat_kid" is
-a child of about 10):
+a child of about 10; "stick_" looks are stickmen, for stick-figure / stickman comedy - use them only when the script
+asks for stickmen, usually with the "flat_white" or "flat_doodle" background):
 {looks}
 Allowed backgrounds (use the "flat_" cartoon ones): {bgs}
 Allowed emotions: {emotions}
@@ -225,12 +228,21 @@ Allowed actions: {actions}
   - kitchen: cook (frying at the stove), step_back (jumps back in fear), hold_jug (lifts a water jug, about to throw
     it), lower_jug (the jug is pushed down), grab_hand (grabs someone's hand to stop them), turn_off_gas,
     cover_kadhai (puts a steel plate on the kadhai), hand_on_shoulder, look_camera (looks at the camera, relieved).
+  - slapstick comedy: slip_fall, fall_face, get_up, fly_away (hit and thrown off the screen), hit_head (bonk, stars),
+    freeze (frozen in shock), double_take, faint, fight_cloud (a cartoon fight in a dust cloud), crash_wall,
+    dizzy, shiver, cartoon_run, run_across (runs through the frame), chase (runs across just behind the other one:
+    put it on the other one's run_across line as the actor), sneak_in / tiptoe, laugh_floor, kick, jaw_drop,
+    lie_sleep (asleep on the floor, snoring), sleep_stand (falls asleep standing), wake_jolt, poke / shake_awake
+    (walks up to the nearest person first), disappointed (slumps, rain cloud).
+    Their sounds (slip, thud, bonk, tweet, zip, crash...) are added automatically: do not put them in "sound".
+    A fall stays down until the character's next action (get_up).
 Allowed camera shots: {shots}
 Allowed props (something a character holds or has with them, from that line on; "none" puts it away): {props}
   Movement on a cycle: ride_in / ride_out / ride_cycle. Leaving running: run_out.
 Character body: "height" one of {heights}; "build" one of {builds}; "outfit" colour one of {outfits} ("" = default).
 Allowed sounds (a line's "sound" plays at the start of the line): {sounds}
 Allowed stickers: {stickers}
+Allowed cartoon effects (a line's "effect", drawn around the speaker): {effects}
 
 Rules:
 - A sound with no speech (stomach growl, doorbell, notification...) is its own line with "text": "" and the sound,
@@ -267,7 +279,7 @@ Reply with JSON only:
               "lines": [{{"speaker": "id", "text": "...", "emotion": "...", "action": "...", "sound": "",
                          "popup": "", "sticker": "", "lights": "", "shot": "auto", "hold": 0, "actor": "",
                          "actor_action": "", "actor_emotion": "", "kadhai": "", "broll": "", "overlay": "",
-                         "prop": ""}}]}},
+                         "prop": "", "effect": ""}}]}},
              {{"card": "...", "card_style": "dark|black|bright", "card_sound": ""}}]}}
 
 Screenplay:
@@ -283,7 +295,8 @@ def _secs(v, top: float) -> float:
 
 def import_screenplay(text: str, provider: str = "gemini") -> dict:
     """A full screenplay (with stage directions) -> characters, scenes, cards, title, hook and music."""
-    from .catalog import (BUILDS, DEFAULT_VOICE, EDGE_FOR_GENDER, FLAT_BACKGROUNDS, HEIGHTS, LOOKS, OUTFIT_COLORS,
+    from .catalog import (BUILDS, DEFAULT_VOICE, EDGE_FOR_GENDER, EFFECT_LABELS, FLAT_BACKGROUNDS, HEIGHTS, LOOKS,
+                          OUTFIT_COLORS,
                           PROPS, SHOT_LABELS, SOUND_LABELS, VOICE_FX_LABELS)
     from .fx import MUSIC_LABELS
     from .kitchen import EXPLAINERS, KADHAI_STATES
@@ -299,6 +312,7 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
                                   music=", ".join(MUSIC_LABELS), shots=", ".join(SHOT_LABELS),
                                   props=", ".join(PROPS), heights=", ".join(k for k in HEIGHTS if k),
                                   builds=", ".join(k for k in BUILDS if k), outfits=", ".join(k for k in OUTFIT_COLORS if k),
+                                  effects=", ".join(k for k in EFFECT_LABELS if k),
                                   script=text.strip()[:6000])
     # Gemini's safety check is borderline on comedy with slaps, chappals or jokes about dowry: it can refuse the same
     # text once and accept it the next time. Say what the text is, and try a few times.
@@ -368,7 +382,8 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
                 kadhai=ln.get("kadhai") if ln.get("kadhai") in KADHAI_STATES else "",
                 broll=ln.get("broll") if ln.get("broll") in EXPLAINERS else "",
                 overlay=str(ln.get("overlay") or "")[:120],
-                prop=ln.get("prop") if ln.get("prop") in PROPS or ln.get("prop") == "none" else ""))
+                prop=ln.get("prop") if ln.get("prop") in PROPS or ln.get("prop") == "none" else "",
+                effect=ln.get("effect") if ln.get("effect") in EFFECT_LABELS else ""))
             if lines[-1]["actor"] not in ids or lines[-1]["actor"] in narr:
                 lines[-1]["actor"] = ""
             last = lines[-1]
@@ -382,13 +397,16 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
             continue
         auto = {"throw": ("chappal", "slap", "whoosh", "punch"), "cook": ("sizzle",), "turn_off_gas": ("click",),
                 "cover_kadhai": ("clang",), "run_in": ("footsteps",), "lower_jug": ("splash",)}
+        from .stick import MOVE_HOLD, MOVE_SOUNDS
+        for a_, snds in MOVE_SOUNDS.items():
+            auto[a_] = tuple(x[1] for x in snds)
         for ln in lines:                       # sounds the app adds by itself are not added twice
             made = set(auto.get(ln["action"], ())) | set(auto.get(ln["actor_action"], ()))
             made |= {"fry": {"sizzle"}, "fire": {"fire", "whoosh"}, "cover": {"clang"}, "gas_off": {"click"}}.get(ln["kadhai"], set())
             if ln["sound"] in made:
                 ln["sound"] = ""
             if not ln["text"] and not ln["sound"] and not ln["hold"]:
-                ln["hold"] = 1.5                   # a visual with no words still gets a moment on screen
+                ln["hold"] = MOVE_HOLD.get(ln["action"], 1.5)   # a visual with no words still gets a moment on screen
         lighting = sc.get("lighting") if sc.get("lighting") in ("day", "dark", "phone") else "day"
         on = [i for i, ln in enumerate(lines) if ln["lights"] == "on"]
         if on:                                 # a light switched on means the room was dark before

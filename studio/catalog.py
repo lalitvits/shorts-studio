@@ -30,7 +30,37 @@ ACTION_LABELS = {
     "sit": "Sit on sofa", "sit_phone": "Sit and use phone", "sit_tea": "Sit and drink tea",
     "sit_read": "Sit and read", "sit_eat": "Sit and eat a snack", "sit_sleep": "Sit and sleep",
 }
+# slapstick comedy moves (stick.py): they work for the stickmen and the flat cartoon people
+SLAPSTICK_LABELS = {
+    "slip_fall": "Slip and fall on the back (banana-peel style)", "fall_face": "Trip and fall on the face",
+    "get_up": "Get up after a fall", "fly_away": "Get hit and fly off the screen",
+    "hit_head": "Bonk on the head (stars, dizzy)", "freeze": "Freeze in shock (stiff, trembling)",
+    "double_take": "Double-take (look away, look back shocked)", "faint": "Faint (fall back stiff, X eyes)",
+    "fight_cloud": "Fight in a dust cloud", "crash_wall": "Run and crash into a wall (splat)",
+    "dizzy": "Dizzy (wobbly, spiral eyes)", "shiver": "Shiver with fear",
+    "cartoon_run": "Cartoon run on the spot (legs spinning)",
+    "run_across": "Run across the screen (enters, exits other side)",
+    "chase": "Chase (runs across just behind the other one)", "sneak_in": "Sneak in on tiptoe (enters)",
+    "tiptoe": "Sneak on tiptoe (in place)", "laugh_floor": "Roll on the floor laughing", "kick": "Kick",
+    "jaw_drop": "Jaw drop (eyes pop out)",
+    "lie_sleep": "Sleep lying on the floor (snoring, keeps sleeping)",
+    "sleep_stand": "Fall asleep standing up (swaying, snoring)",
+    "wake_jolt": "Wake up with a jolt (jumps up, eyes pop)",
+    "poke": "Poke someone (walks up, poke poke poke)", "shake_awake": "Shake someone by the shoulders",
+    "disappointed": "Exaggerated disappointment (slumps, rain cloud)",
+}
+ACTION_LABELS.update(SLAPSTICK_LABELS)
 ACTIONS = list(ACTION_LABELS)
+# cartoon effects drawn around the character during a line (stick.py)
+EFFECT_LABELS = {
+    "": "Effect: none", "dizzy": "Dizzy stars around the head", "impact": "Impact burst (POW star)",
+    "speed": "Speed lines", "dust": "Dust puffs at the feet", "sweat": "Sweat drops flying",
+    "exclaim": "Red ! above the head", "question": "? above the head", "steam": "Angry steam from the ears",
+    "hearts": "Floating hearts", "shiver": "Shivering lines", "rain_cloud": "Rain cloud over the head (sad)",
+    "eyes_pop": "Eyes pop out", "idea": "Idea bulb above the head", "sparkle": "Sparkles (proud, shiny)",
+    "alarm": "Alarm clock ringing next to them", "fly": "A fly buzzing around the head", "snore": "Snot bubble (asleep)",
+}
+EFFECTS = [k for k in EFFECT_LABELS if k]
 
 # The three characters, copied from their character sheets (hoodie, dark jeans, white sneakers).
 # Each one's face is a set of 20 pictures in assets/characters/<id>/heads/<emotion>.png.
@@ -96,6 +126,19 @@ _FLAT = {
         accent2=(250, 250, 250), bottom="pants", bottom_color=(60, 96, 150), hat=None, hair="side",
         hair_color=(40, 28, 24), mustache=False, stubble=True, watch=True, female=False, height=1.0, build=0.95,
         shoe=(40, 40, 46))),
+    # stickmen (stick.py): thick lines, a big round head and big expressive eyes
+    "stick_classic": ("Stickman: Classic (black)", False, dict(kind="stick", color=(30, 30, 34), height=1.0)),
+    "stick_blue": ("Stickman: Blue (spiky hair)", False, dict(kind="stick", color=(40, 96, 200), hair="spiky",
+                                                              height=1.0)),
+    "stick_red": ("Stickman: Red (headband)", False, dict(kind="stick", color=(206, 44, 44), band=True,
+                                                          accent=(206, 44, 44), height=1.0)),
+    "stick_girl": ("Stickman: Girl (bow, skirt)", True, dict(kind="stick", color=(200, 50, 130), bow=True, skirt=True,
+                                                             lashes=True, accent=(246, 110, 170), height=0.95)),
+    "stick_kid": ("Stickman: Kid (cap)", False, dict(kind="stick", color=(234, 120, 30), cap=True,
+                                                     accent=(60, 140, 220), hair="tuft", height=0.72)),
+    "stick_boss": ("Stickman: Boss (tie, glasses, mustache)", False, dict(kind="stick", color=(60, 62, 72), tie=True,
+                                                                          glasses=True, mustache=True, hair="messy",
+                                                                          accent=(200, 40, 50), height=1.04)),
     "flat_brain": ("Flat: My brain (inner voice, little devil)", False, dict(
         kind="brain", color=(244, 150, 172), glow=(255, 110, 140), horns=True, height=1.0)),
     "flat_dog": ("Flat: Dog (brown)", False, dict(kind="dog", color=(146, 94, 58), light=(196, 150, 104), height=1.0)),
@@ -189,6 +232,8 @@ FLAT_BACKGROUNDS = {
     "flat_sabzi_mandi": "Flat cartoon: sabzi mandi (vegetable and fruit carts)",
     "flat_airport": "Flat cartoon: airport (departure board, planes)",
     "flat_bus_stop": "Flat cartoon: bus stop (shelter, passing bus)",
+    "flat_white": "Plain white (stickman comedy)",
+    "flat_doodle": "Doodle paper (hand-drawn hills, sun, clouds)",
 }
 
 # Camera shot for a line (flat cartoon style). "auto" picks one like a cartoon editor would.
@@ -228,7 +273,7 @@ VOICE_TUNE = {"3d_oldman": (-10, -10), "flat_uncle": (-6, -4), "flat_police": (-
               "flat_aunty": (-2, -4), "flat_boy": (28, 8), "3d_boy": (20, 6), "flat_girl": (12, 4),
               "3d_woman": (6, 2), "flat_man": (0, 2), "3d_youngman": (0, 2), "flat_dog": (8, 10), "flat_cat": (24, 6),
               "flat_kid": (34, 10), "narrator": (-4, -4), "flat_youth_a": (6, 4), "flat_youth_b": (4, 6),
-              "flat_youth_c": (8, 4),
+              "flat_youth_c": (8, 4), "stick_kid": (30, 10), "stick_girl": (12, 4), "stick_boss": (-6, -4),
               "clay": (14, 4)}
 # Voice effects (tts.VOICE_FX) and the look that gets one by default
 VOICE_FX_LABELS = {"": "No effect", "echo": "Echo", "devil": "Devil (deep, with echo)",
@@ -257,8 +302,19 @@ SOUND_LABELS = {
     "scratch": "Record scratch (effect)",
     "sizzle": "Oil sizzling, chhann (effect)", "fire": "Fire flaring up (effect)", "splash": "Water splash (effect)",
     "footsteps": "Running footsteps (effect)", "clang": "Metal clang, thali (effect)",
+    "slip": "Cartoon slip, wheee (effect)", "slide_up": "Slide whistle up (effect)",
+    "slide_down": "Slide whistle down, falling (effect)", "zip": "Cartoon zip, fast run (effect)",
+    "bonk": "Bonk on the head (effect)", "tweet": "Dizzy birds tweeting (effect)", "crash": "Crash, smash (effect)",
+    "glass_break": "Glass breaking (effect)", "crickets": "Crickets, awkward silence (effect)",
+    "wah_wah": "Sad trombone, wah wah waaah (effect)", "tiptoe": "Sneaky tiptoe music (effect)",
+    "awooga": "Awooga horn, eyes pop (effect)", "spring": "Spring boing, doing (effect)",
+    "fight": "Cartoon fight cloud (effect)",
+    "alarm": "Alarm clock ringing (effect)", "buzz": "Fly buzzing (effect)", "snore": "Snoring (effect)",
+    "boop": "Poke, boop (effect)",
 }
-FX_SOUNDS = {"punch", "slap", "whoosh", "pop", "ding", "boing", "thud", "growl", "ping", "doorbell", "chappal",
+FX_SOUNDS = {"slip", "slide_up", "slide_down", "zip", "bonk", "tweet", "crash", "glass_break", "crickets", "wah_wah",
+             "tiptoe", "awooga", "spring", "fight", "alarm", "buzz", "snore", "boop",
+             "punch", "slap", "whoosh", "pop", "ding", "boing", "thud", "growl", "ping", "doorbell", "chappal",
              "laugh_track", "boom", "dun_dun", "click", "tick", "scratch", "sizzle", "fire", "splash", "footsteps",
              "clang"}
 # The emotion that usually goes with each sound (the app suggests it when the line is still "neutral").

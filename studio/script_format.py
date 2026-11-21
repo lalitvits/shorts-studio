@@ -26,7 +26,8 @@ from __future__ import annotations
 
 import re
 
-from .catalog import (ACTION_LABELS, BUILDS, EMOTIONS, HEIGHTS, LOOKS, OUTFIT_COLORS, PROP_LABELS, SHOT_LABELS,
+from .catalog import (ACTION_LABELS, BUILDS, EFFECT_LABELS, EMOTIONS, HEIGHTS, LOOKS, OUTFIT_COLORS, PROP_LABELS,
+                      SHOT_LABELS,
                       SOUND_LABELS, VOICE_FX_LABELS, VOICES, EDGE_FOR_GENDER, DEFAULT_VOICE, FLAT_BACKGROUNDS)
 
 HEADER = "### SHORTS STUDIO SCRIPT v1"
@@ -55,7 +56,39 @@ SYN = {
                "still": "idle", "stand": "idle", "standing": "idle", "pointing": "point", "waving": "wave",
                "crying": "cry", "jumping": "jump", "dancing": "dance", "clapping": "clap", "thinking": "think",
                "shrugging": "shrug", "explaining": "explain", "eat_snack": "eat", "eating": "eat",
-               "read": "read_book", "reading": "read_book", "look_at_camera": "look_camera"},
+               "read": "read_book", "reading": "read_book", "look_at_camera": "look_camera",
+               # slapstick
+               "slip": "slip_fall", "slips": "slip_fall", "banana_slip": "slip_fall", "fall": "slip_fall",
+               "falls": "slip_fall", "fall_down": "slip_fall", "fall_back": "slip_fall", "trip": "fall_face",
+               "trips": "fall_face", "fall_forward": "fall_face", "faceplant": "fall_face", "stand_up": "get_up",
+               "gets_up": "get_up", "fly_off": "fly_away", "flies_away": "fly_away", "knocked_away": "fly_away",
+               "thrown_away": "fly_away", "bonk": "hit_head", "hit_on_head": "hit_head", "head_hit": "hit_head",
+               "frozen": "freeze", "freezes": "freeze", "stunned": "freeze", "doubletake": "double_take",
+               "faints": "faint", "fainting": "faint", "pass_out": "faint", "passes_out": "faint",
+               "fight": "fight_cloud", "fighting": "fight_cloud", "brawl": "fight_cloud", "dust_cloud": "fight_cloud",
+               "crash": "crash_wall", "crashes": "crash_wall", "splat": "crash_wall", "hit_wall": "crash_wall",
+               "wobble": "dizzy", "wobbly": "dizzy", "shake": "shiver", "shaking": "shiver", "trembling": "shiver",
+               "tremble": "shiver", "run": "cartoon_run", "running": "cartoon_run", "run_past": "run_across",
+               "dash": "run_across", "runs_across": "run_across", "runs_past": "run_across", "chasing": "chase",
+               "chases": "chase", "run_after": "chase", "sneak": "tiptoe", "sneaking": "tiptoe", "tip_toe": "tiptoe",
+               "sneaks_in": "sneak_in", "tiptoe_in": "sneak_in", "rofl": "laugh_floor", "rolling_laughing": "laugh_floor",
+               "roll_laughing": "laugh_floor", "kicks": "kick", "kicking": "kick", "jaw": "jaw_drop",
+               "mouth_drop": "jaw_drop", "sleep": "lie_sleep", "sleeping": "lie_sleep", "asleep": "lie_sleep",
+               "snoring": "lie_sleep", "nap": "lie_sleep", "sleep_standing": "sleep_stand",
+               "falls_asleep_standing": "sleep_stand", "doze_off": "sleep_stand", "nod_off": "sleep_stand",
+               "wake_up": "wake_jolt", "wakes_up": "wake_jolt", "jolt_awake": "wake_jolt", "pokes": "poke",
+               "poking": "poke", "shake_shoulders": "shake_awake", "shakes_awake": "shake_awake",
+               "disappointment": "disappointed", "slump": "disappointed", "sad_slump": "disappointed"},
+    "effect": {"stars": "dizzy", "dizzy_stars": "dizzy", "seeing_stars": "dizzy", "pow": "impact", "bang": "impact",
+               "hit_star": "impact", "!": "exclaim", "exclamation": "exclaim", "exclamation_mark": "exclaim",
+               "alert": "exclaim", "?": "question", "question_mark": "question", "confused_mark": "question",
+               "angry_steam": "steam", "smoke_ears": "steam", "heart": "hearts", "love_hearts": "hearts",
+               "sad_cloud": "rain_cloud", "raincloud": "rain_cloud", "cloud": "rain_cloud", "bulb": "idea",
+               "lightbulb": "idea", "light_bulb": "idea", "sparkles": "sparkle", "shine": "sparkle",
+               "sweat_drops": "sweat", "speed_lines": "speed", "motion_lines": "speed", "eyes_popping": "eyes_pop",
+               "eye_pop": "eyes_pop", "shivering": "shiver", "dust_cloud": "dust", "puffs": "dust",
+               "alarm_clock": "alarm", "ringing": "alarm", "alarm_ringing": "alarm", "fly_buzzing": "fly",
+               "housefly": "fly", "mosquito": "fly", "bubble": "snore", "snot_bubble": "snore", "zzz": "snore"},
     "prop": {"mobile": "phone", "cellphone": "phone", "smartphone": "phone", "mobile_phone": "phone",
              "bicycle": "cycle", "bike": "cycle", "water_glass": "glass", "glass_of_water": "glass",
              "water_bottle": "bottle", "tea": "cup", "tea_cup": "cup", "plate": "thali", "stick": "lathi",
@@ -97,7 +130,9 @@ SYN = {
                    "bus_stand": "flat_bus_stop", "बस_स्टॉप": "flat_bus_stop", "street": "flat_city_street",
                    "road": "flat_city_street", "kitchen": "flat_kitchen", "रसोई": "flat_kitchen", "bedroom": "flat_bedroom",
                    "office": "flat_office", "school": "flat_school", "village": "flat_village", "गाँव": "flat_village",
-                   "park": "flat_park", "heaven": "flat_swarg", "hell": "flat_nark"},
+                   "park": "flat_park", "heaven": "flat_swarg", "hell": "flat_nark", "white": "flat_white",
+                   "plain": "flat_white", "plain_white": "flat_white", "blank": "flat_white", "doodle": "flat_doodle",
+                   "notebook": "flat_doodle", "paper": "flat_doodle", "sketch": "flat_doodle"},
     "look": {"man": "flat_man", "young_man": "flat_man", "woman": "flat_aunty", "lady": "flat_aunty",
              "aunty": "flat_aunty", "mother": "flat_aunty", "mom": "flat_aunty", "mummy": "flat_aunty",
              "wife": "flat_girl", "girl": "flat_girl", "young_woman": "flat_girl", "boy": "flat_boy",
@@ -106,6 +141,10 @@ SYN = {
              "hoodie_boy": "flat_youth_b", "gen_z": "flat_youth_c", "student": "flat_youth_c", "uncle": "flat_uncle",
              "old_man": "flat_uncle", "father": "flat_uncle", "police": "flat_police", "constable": "flat_police",
              "brain": "flat_brain", "dog": "flat_dog", "cat": "flat_cat", "vo": "narrator", "voice_over": "narrator",
+             "stickman": "stick_classic", "stick_man": "stick_classic", "stick_figure": "stick_classic",
+             "stickman_black": "stick_classic", "stickman_blue": "stick_blue", "stickman_red": "stick_red",
+             "stickman_girl": "stick_girl", "stick_woman": "stick_girl", "stickman_kid": "stick_kid",
+             "stick_child": "stick_kid", "stickman_boss": "stick_boss", "stick_boss_man": "stick_boss",
              "voiceover": "narrator"},
 }
 NARRATOR_WORDS = {"narrator", "vo", "voiceover", "voice_over", "वॉयसओवर", "वॉइसओवर", "सूत्रधार"}
@@ -156,6 +195,7 @@ def build_format(idea: str = "", language: str = "hi", seconds: int = 45) -> str
     props = "\n".join(f"  {k}: {v}" for k, v in PROP_LABELS.items() if k)
     cams = "\n".join(f"  {k}: {v}" for k, v in SHOT_LABELS.items())
     sounds = ", ".join(SOUND_LABELS)
+    effects = "\n".join(f"  {k}: {v}" for k, v in EFFECT_LABELS.items() if k)
     music = ", ".join(_music())
     kadhai, explainers = _kitchen()
     gem = ", ".join(v["id"].split(":", 1)[1] for v in VOICES if v["id"].startswith("gemini:"))
@@ -198,11 +238,17 @@ cast: <ids of the characters on screen in this scene, comma separated>
   silent: <seconds>         no words: an acting moment of this many seconds
   popup: "<text>"           a phone notification shown on screen
   sticker: <sticker>        a sticker pops up next to the speaker
+  fx: <effect>              a cartoon effect around the speaker (dizzy stars, "!", "?", hearts, rain cloud...)
   overlay: "<line 1> | <line 2>"   big bold text on screen until the scene ends (line 2 is smaller)
   lights: on/off            the room light switches on or off
   kadhai: <state>           kitchen only: the kadhai on the stove
   cutaway: <cutaway>        the picture cuts to an explainer animation while the line is spoken
 Movement is an action: walk_in / walk_out / run_in / run_out / ride_in / ride_out (on a cycle) / appear / step_back.
+Slapstick is an action too: slip_fall, fall_face, get_up, fly_away, hit_head, freeze, double_take, faint, fight_cloud,
+crash_wall, dizzy, shiver, cartoon_run, run_across, chase, sneak_in, tiptoe, laugh_floor, kick, jaw_drop.
+Each comes with its own cartoon sound (slip, thud, bonk, zip...) and effects; a fall stays down until "get_up".
+NO-DIALOGUE COMEDY (works in every country): use the stickman looks, background flat_white or flat_doodle, and
+lines with "silent: <seconds>" (no words), a slapstick action, an emotion, sounds and fx. Tell the joke by action.
 
 === ALLOWED VALUES ===
 LOOKS (character drawings):
@@ -225,6 +271,8 @@ CAMERA:
 {cams}
 SOUNDS: {sounds}
 STICKERS: {", ".join(_stickers())}
+CARTOON EFFECTS (fx):
+{effects}
 KADHAI states (kitchen): {", ".join(kadhai)}
 CUTAWAYS: {", ".join(explainers)}
 
@@ -255,6 +303,160 @@ chor (happy, use_phone, silent: 2, sticker: money)
 cast: vikram, dost
 dost (worried, explain, prop: bottle): चोर सोशल मीडिया पर ही नज़र रखते हैं।
 narrator (meanwhile: vikram relieved look_camera, overlay: "ट्रिप की फोटो, घर लौटकर पोस्ट करें | Post trip photos after you return"): समझदार बनें, सुरक्षित रहें।
+
+=== EXAMPLE 2: a no-dialogue stickman comedy (only actions, faces and sounds) ===
+{HEADER}
+title: The Last Samosa
+hook: Last samosa...
+language: {language}
+music: comedy
+
+## CHARACTERS
+- id: tom | name: Tom | look: stick_blue | gender: male
+- id: boss | name: Boss | look: stick_boss | gender: male
+
+## SCENE | background: flat_white | music: comedy
+cast: tom, boss
+tom (happy, eat, prop: samosa, silent: 2.4, fx: sparkle)
+boss (shocked, double_take, silent: 2)
+boss (angry, idle, silent: 1.2, fx: steam, sound: dun_dun)
+tom (scared, jaw_drop, silent: 1.4)
+tom (scared, run_across, silent: 1.8, sound: zip, meanwhile: boss angry chase)
+
+## SCENE | background: flat_doodle | music: keep
+cast: tom, boss
+tom (happy, sneak_in, silent: 2.8, prop: samosa)
+tom (shocked, slip_fall, silent: 2)
+boss (laughing, laugh_floor, silent: 2.2, sound: laugh_track)
+"""
+
+
+# ------------------------------------------------------------------ the stickman comedy format (no dialogue)
+STICK_BASIC_ACTIONS = ("idle", "walk_in", "walk_out", "run_in", "run_out", "appear", "wave", "point", "think",
+                       "facepalm", "shrug", "look_around", "jump", "cheer", "clap", "dance", "punch", "slap", "throw",
+                       "eat", "drink_tea", "use_phone", "phone_call", "read_book", "hide_behind", "arms_crossed",
+                       "step_back", "grab_hand", "hand_on_shoulder", "look_camera", "ride_in", "ride_out", "sit",
+                       "sit_sleep", "cry", "wipe_tears")
+STICK_SOUNDS = ("slip", "slide_up", "slide_down", "zip", "bonk", "tweet", "crash", "glass_break", "crickets", "wah_wah",
+                "tiptoe", "awooga", "spring", "fight", "boing", "thud", "punch", "slap", "whoosh", "pop", "ding",
+                "dun_dun", "scratch", "laugh_track", "boom", "growl", "doorbell", "ping", "tick", "splash",
+                "laugh", "giggle", "gasp", "scream", "cry", "sigh", "yawn", "hmm", "angry", "frustrated")
+
+
+def build_stick_format(idea: str = "", seconds: int = 30) -> str:
+    """A format just for no-dialogue stickman comedy: the joke is told by actions, faces and sound effects."""
+    from .catalog import SLAPSTICK_LABELS
+    nl = "\n"
+    looks = nl.join(f"  {k}: {v['label'].replace('Stickman: ', '')}" for k, v in LOOKS.items() if k.startswith("stick_"))
+    slap = nl.join(f"  {k}: {v}" for k, v in SLAPSTICK_LABELS.items())
+    basic = ", ".join(a for a in STICK_BASIC_ACTIONS if a in ACTION_LABELS)
+    props = ", ".join(k for k in PROP_LABELS if k)
+    effects = nl.join(f"  {k}: {v}" for k, v in EFFECT_LABELS.items() if k)
+    sounds = nl.join(f"  {k}: {SOUND_LABELS[k]}" for k in STICK_SOUNDS if k in SOUND_LABELS)
+    music = ", ".join(_music())
+    idea_line = idea.strip() or "<WRITE YOUR GAG IDEA HERE, or leave this and invent a funny everyday situation>"
+    n_beats = "15 to 18" if 24 <= seconds <= 40 else str(max(6, min(30, round(seconds / 1.8))))
+    return f"""You are writing a STICKMAN COMEDY short for "Shorts Studio", an app that animates it as a YouTube Short / Reel.
+There is NO DIALOGUE: the joke is told only through actions, facial expressions, cartoon effects and sound effects,
+so it is understood in every country. Idea: {idea_line}
+Length: about {seconds} seconds, in about {n_beats} short beats (1 to 3 seconds each).
+
+THE VIEWER MUST GET THE JOKE WITHOUT THINKING. Rules:
+- Story: ONE simple situation everybody knows (waking up, the last slice of food, a fly, a banana peel, the gym...).
+  The first 2 beats show it at once, with a visible reason (an alarm ringing: fx alarm; a fly buzzing: fx fly).
+- Characters: 2, at most 3. Give each one a clear goal the viewer can see (Bob wants Tom awake).
+- Show, don't explain: never rely on text to explain the joke. No text cards except a short time jump.
+- Cause and effect: every action has a visible reason. If someone falls, show what caused it (a poke, a slip_fall
+  on a banana peel, a crash into a wall).
+- Escalation: the character tries 3 different ways, each bigger and funnier than the last (poke -> shake_awake ->
+  a jug of water). Never repeat the same action twice in a row.
+- Expressions: big cartoon reactions right after every surprise: jaw_drop, double_take, freeze, shiver, eyes_pop,
+  disappointed. Use strong emotions (shocked, angry, scared, excited), never neutral twice in a row.
+- No dead beats: never more than 2 beats in a row of just standing, looking or reacting; something must move.
+- Sound: a sound effect on the beats with physical action (slapstick moves add their own sounds automatically).
+- Twist: build anticipation, let the viewer expect one thing, then show something unexpected but logical.
+- Ending: a VISUAL punchline in the final 3 seconds, the funniest moment of the whole video (not a text card).
+- Zero dialogue: every line is silent. It works in every country.
+
+IDEAS THAT WORK (for inspiration):
+- Banana trouble: he carefully avoids a banana peel, then slips on the peel of the banana he just ate.
+- The impossible fly: he tries and fails to swat a fly (fx fly); finally it lands on his nose.
+- Gym disaster: he shows off with a heavy dumbbell and ends up flat on the floor.
+- The last samosa: two friends fight over it; while they fight, a third one eats it.
+- Sleeping champion: the alarm rings, his friend tries 3 ways to wake him, it works... then he falls asleep standing.
+
+Reply with ONLY the script in the exact format below (start with the {HEADER} line, no other text).
+Write plain text: no Markdown (no **bold**, no code blocks, no bulleted lines). Use only the allowed values.
+
+=== FORMAT ===
+{HEADER}
+title: <short title>
+hook: <optional: 2 to 4 words shown big in the first 2 seconds, or leave empty>
+language: en
+music: <music id>
+
+## CHARACTERS
+- id: <short English id> | name: <name> | look: <stickman look> | gender: male/female | height: <height>
+
+## SCENE | background: flat_white | music: keep
+cast: <ids on screen, comma separated>
+<id> (<emotion>, <action>, silent: <seconds>, fx: <effect>, sound: <sound>, prop: <prop>)
+<id> (<emotion>, <action>, silent: <seconds>, meanwhile: <other id> <emotion> <action>)
+
+## CARD | text: <short text, e.g. Meanwhile... / 5 minutes later> | style: bright | sound: <sound> | seconds: 1.5
+
+Every line is silent: it has NO ":" and no words after the brackets. Every line has "silent: <seconds>".
+"meanwhile:" makes a second character act at the same time (for example the chaser in a chase:
+tom (scared, run_across, silent: 1.8, meanwhile: boss angry chase)).
+A fall stays down until that character's next line (use get_up). walk_in / run_in / sneak_in / appear bring someone in.
+
+=== ALLOWED VALUES ===
+STICKMAN LOOKS:
+{looks}
+HEIGHT: {", ".join(k for k in HEIGHTS if k)}
+BACKGROUNDS: flat_white (plain white, classic), flat_doodle (doodle paper with hills and clouds),
+  or any flat cartoon place: flat_park, flat_city_street, flat_kitchen, flat_office, flat_school, flat_bedroom,
+  flat_market, flat_chai_tapri, flat_airport, flat_bus_stop
+MUSIC: {music} (comedy suits most gags; none = silence)
+EMOTIONS: {", ".join(EMOTIONS)}
+SLAPSTICK ACTIONS (each plays its own sound and effects automatically):
+{slap}
+OTHER ACTIONS: {basic}
+PROPS (held from that line on; "none" puts it away): {props}
+CARTOON EFFECTS (fx):
+{effects}
+SOUNDS (a line's "sound" plays at its start):
+{sounds}
+CAMERA (optional, "camera: <id>"): auto, wide, single, close
+
+=== EXAMPLE ===
+{HEADER}
+title: The Sleeping Champion
+hook:
+language: en
+music: comedy
+
+## CHARACTERS
+- id: tom | name: Tom | look: stick_blue | gender: male
+- id: bob | name: Bob | look: stick_red | gender: male
+
+## SCENE | background: flat_white | music: comedy
+cast: tom, bob
+tom (sleepy, lie_sleep, silent: 2.6, fx: alarm)
+bob (happy, walk_in, silent: 1.8)
+bob (surprised, double_take, silent: 2)
+bob (neutral, poke, silent: 1.6)
+bob (angry, shake_awake, silent: 1.6, fx: steam)
+bob (thinking, think, silent: 1.2, fx: idea, sound: ding)
+bob (excited, hold_jug, silent: 1.2)
+bob (happy, lower_jug, silent: 1.6, meanwhile: tom shocked wake_jolt)
+tom (proud, cheer, silent: 1.4, fx: sparkle)
+bob (relieved, thumbs_up, silent: 1.2)
+tom (sleepy, sleep_stand, silent: 2.2)
+bob (shocked, jaw_drop, silent: 1.4)
+bob (worried, poke, silent: 1.2)
+tom (sleepy, faint, silent: 1.6)
+bob (sad, disappointed, silent: 2.4)
 """
 
 
@@ -374,6 +576,7 @@ def parse(text: str) -> dict:
     props_allowed = set(PROP_LABELS) - {""} | {"none"}
     cams, sounds = set(SHOT_LABELS), set(SOUND_LABELS)
     stickers = set(_stickers())
+    fx_allowed = set(EFFECT_LABELS) - {""}
     kadhai, explainers = _kitchen()
     music = set(_music())
     looks = _visible_looks()
@@ -458,7 +661,7 @@ def parse(text: str) -> dict:
         text = text.strip().strip('"“”').strip()
         ln = dict(speaker=c["id"], text=text, emotion="neutral", action="talk", sound="", popup="", sticker="",
                   lights="", shot="auto", hold=0.0, actor="", actor_action="idle", actor_emotion="neutral",
-                  kadhai="", broll="", overlay="", prop="")
+                  kadhai="", broll="", overlay="", prop="", effect="")
         for part in _split_top(attrs, ","):
             k, v = _kv(part)
             if k is None:                                  # a bare word: emotion, action, prop, camera or sound
@@ -477,6 +680,8 @@ def parse(text: str) -> dict:
                     ln["shot"] = _pick("camera", w, cams)
                 elif _key(w) in sounds:
                     ln["sound"] = _key(w)
+                elif _pick("effect", w, fx_allowed):
+                    ln["effect"] = _pick("effect", w, fx_allowed)
                 else:
                     warn.append(f'Unknown word "{w}" in a line of {c["name"]}: ignored.')
                 continue
@@ -488,6 +693,8 @@ def parse(text: str) -> dict:
                 ln["prop"] = _pick("prop", v, props_allowed) or _bad(warn, "prop", v, "")
             elif k in ("camera", "shot", "angle", "camera_angle"):
                 ln["shot"] = _pick("camera", v, cams) or _bad(warn, "camera", v, "auto")
+            elif k in ("fx", "cartoon_effect", "visual_effect", "vfx") or (k == "effect" and _pick("effect", v, fx_allowed)):
+                ln["effect"] = _pick("effect", v, fx_allowed) or _bad(warn, "effect", v, "")
             elif k in ("sound", "sfx", "effect"):
                 ln["sound"] = _key(v) if _key(v) in sounds else _bad(warn, "sound", v, "")
             elif k in ("silent", "seconds", "hold", "duration"):
@@ -674,7 +881,8 @@ def export(tl: dict) -> str:
             for k, name in (("popup", "popup"), ("overlay", "overlay")):
                 if ln.get(k):
                     a.append(f"{name}: {q(ln[k])}")
-            for k, name in (("sticker", "sticker"), ("lights", "lights"), ("kadhai", "kadhai"), ("broll", "cutaway")):
+            for k, name in (("sticker", "sticker"), ("effect", "fx"), ("lights", "lights"), ("kadhai", "kadhai"),
+                            ("broll", "cutaway")):
                 if ln.get(k):
                     a.append(f"{name}: {ln[k]}")
             text = (ln.get("text") or "").strip()

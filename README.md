@@ -61,6 +61,18 @@ What the format can say:
 - **Big text on screen**: a bold message over the picture from a line to the end of its scene; write a second, smaller line after ` | ` (for example `आग पर पानी न डालें, उसे ढकें! | NEVER USE WATER ON OIL FIRE`).
 - **Paste a full script** understands all of these: VO lines, visuals, kadhai, B-roll, on-screen text, music changes and scene timings.
 
+## Stickman comedy (no dialogue, works in every country)
+
+Tell the joke with actions, faces and sound effects only.
+
+- **Stickmen**: Classic (black), Blue (spiky hair), Red (headband), Girl (bow, skirt), Kid (cap) and Boss (tie, glasses, mustache). They have big expressive eyes and can do every action, emotion and prop the flat cartoon people can.
+- **Slapstick moves** (in the Action menu as "Comedy: ...", and they work for the flat cartoon people too): slip and fall, trip on the face, get up, get hit and fly off the screen, bonk on the head, freeze in shock, double-take, faint, fight in a dust cloud, run and crash into a wall, dizzy, shiver, cartoon run, run across the screen, chase, sneak in on tiptoe, roll on the floor laughing, kick, jaw drop, sleep on the floor (snoring, snot bubble), fall asleep standing, wake up with a jolt, poke someone, shake someone by the shoulders, exaggerated disappointment (slumps under a rain cloud). Poking and shaking walk up to the other person first; a slip shows the banana peel that caused it. Each move adds its own sound and effects, and a little camera shake when someone hits the ground. A fall stays down until that character's next action (for example "Get up").
+- **Cartoon effects** (a line's **Effect** menu): dizzy stars, impact burst, speed lines, dust puffs, flying sweat, a red "!" or a "?" above the head, angry steam, floating hearts, shivering lines, a rain cloud over the head, eyes popping out, an idea bulb, sparkles, an alarm clock ringing beside them (with its sound), a fly buzzing around the head (with its sound), a snot bubble.
+- **Cartoon sounds**: slip, slide whistle up and down, zip (fast run), bonk, dizzy birds tweeting, crash, glass breaking, crickets (awkward silence), sad trombone "wah wah waaah", sneaky tiptoe music, awooga horn, spring "doing", fight cloud, alarm clock, fly buzzing, snoring, poke "boop".
+- **Backgrounds**: Plain white (the classic stickman look) and Doodle paper (notebook lines, hand-drawn hills, sun, drifting clouds).
+- **How to make one**: add stickmen in Cast, pick the Plain white background, then add lines with **no words**: set the seconds, an action, an emotion, a sound and an effect. In the script format, write `tom (scared, slip_fall, silent: 2, fx: dizzy)`.
+- **Stickman comedy script**: under "Paste a full script", the **Get the stickman script format** button gives a separate format just for stickman gags. Type a gag idea and a length, copy the format into ChatGPT, Gemini or any AI app, and paste its answer back to Import. It teaches the AI how to build a gag with only stickmen, slapstick moves, faces, cartoon effects and sounds, and no dialogue. It gives these rules: one simple situation everyone knows, 2 or 3 characters with a visible goal, 15 to 18 short beats, show instead of explaining, a visible cause for every action, three escalating attempts, big reactions, no dead beats, sounds on the physical beats, and a visual punchline in the last 3 seconds. It also lists ready ideas (banana trouble, the impossible fly, gym disaster, the last samosa, the sleeping champion) and includes a full example.
+
 ## What you need
 
 - Python 3.10 or newer
