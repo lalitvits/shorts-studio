@@ -233,7 +233,8 @@ Allowed actions: {actions}
     dizzy, shiver, cartoon_run, run_across (runs through the frame), chase (runs across just behind the other one:
     put it on the other one's run_across line as the actor), sneak_in / tiptoe, laugh_floor, kick, jaw_drop,
     lie_sleep (asleep on the floor, snoring), sleep_stand (falls asleep standing), wake_jolt, poke / shake_awake
-    (walks up to the nearest person first), disappointed (slumps, rain cloud).
+    (walks up to the nearest person first), disappointed (slumps, rain cloud), invisible_wall (walks into an
+    invisible wall: bonk, the glass shows for a moment).
     Their sounds (slip, thud, bonk, tweet, zip, crash...) are added automatically: do not put them in "sound".
     A fall stays down until the character's next action (get_up).
 Allowed camera shots: {shots}
@@ -397,7 +398,7 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
             continue
         auto = {"throw": ("chappal", "slap", "whoosh", "punch"), "cook": ("sizzle",), "turn_off_gas": ("click",),
                 "cover_kadhai": ("clang",), "run_in": ("footsteps",), "lower_jug": ("splash",)}
-        from .stick import MOVE_HOLD, MOVE_SOUNDS
+        from .stick import MOVE_SOUNDS, move_hold
         for a_, snds in MOVE_SOUNDS.items():
             auto[a_] = tuple(x[1] for x in snds)
         for ln in lines:                       # sounds the app adds by itself are not added twice
@@ -406,7 +407,7 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
             if ln["sound"] in made:
                 ln["sound"] = ""
             if not ln["text"] and not ln["sound"] and not ln["hold"]:
-                ln["hold"] = MOVE_HOLD.get(ln["action"], 1.5)   # a visual with no words still gets a moment on screen
+                ln["hold"] = move_hold(ln["action"])   # a visual with no words still gets a moment on screen
         lighting = sc.get("lighting") if sc.get("lighting") in ("day", "dark", "phone") else "day"
         on = [i for i, ln in enumerate(lines) if ln["lights"] == "on"]
         if on:                                 # a light switched on means the room was dark before

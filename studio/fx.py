@@ -628,6 +628,16 @@ def _snore():
     return out
 
 
+def _step():
+    """One soft cartoon footstep (a muffled tap)."""
+    n, rnd, out = int(0.12 * RATE), random.Random(3), []
+    for i in range(n):
+        t = i / RATE
+        out.append(math.sin(TWO_PI * (140 + 60 * math.exp(-t * 60)) * t) * math.exp(-t * 45)
+                   + rnd.uniform(-1, 1) * math.exp(-t * 90) * 0.35)
+    return _lowpass(out, 0.4)
+
+
 def _boop():
     """A cartoon poke: a short, round boop."""
     n, ph, out = int(0.18 * RATE), 0.0, []
@@ -645,7 +655,7 @@ MAKERS = {"punch": _punch, "slap": _slap, "whoosh": _whoosh, "pop": _pop, "ding"
           "clang": _clang, "slip": _slip, "slide_up": _slide_up, "slide_down": _slide_down, "zip": _zip,
           "bonk": _bonk, "tweet": _tweet, "crash": _crash, "glass_break": _glass_break, "crickets": _crickets,
           "wah_wah": _wah_wah, "tiptoe": _tiptoe, "awooga": _awooga, "spring": _spring, "fight": _fight,
-          "alarm": _alarm, "buzz": _buzz, "snore": _snore, "boop": _boop}
+          "alarm": _alarm, "buzz": _buzz, "snore": _snore, "boop": _boop, "step": _step}
 
 
 def fx_wav(fx_id: str) -> Path:

@@ -1701,8 +1701,14 @@ class FlatComposer:
                 kind = "auto"
             auto = kind == "auto"
             acts = {ln.action, getattr(ln, "actor_action", "")}
-            if auto and self._stick_scene(sc) and len(cast) > 1:   # stickman comedy: everyone in view, always
-                kind = "close" if "jaw_drop" in acts and last_close.get(subj, -9) < i - 3 else "wide"
+            far = False
+            if auto and self._stick_scene(sc):              # stickman comedy: a tight two-shot of everyone,
+                react = acts & stick.REACTIONS or getattr(ln, "effect", "") == "eyes_pop"   # a big reaction: close
+                if react and last_close.get(subj, -9) < i - 2:
+                    kind = "close"
+                else:                                        # pulled back when someone lies, runs or flies
+                    far = bool(acts & stick.FAR_MOVES) or self._anyone_down(sc, a, b)
+                    kind = "wide" if len(cast) > 1 else "single"
                 auto = False
             if auto and acts & stick.NEED_WIDE:              # slapstick needs the whole body (and the floor) in view
                 kind = "wide" if len(cast) > 1 else "single"
@@ -1727,7 +1733,7 @@ class FlatComposer:
                 kind = "single"
             if kind == "ots" and narr:
                 kind = "single"
-            spec = dict(type=kind, subj=subj, partner=partner)
+            spec = dict(type=kind, subj=subj, partner=partner, far=far)
             dur = ln.end - ln.start
             if auto and partner and dur > 5.5 and kind not in ("wide", "stove") and not narr:   # a reaction shot
                 cut = ln.start + dur * 0.58
@@ -1761,11 +1767,15 @@ class FlatComposer:
         if t == "wide":
             n = len(cast)
             sc_ = 0.82 if n <= 2 else max(0.55, 0.82 - 0.09 * (n - 2))
-            if self._stick_scene(sc):                           # stickmen: a wider view, room to fall and run
-                sc_ = 0.68 if n <= 2 else max(0.5, 0.68 - 0.07 * (n - 2))
             xs = [540] if n == 1 else [FW * (0.2 + 0.6 * i / (n - 1)) for i in range(n)]
-            if self._stick_scene(sc) and n == 2:
-                xs = [FW * 0.2, FW * 0.86]
+            if self._stick_scene(sc):                           # stickmen: big in the frame (faces readable on a
+                if spec.get("far"):                             # phone); pulled back when someone lies or runs
+                    sc_ = 0.68 if n <= 2 else max(0.5, 0.68 - 0.07 * (n - 2))
+                    xs = [540] if n == 1 else [FW * 0.2, FW * 0.86] if n == 2 else xs
+                else:
+                    sc_ = 1.0 if n <= 2 else max(0.72, 0.9 - 0.06 * (n - 3))
+                    xs = [540] if n == 1 else [FW * 0.29, FW * 0.71] if n == 2 else \
+                        [FW * (0.16 + 0.68 * i / (n - 1)) for i in range(n)]
             if stove:                                          # everyone to the left of the stove
                 xs = [400] if n == 1 else [FW * (0.13 + 0.47 * i / (n - 1)) for i in range(n)]
             for i, cid in enumerate(cast):
@@ -1777,7 +1787,8 @@ class FlatComposer:
             if self._animal(subj):
                 actors.append(dict(cid=subj, view="side", x=520, g=G + 40, scale=1.45, face=fd))
             else:
-                actors.append(dict(cid=subj, view="front", x=540, g=G, scale=1.05, face=fd))
+                big = 1.18 if self._stick_scene(sc) and not spec.get("far") else 0.8 if spec.get("far") else 1.05
+                actors.append(dict(cid=subj, view="front", x=540, g=G, scale=big, face=fd))
             bg = (base + 260 * fd, 1.12, False)
         elif t == "close":
             fd = side
@@ -1800,8 +1811,67 @@ class FlatComposer:
             bg = (base - 380, 1.0, True)
         return dict(bg=bg, actors=actors, ground=G, type=t)
 
+    EASE = 0.18
+
+    def _ease(self, sc, cid, mine, now, recent, t, pose, key):
+        """Blend the arms and body from the pose shown just before (a new line starting, or a line just ended).
+        Returns a cache tag for the blend, or None."""
+        if any(pose.get(q) for q in ("rot", "move", "cloud", "sq", "ride", "sit")):
+            return None
+        if now is not None:
+            i = mine.index(now)
+            since = t - now[0]
+            if since >= self.EASE:
+                return None
+            if i > 0 and mine[i - 1][1] >= now[0] - 0.05:          # straight from their previous line
+                pa, pe, pt = mine[i - 1][2], mine[i - 1][3], mine[i - 1][1] - mine[i - 1][0]
+            elif i > 0 and mine[i - 1][2] in FLAT_PERSIST:
+                pa, pe, pt = mine[i - 1][2], mine[i - 1][3], 9.0
+            else:
+                pa, pe, pt = "idle", "neutral", t - sc.start
+            if pa == now[2]:
+                return None
+        elif recent is not None and recent[2] not in FLAT_PERSIST and 0 <= t - recent[1] < self.EASE:
+            since = t - recent[1]                                   # their line just ended: back to standing
+            pa, pe, pt = recent[2], recent[3], recent[1] - recent[0]
+        else:
+            return None
+        if pa in stick.SLAPSTICK or pa in ("walk_in", "walk_out", "run_in", "run_out", "ride_in", "ride_out"):
+            return None
+        prev = pose_for(pa, pe, round(pt * 15) / 15, False, key)
+        if any(prev.get(q) for q in ("rot", "move", "cloud", "sq", "ride", "sit")):
+            return None
+        w = since / self.EASE
+        w = w * w * (3 - 2 * w)
+        for arm in ("L", "R"):
+            ax_, ay_ = stick.hand_target(prev[arm])
+            bx_, by_ = stick.hand_target(pose[arm])
+            pose[arm] = ("ik", ax_ + (bx_ - ax_) * w, ay_ + (by_ - ay_) * w)
+        for q in ("dx", "dy", "head_dx", "head_dy", "crouch"):
+            pose[q] = prev.get(q, 0.0) + (pose.get(q, 0.0) - prev.get(q, 0.0)) * w
+        return (pa, round(w, 2))
+
+    def _last_scene(self):
+        return next((x for x in reversed(self.sched) if x.card is None), None)
+
     def _stick_scene(self, sc) -> bool:
         return bool(sc.cast) and all(self.specs[c]["kind"] == "stick" for c in sc.cast)
+
+    def _latest(self, sc, cid, t):
+        last = None
+        for m in self._acts(sc, cid):
+            if m[0] > t:
+                break
+            last = m[2]
+        return last
+
+    def _anyone_down(self, sc, a, b) -> bool:
+        """Someone lies on the floor (or is out running) between a and b: the camera pulls back."""
+        for cid in sc.cast:
+            for tt in (a + 0.01, (a + b) / 2, b - 0.01):
+                if self._latest(sc, cid, tt) in stick.DOWN:
+                    return True
+        return False
 
     def _sleeping(self, sc, cid, t) -> bool:
         """Lying asleep on the floor right now (their latest action is lie_sleep)."""
@@ -2013,7 +2083,7 @@ class FlatComposer:
     # ------------------------------------------------------------- frame
     def frame(self, sc, t: float) -> Image.Image:
         segs = self.segments(sc)
-        si = next((i for i, s in enumerate(segs) if s[0] <= t < s[1]), len(segs) - 1)
+        si = next((i for i, s in enumerate(segs) if s[0] <= t < s[1]), 0 if t < segs[0][0] else len(segs) - 1)
         seg = segs[si]
         lkey = ("lay", id(sc), si)
         if lkey not in self.segs:
@@ -2109,7 +2179,7 @@ class FlatComposer:
             blink = blink_amount(t, phase)
             # quantize so repeated drawings come from the cache
             mq = round(mouth * 6) / 6
-            fq = 15 if speaking or action in SMOOTH_ACTIONS else 6
+            fq = 15 if speaking or action in SMOOTH_ACTIONS or sp["kind"] == "stick" else 6
             tq = round(t_act * fq) / fq
             if sp["kind"] == "3d":                  # real 3D model, rendered by the hidden browser
                 spr3 = self._sprite_3d(a, sp, action, emotion, speaking, still, mq, blink, tq, k)
@@ -2139,6 +2209,9 @@ class FlatComposer:
                 pose["dx"] = 0.0
             if held:                                   # something they carry (a line's "prop")
                 hold_prop(pose, held, action)
+            blend = None
+            if sp["kind"] == "stick" and not walk and not a.get("back"):   # ease from the last pose (0.18 s)
+                blend = self._ease(sc, cid, mine, now, recent, t, pose, key)
             if a.get("back"):                    # big foreground back: hardly moves, so it is drawn once
                 tq, mq, blink = (round(t_act * 6) / 6 if sp["kind"] not in ("human", "stick") else 0.0), 0.0, 0.0
                 if sp["kind"] in ("human", "stick"):
@@ -2146,7 +2219,7 @@ class FlatComposer:
                     pose["dy"] = 0.0
             scale_px = a["scale"] * k
             ck = (cid, a["view"], a["face"], round(scale_px, 3), action, emotion, mq, round(blink, 1), tq, speaking, key,
-                  held, eff, reach_down)
+                  held, eff, reach_down, blend)
             below = (FH - a["g"]) * k
             spr, (ax, ay) = self.sprites.get(ck, lambda: render_sprite(sp, a["view"], a["face"], scale_px, pose,
                                                                      emotion, mq, blink, tq, speaking, below))
@@ -2174,6 +2247,9 @@ class FlatComposer:
                 ax_ = fx - 590 * sr * hk - (130 if sr > 0 else -130) * hk if lying else fx - a["face"] * 300 * hk
                 ax_ = min(max(ax_, 90 * hk), self.w - 90 * hk)
                 stick.draw_alarm(im, ax_, fy, hk, t)
+            if action == "invisible_wall" and 0.42 < t_act < 1.5:     # the invisible wall shows for a moment
+                hk = scale_px * sp.get("height", 1.0)
+                stick.draw_glass(im, fx + a["face"] * (180 + 70) * hk, fy, hk, (t_act - 0.42) / 1.08)
             if action == "crash_wall":               # the wall they run into
                 hk = scale_px * sp.get("height", 1.0)
                 stick.draw_wall(im, fx + a["face"] * 330 * hk, fy, hk, a["face"])
@@ -2196,6 +2272,8 @@ class FlatComposer:
         u = min(1.0, max(0.0, (t - a0) / max(0.5, b0 - a0)))
         u = u * u * (3 - 2 * u)
         zoom = 1.0 + 0.045 * u
+        if self._stick_scene(sc) and sc is self._last_scene() and si == len(segs) - 1:
+            zoom = 1.0 + 0.16 * u                      # the punchline: push in
         dirx = 1 if _h(round(a0, 2)) % 2 else -1
         cw, ch = self.w / zoom, self.h / zoom
         cx = self.w / 2 + dirx * 16 * k * u

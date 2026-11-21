@@ -134,7 +134,7 @@ def normalize(tl: dict) -> dict:
                 if (ln.get("action") in ("talk", "idle", None, "") and not ln.get("kadhai") and not ln.get("actor")
                         and not ln.get("broll") and not ln.get("overlay")):
                     continue                                     # nothing to say, play or show
-                hold = stick.MOVE_HOLD.get(ln.get("action"), 1.5)   # an action with no words: a silent moment
+                hold = stick.move_hold(ln.get("action"))          # an action with no words: a silent moment
             actor = ln.get("actor") if ln.get("actor") in ids and ln.get("actor") not in narrators else ""
             lines.append(dict(speaker=ln.get("speaker") if ln.get("speaker") in ids else ids[0], text=text, sound=sound,
                               hold=hold, actor=actor,
@@ -250,6 +250,39 @@ def _line_extras(lt, ln: dict):
     lt.prop = ln.get("prop", "")
     lt.effect = ln.get("effect", "")
     return lt
+
+
+def trim_empty(tl: dict, sched: list, total: float) -> tuple[list, float]:
+    """Cut the end of a scene where everyone has already left the frame (run across, walked out, flew away) and
+    nothing more is said or heard; later scenes move up."""
+    fc = FlatComposer(tl, sched, 108, 192)
+    shift = 0.0
+    for sc in sched:
+        if shift:
+            sc.start, sc.end = sc.start - shift, sc.end - shift
+            for ln in sc.lines:
+                ln.start, ln.end = ln.start - shift, ln.end - shift
+        if sc.card is not None or not sc.cast or not fc.handles(sc):
+            continue
+        t, empty_from = sc.end - 0.05, None
+        while t > sc.start:
+            if all(fc._walk(sc, cid, {"x": 0.0}, t) == "hidden" for cid in sc.cast):
+                empty_from = t
+                t -= 0.1
+            else:
+                break
+        if empty_from is None:
+            continue
+        new_end = empty_from + 0.5
+        if new_end > sc.end - 0.6 or any(ln.end > empty_from and (ln.text or ln.reaction) for ln in sc.lines):
+            continue
+        cut = sc.end - new_end
+        sc.lines = [ln for ln in sc.lines if ln.start < new_end]
+        for ln in sc.lines:
+            ln.end = min(ln.end, new_end)
+        sc.end = new_end
+        shift += cut
+    return sched, total - shift
 
 
 def silent_clip(seconds: float) -> Clip:
@@ -919,6 +952,7 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
             sched, total = build_schedule(tl, clip_for)
         except SoundError as e:
             raise RenderError(str(e))
+        sched, total = trim_empty(tl, sched, total)    # no empty screen after everyone has left
         voice_input = "voice.wav"
     music_path = None
     if au["music_id"]:
@@ -944,6 +978,9 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
 
     w, h, fps = q["w"], q["h"], q["fps"]
     comp = Composer(tl, sched, w, h, q["ss"])
+    stick_ids = {c["id"] for c in tl["characters"] if LOOKS.get(c["look"], {}).get("flat", {}).get("kind") == "stick"}
+    on_screen = {c["id"] for c in tl["characters"] if c["look"] not in NARRATOR_LOOKS}
+    stick_video = bool(stick_ids) and stick_ids >= on_screen      # a stickman comedy: music carries it
     work = Path(tempfile.mkdtemp(prefix="shorts_"))
     try:
         if au["mode"] != "file":
@@ -977,7 +1014,7 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
             if tl["hook"]:
                 events.append((0.1, "pop", 0.6))
             events += kitchen.sound_events(sched)          # sizzle, fire, thali clang, gas knob, footsteps, splash
-            events += stick.sound_events(sched)            # slip, thud, bonk, tweeting birds, zip, crash...
+            events += stick.sound_events(sched, stick_ids)  # slip, thud, bonk, tweeting birds, zip, crash...
         events += [(sc.start + 0.05, sc.card_sound, 1.0) for sc in sched if sc.card is not None and sc.card_sound]
         events += [(ln.start, "click", 0.9) for sc in sched for ln in sc.lines if getattr(ln, "lights", "")]
         events += [(ln.start + 0.05, "ping", 0.9) for sc in sched for ln in sc.lines if ln.popup]
@@ -1026,7 +1063,14 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
             streams.append(("fxs", 0.9))
         if music_idx:
             graph += f";[{music_idx}:a]{norm}[mus]"
-            streams.append(("mus", au["music_volume"]))
+            mvol, mname = au["music_volume"], "mus"
+            if stick_video:                    # no words: the music is louder, and dips under each sound effect
+                mvol = max(mvol, 0.55)
+                if fx_idx:
+                    graph = graph.replace(f"[{fx_idx}:a]{norm}[fxs]", f"[{fx_idx}:a]{norm},asplit=2[fxs][fxk]")
+                    graph += ";[mus][fxk]sidechaincompress=threshold=0.03:ratio=5:attack=15:release=350[musd]"
+                    mname = "musd"
+            streams.append((mname, mvol))
         if len(streams) == 1:
             audio_graph = graph.rsplit("[voice]", 1)[0] + "[aout]"
         else:

@@ -29,6 +29,29 @@ STAYS = {"slip_fall", "fall_face", "faint", "crash_wall"}
 # moves that keep going (still animated) until the character's next action
 LOOPS = {"lie_sleep", "sleep_stand"}
 TWO_PERSON = {"poke", "shake_awake"}      # they walk up to the nearest person first
+REACTIONS = {"jaw_drop", "freeze"}         # big reactions: a quick close-up
+DOWN = STAYS | {"lie_sleep", "laugh_floor"}  # lying on the floor: the camera pulls back
+FAR_MOVES = DOWN | {"run_across", "chase", "fly_away", "fight_cloud", "sneak_in", "invisible_wall", "get_up",
+                    "wake_jolt"}
+def move_hold(action) -> float:
+    """Seconds a silent line lasts when no seconds are given."""
+    return MOVE_HOLD.get(action, 1.0 if action in QUICK else 1.5)
+
+
+# simple gestures: a silent line with one of these is short (seconds) unless you set the seconds
+QUICK = {"wave", "point", "thumbs_up", "ok_sign", "stop", "shrug", "facepalm", "clap", "jump", "cheer", "look_camera",
+         "think", "arms_crossed", "look_around", "dance", "punch", "slap", "hands_up"}
+# a stickman's own, clearer faces (bigger difference between the emotions)
+STICK_FACE = {"happy": dict(eyes="happy", mouth="smile"), "proud": dict(eyes="happy", mouth="smile", brow=0.4),
+              "excited": dict(eyes="wide", mouth="laugh", brow=-1.0), "angry": dict(eyes="open", mouth="frown", brow=1.8),
+              "sad": dict(eyes="half", mouth="frown", brow=-1.6), "neutral": dict(eyes="open", mouth="smile_s", brow=0),
+              "relieved": dict(eyes="happy", mouth="smile", brow=-0.6), "in_love": dict(eyes="happy", mouth="smile"),
+              "scared": dict(eyes="wide", mouth="o", brow=-1.6), "shocked": dict(eyes="wide", mouth="o", brow=-1.8)}
+# two-handed props held out in front (not hugged to the chest); the left arm's x is mirrored
+STICK_HOLD = {"plate_samosa": (("ik", -95, -610), ("ik", 205, -615)), "parcel": (("ik", -70, -600), ("ik", 190, -600)),
+              "book": (("ik", -80, -700), ("ik", 185, -700)), "laptop": (("ik", -90, -680), ("ik", 200, -680)),
+              "newspaper": (("ik", -60, -720), ("ik", 200, -720)), "jug": (("ik", -70, -690), ("ik", 185, -730)),
+              "jug_low": (("ik", -60, -560), ("ik", 170, -560))}
 # moves the camera must show in full (a reaction like a jaw drop can still get a close-up)
 NEED_WIDE = set(SLAPSTICK) - {"jaw_drop", "double_take", "freeze", "shiver", "dizzy"}
 EFFECTS = {k for k in EFFECT_LABELS if k}
@@ -37,10 +60,23 @@ MOVE_HOLD = {"slip_fall": 2.0, "fall_face": 1.8, "get_up": 1.3, "fly_away": 1.4,
              "double_take": 2.0, "faint": 2.0, "fight_cloud": 2.4, "crash_wall": 2.2, "dizzy": 2.0, "shiver": 1.6,
              "cartoon_run": 1.4, "run_across": 1.5, "chase": 1.8, "sneak_in": 2.8, "tiptoe": 2.0,
              "laugh_floor": 2.2, "kick": 1.2, "jaw_drop": 1.6, "lie_sleep": 2.2, "sleep_stand": 2.2,
-             "wake_jolt": 1.4, "poke": 1.6, "shake_awake": 1.6, "disappointed": 2.2}
+             "wake_jolt": 1.4, "poke": 1.6, "shake_awake": 1.6, "disappointed": 2.2, "invisible_wall": 2.0}
 
 
 HIP_L = ("ik", 126, -520)       # a hand on the hip
+FOODS_BIG = {"samosa", "jalebi", "vada_pav", "banana", "apple", "mango", "orange", "grapes", "watermelon", "tomato",
+             "onion", "potato", "carrot", "brinjal", "chilli", "cabbage", "cucumber", "lemon", "cauliflower", "bhindi",
+             "garlic", "peas", "bhutta", "coconut", "snack"}
+
+
+def hand_target(spec):
+    """Where a stickman's (right) hand ends up for an arm spec, as an ("ik", x, y) target (for easing poses)."""
+    if spec[0] in ("ik", "ikd"):
+        return spec[1], spec[2]
+    from .flat import _fk
+    a_ = max(24, spec[1]) if spec[1] <= 95 else 95 + (spec[1] - 95) * 0.5
+    _e, hand = _fk(14, -735, a_, spec[2], 170, 160, 1)
+    return hand[0], hand[1] - 10
 
 
 def _sm(v):
@@ -219,6 +255,24 @@ def slapstick_pose(p: dict, action: str, emotion: str, t: float):
         p["L"] = p["R"] = ("fk", 4, 0)
         p["emo"] = "sad"
         fx.add("rain_cloud")
+    elif action == "invisible_wall":                      # walks on happily... BONK, against nothing
+        if t < 0.45:
+            p.update(move=(180 * t / 0.45, 0))
+            p["walk"] = t
+            p["L"] = ("fk", 10 + 18 * s(t * 8), -10)
+            p["R"] = ("fk", 10 - 18 * s(t * 8), -10)
+            p["emo"] = "happy"
+        elif t < 0.95:                                    # squashed flat against the glass
+            p.update(move=(180, 0), sq=(0.62, 1.03))
+            p["L"] = p["R"] = ("fk", 90, 0)
+            p["emo"] = "shocked"
+            fx.add("impact")
+        else:                                             # bounces back, dizzy
+            e = _sm((t - 0.95) / 0.5)
+            p.update(move=(180 - 110 * e, 0), rot=10 * s(t * 6) * (1 - 0.5 * e), piv=-20)
+            p["eyes"] = "spiral"
+            p["L"] = p["R"] = ("fk", 40, 30)
+            fx.add("dizzy")
     elif action == "fight_cloud":
         p["cloud"] = True
         fx.add("cloud")
@@ -297,7 +351,7 @@ def slapstick_pose(p: dict, action: str, emotion: str, t: float):
 
 def impact_times(sched) -> list:
     """When a slapstick move lands (a small camera shake)."""
-    at = {"slip_fall": 0.45, "fall_face": 0.4, "fly_away": 0.03, "hit_head": 0.03, "faint": 0.9, "crash_wall": 0.4,
+    at = {"invisible_wall": 0.45, "slip_fall": 0.45, "fall_face": 0.4, "fly_away": 0.03, "hit_head": 0.03, "faint": 0.9, "crash_wall": 0.4,
           "kick": 0.32}
     out = []
     for sc in sched:
@@ -327,6 +381,7 @@ MOVE_SOUNDS = {
     "tiptoe": ((0.0, "tiptoe", 0.8),),
     "kick": ((0.2, "whoosh", 0.6), (0.32, "punch", 1.0)),
     "jaw_drop": ((0.0, "awooga", 0.9),),
+    "invisible_wall": ((0.44, "bonk", 1.0), (0.47, "spring", 0.6), (1.0, "tweet", 0.5)),
     "lie_sleep": ((0.1, "snore", 0.7), (2.1, "snore", 0.7), (4.1, "snore", 0.7)),
     "sleep_stand": ((0.3, "snore", 0.7), (2.3, "snore", 0.7), (4.3, "snore", 0.7)),
     "wake_jolt": ((0.0, "spring", 0.9), (0.05, "awooga", 0.7)),
@@ -337,8 +392,38 @@ MOVE_SOUNDS = {
 EFFECT_SOUNDS = {"alarm": "alarm", "fly": "buzz"}     # a line's effect that makes a sound
 
 
-def sound_events(sched) -> list:
-    out = []
+WHOOSH = {"wave", "point", "throw", "punch", "slap", "jump", "cheer", "shrug", "stop", "thumbs_up", "facepalm",
+          "dance", "clap", "hands_up"}
+WALKS = {"walk_in": 1.6, "walk_out": 1.6, "walk": 2.0}
+POP_EMOTIONS = {"shocked", "surprised", "angry", "scared", "excited", "laughing", "crying", "in_love", "confused"}
+
+
+def _stick_extras(sched, stick_ids) -> list:
+    """Stickman videos get small sounds for everything: footsteps when walking, a whoosh on fast gestures and a
+    pop when a face changes to a strong emotion."""
+    out, last_emo = [], {}
+    for sc in sched:
+        for ln in sc.lines:
+            for who, act, emo in ((ln.char, ln.action, ln.emotion),
+                                  (getattr(ln, "actor", ""), getattr(ln, "actor_action", ""),
+                                   getattr(ln, "actor_emotion", ""))):
+                if not who or who not in stick_ids:
+                    continue
+                if act in WALKS:
+                    k = 0.0
+                    while k < min(WALKS[act], ln.end - ln.start):
+                        out.append((ln.start + k + 0.1, "step", 0.55))
+                        k += 0.4
+                elif act in WHOOSH:
+                    out.append((ln.start + 0.04, "whoosh", 0.32))
+                if emo in POP_EMOTIONS and last_emo.get(who) != emo and not getattr(ln, "sound", ""):
+                    out.append((ln.start + 0.02, "pop", 0.35))
+                last_emo[who] = emo
+    return out
+
+
+def sound_events(sched, stick_ids=()) -> list:
+    out = _stick_extras(sched, set(stick_ids)) if stick_ids else []
     for sc in sched:
         for ln in sc.lines:
             for a in {ln.action, getattr(ln, "actor_action", "")}:
@@ -549,6 +634,13 @@ def draw_stick(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
     if pose.get("ride") is not None:
         _cycle(Pen(im, ox + pose["dx"] * s, oy, s), 0, 1, t, pose["ride"] * 7, sp.get("cycle_color", (214, 60, 52)))
     U = 120 * pose.get("crouch", 0.0)                       # knees bent: the upper body comes down
+    calm = not any(pose.get(q) for q in ("rot", "sq", "cloud", "ride", "sit"))
+    if calm:                                               # alive when standing: breathing, a little sway
+        U += 7 * math.sin(t * 2.6)
+        pose = dict(pose, head_dx=pose["head_dx"] + 5 * math.sin(t * 1.3))
+    emo_now = pose.get("emo") or emotion
+    if emo_now == "angry":                                 # red in the face
+        head_fill = (255, 212, 202)
     pen = Pen(im, ox + pose["dx"] * s, oy + pose["dy"] * s, s)            # legs (feet on the ground)
     up = Pen(im, ox + pose["dx"] * s, oy + (pose["dy"] + U) * s, s)        # body, arms and head
     hx, hy, r = pose["head_dx"] * 0.8, -905 + pose["head_dy"], 135
@@ -640,14 +732,15 @@ def draw_stick(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
             up.circle(bx, by, 18, acc, 5)
         if back:
             return
-        cfg = _face_cfg(pose.get("emo") or emotion)
+        cfg = _face_cfg(emo_now)
+        cfg.update(STICK_FACE.get(emo_now, {}))
         if pose.get("eyes"):
             cfg["eyes"] = pose["eyes"]
         look = pose.get("eyes_dir", 0.0)
         fx_, ey = hx + 10, hy - 6
         for side in (-1, 1):
-            ex = fx_ + side * 48
-            q = _scaled(up, ex, ey, 1.5)
+            ex = fx_ + side * 54
+            q = _scaled(up, ex, ey, 1.85)
             if "eyes_pop" in fxs:
                 q.circle(ex, ey, 14, (40, 30, 30), 0)
             elif not eye_extra(q, ex, ey, cfg["eyes"], t):
@@ -655,10 +748,11 @@ def draw_stick(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
             if sp.get("lashes") and cfg["eyes"] in ("open", "up", "wide", "half"):
                 for k in (-1, 0, 1):
                     up.line([(ex + k * 9, ey - 20), (ex + k * 14, ey - 34)], OUT, 4)
-        _brows(_scaled(up, fx_, ey - 44, 1.05), fx_, ey - 44 - (8 if cfg["eyes"] == "wide" else 0), cfg["brow"])
+        by_ = ey - 58 - (10 if cfg["eyes"] == "wide" else 0)
+        _brows(_scaled(up, fx_, by_, 1.25), fx_, by_, cfg["brow"])
         if sp.get("glasses"):
             for side in (-1, 1):
-                up.circle(fx_ + side * 46, ey, 40, None, 6, (40, 40, 48))
+                up.circle(fx_ + side * 54, ey, 46, None, 6, (40, 40, 48))
             up.line([(fx_ - 8, ey - 4), (fx_ + 8, ey - 4)], (40, 40, 48), 6)
         m = pose["chew"] if pose.get("chew") is not None and mouth < 0.05 else mouth
         jaw = pose.get("jaw", 0.0)
@@ -667,7 +761,7 @@ def draw_stick(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
             up.ellipse(fx_ - 46, hy + 40, fx_ + 46, hy + 40 + h, (110, 26, 34), 5)
             up.ellipse(fx_ - 26, hy + 40 + h * 0.55, fx_ + 26, hy + 40 + h * 0.95, (232, 110, 120), 0)
         else:
-            _mouth(_scaled(up, fx_, hy + 66, 1.1), fx_, hy + 66, cfg["mouth"], m, t)
+            _mouth(_scaled(up, fx_, hy + 74, 1.5), fx_, hy + 74, cfg["mouth"], m, t)
         if sp.get("mustache"):
             up.poly([(fx_ - 46, hy + 50), (fx_ - 26, hy + 34), (fx_, hy + 40), (fx_ + 26, hy + 34), (fx_ + 46, hy + 50),
                      (fx_ + 26, hy + 48), (fx_, hy + 52), (fx_ - 26, hy + 48)], C, 0)
@@ -678,8 +772,9 @@ def draw_stick(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
     # arms
     def _arms():
         hands = {}
+        held2 = STICK_HOLD.get(pose["prop"])
         for side, key in ((-1, "L"), (1, "R")):
-            spec = pose[key]
+            spec = held2[0 if key == "L" else 1] if held2 else pose[key]
             sx, sy = side * 14, -735
             if spec[0] in ("ik", "ikd"):
                 elbow, hand = _ik(sx, sy, side * spec[1], spec[2] + 10, 155, 150, side, down=spec[0] == "ikd")
@@ -693,7 +788,11 @@ def draw_stick(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
                 from .flat import _lathi
                 _lathi(up, elbow, hand)
             if key == "R" and not back and pose["prop"]:
-                _prop(up, pose["prop"], hand, hands.get("L"), C, pose.get("bite", 0))
+                if held2 or pose["prop"] in ("phone_ear", "ladle", "jug", "jug_low"):
+                    _prop(up, pose["prop"], hand, hands.get("L"), C, pose.get("bite", 0))
+                else:                                      # one-hand props and food: bigger, easy to see
+                    big = (1.2 if pose.get("chew") is not None else 1.55) if pose["prop"] in FOODS_BIG else 1.3
+                    _prop(_scaled(up, hand[0], hand[1], big), pose["prop"], hand, hands.get("L"), C, pose.get("bite", 0))
 
     # arms go behind the big head, unless a hand reaches the face (eating, facepalm, phone at the ear...)
     to_face = any(pose[k][0] in ("ik", "ikd") and pose[k][2] < -760 for k in ("L", "R"))
@@ -768,3 +867,20 @@ def draw_peel(im, x, ground, k, face, t):
         pen.poly([(-26, 0), tip, (26, 0)], yel, 4)
     pen.ellipse(-34, -22, 34, 6, yel, 4)
     pen.line([(-6, -18), (8, -34)], dark, 7)
+
+
+def draw_glass(im, x, ground, k, u):
+    """The invisible wall, seen for a moment: a faint glass pane with shine lines, fading away (u: 0..1)."""
+    from PIL import Image, ImageDraw
+    a = max(0.0, 1.0 - u) ** 0.8
+    if a <= 0.02:
+        return
+    w, h = max(2, round(46 * k)), max(2, round(1300 * k))
+    ov = Image.new("RGBA", (w + 4, h + 4), (0, 0, 0, 0))
+    d = ImageDraw.Draw(ov)
+    d.rectangle([2, 2, w + 1, h + 1], fill=(170, 215, 245, round(70 * a)), outline=(120, 180, 230, round(200 * a)),
+                width=max(1, round(4 * k)))
+    for f in (0.22, 0.3):                                   # shine
+        y0 = h * f
+        d.line([(4, y0 + 60 * k), (w - 2, y0)], fill=(255, 255, 255, round(230 * a)), width=max(1, round(5 * k)))
+    im.paste(ov, (round(x - w / 2), round(ground - h)), ov)

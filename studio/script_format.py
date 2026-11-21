@@ -73,7 +73,8 @@ SYN = {
                "chases": "chase", "run_after": "chase", "sneak": "tiptoe", "sneaking": "tiptoe", "tip_toe": "tiptoe",
                "sneaks_in": "sneak_in", "tiptoe_in": "sneak_in", "rofl": "laugh_floor", "rolling_laughing": "laugh_floor",
                "roll_laughing": "laugh_floor", "kicks": "kick", "kicking": "kick", "jaw": "jaw_drop",
-               "mouth_drop": "jaw_drop", "sleep": "lie_sleep", "sleeping": "lie_sleep", "asleep": "lie_sleep",
+               "mouth_drop": "jaw_drop", "glass_wall": "invisible_wall", "bump_into_wall": "invisible_wall",
+               "mime_wall": "invisible_wall", "walks_into_wall": "invisible_wall", "sleep": "lie_sleep", "sleeping": "lie_sleep", "asleep": "lie_sleep",
                "snoring": "lie_sleep", "nap": "lie_sleep", "sleep_standing": "sleep_stand",
                "falls_asleep_standing": "sleep_stand", "doze_off": "sleep_stand", "nod_off": "sleep_stand",
                "wake_up": "wake_jolt", "wakes_up": "wake_jolt", "jolt_awake": "wake_jolt", "pokes": "poke",
@@ -377,6 +378,12 @@ THE VIEWER MUST GET THE JOKE WITHOUT THINKING. Rules:
 - Twist: build anticipation, let the viewer expect one thing, then show something unexpected but logical.
 - Ending: a VISUAL punchline in the final 3 seconds, the funniest moment of the whole video (not a text card).
 - Zero dialogue: every line is silent. It works in every country.
+- NO TEXT ON SCREEN: leave "hook:" empty and do not end with a text card. The last action IS the punchline.
+  A CARD is only allowed for a short time jump ("5 minutes later"), never to explain or comment on the joke.
+- Pace: simple gestures (wave, point, shrug, cheer...) last 1 to 1.5 seconds; slapstick moves 1.5 to 2.5 seconds.
+  At most 2 beats in a row without a big movement.
+- Every scene ends with at least one character still on screen (nobody runs off and leaves an empty frame,
+  unless the scene ends right there).
 
 IDEAS THAT WORK (for inspiration):
 - Banana trouble: he carefully avoids a banana peel, then slips on the peel of the banana he just ate.
@@ -391,7 +398,8 @@ Write plain text: no Markdown (no **bold**, no code blocks, no bulleted lines). 
 === FORMAT ===
 {HEADER}
 title: <short title>
-hook: <optional: 2 to 4 words shown big in the first 2 seconds, or leave empty>
+hook:
+(leave hook empty: no text on screen)
 language: en
 music: <music id>
 
@@ -403,7 +411,7 @@ cast: <ids on screen, comma separated>
 <id> (<emotion>, <action>, silent: <seconds>, fx: <effect>, sound: <sound>, prop: <prop>)
 <id> (<emotion>, <action>, silent: <seconds>, meanwhile: <other id> <emotion> <action>)
 
-## CARD | text: <short text, e.g. Meanwhile... / 5 minutes later> | style: bright | sound: <sound> | seconds: 1.5
+## CARD | text: <only a time jump, e.g. 5 minutes later> | style: bright | sound: <sound> | seconds: 1.5
 
 Every line is silent: it has NO ":" and no words after the brackets. Every line has "silent: <seconds>".
 "meanwhile:" makes a second character act at the same time (for example the chaser in a chase:

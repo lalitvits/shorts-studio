@@ -36,7 +36,7 @@ SLAPSTICK_LABELS = {
     "get_up": "Get up after a fall", "fly_away": "Get hit and fly off the screen",
     "hit_head": "Bonk on the head (stars, dizzy)", "freeze": "Freeze in shock (stiff, trembling)",
     "double_take": "Double-take (look away, look back shocked)", "faint": "Faint (fall back stiff, X eyes)",
-    "fight_cloud": "Fight in a dust cloud", "crash_wall": "Run and crash into a wall (splat)",
+    "fight_cloud": "Fight in a dust cloud", "crash_wall": "Run and crash into a brick wall (splat)",
     "dizzy": "Dizzy (wobbly, spiral eyes)", "shiver": "Shiver with fear",
     "cartoon_run": "Cartoon run on the spot (legs spinning)",
     "run_across": "Run across the screen (enters, exits other side)",
@@ -48,6 +48,7 @@ SLAPSTICK_LABELS = {
     "wake_jolt": "Wake up with a jolt (jumps up, eyes pop)",
     "poke": "Poke someone (walks up, poke poke poke)", "shake_awake": "Shake someone by the shoulders",
     "disappointed": "Exaggerated disappointment (slumps, rain cloud)",
+    "invisible_wall": "Walk into an invisible wall (bonk, glass shows for a moment)",
 }
 ACTION_LABELS.update(SLAPSTICK_LABELS)
 ACTIONS = list(ACTION_LABELS)
