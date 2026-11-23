@@ -261,6 +261,9 @@ Rules:
   says "she stepped back" -> actor: her id, actor_action: "step_back", actor_emotion: "scared"). This also works on a
   normal line: "Stop!" said by the father while the son's jug is pushed down -> actor: son, actor_action: "lower_jug".
 - A visual with no words: a line with "text": "", the action, and "hold": its seconds (for example 2).
+- A mysterious bag / suitcase / parcel lying in the scene: "bag" on the line where it changes: "here" (it lies
+  there), "shake" (it shakes by itself), "open" (it pops open), "photo" (a photo flies out and is shown big),
+  "gone". Someone walking up to it: action "go_to_bag". A close-up of it: "shot": "bag".
 - Kadhai / stove: "kadhai" on the line where it changes: "fry" (oil frying), "fire" (the oil catches fire),
   "cover" (covered with a plate), "gas_off". The actions cook / turn_off_gas / cover_kadhai already do their part.
   A close-up of the stove: "shot": "stove". Their sounds (sizzle, fire, clang, knob click, running footsteps, water
@@ -280,7 +283,7 @@ Reply with JSON only:
               "lines": [{{"speaker": "id", "text": "...", "emotion": "...", "action": "...", "sound": "",
                          "popup": "", "sticker": "", "lights": "", "shot": "auto", "hold": 0, "actor": "",
                          "actor_action": "", "actor_emotion": "", "kadhai": "", "broll": "", "overlay": "",
-                         "prop": "", "effect": ""}}]}},
+                         "prop": "", "effect": "", "bag": ""}}]}},
              {{"card": "...", "card_style": "dark|black|bright", "card_sound": ""}}]}}
 
 Screenplay:
@@ -384,7 +387,8 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
                 broll=ln.get("broll") if ln.get("broll") in EXPLAINERS else "",
                 overlay=str(ln.get("overlay") or "")[:120],
                 prop=ln.get("prop") if ln.get("prop") in PROPS or ln.get("prop") == "none" else "",
-                effect=ln.get("effect") if ln.get("effect") in EFFECT_LABELS else ""))
+                effect=ln.get("effect") if ln.get("effect") in EFFECT_LABELS else "",
+                bag=ln.get("bag") if ln.get("bag") in ("here", "shake", "open", "photo", "gone") else ""))
             if lines[-1]["actor"] not in ids or lines[-1]["actor"] in narr:
                 lines[-1]["actor"] = ""
             last = lines[-1]

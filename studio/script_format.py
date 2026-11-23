@@ -73,13 +73,18 @@ SYN = {
                "chases": "chase", "run_after": "chase", "sneak": "tiptoe", "sneaking": "tiptoe", "tip_toe": "tiptoe",
                "sneaks_in": "sneak_in", "tiptoe_in": "sneak_in", "rofl": "laugh_floor", "rolling_laughing": "laugh_floor",
                "roll_laughing": "laugh_floor", "kicks": "kick", "kicking": "kick", "jaw": "jaw_drop",
-               "mouth_drop": "jaw_drop", "glass_wall": "invisible_wall", "bump_into_wall": "invisible_wall",
+               "mouth_drop": "jaw_drop", "walk_to_bag": "go_to_bag", "goes_to_bag": "go_to_bag",
+               "approach_bag": "go_to_bag", "glass_wall": "invisible_wall", "bump_into_wall": "invisible_wall",
                "mime_wall": "invisible_wall", "walks_into_wall": "invisible_wall", "sleep": "lie_sleep", "sleeping": "lie_sleep", "asleep": "lie_sleep",
                "snoring": "lie_sleep", "nap": "lie_sleep", "sleep_standing": "sleep_stand",
                "falls_asleep_standing": "sleep_stand", "doze_off": "sleep_stand", "nod_off": "sleep_stand",
                "wake_up": "wake_jolt", "wakes_up": "wake_jolt", "jolt_awake": "wake_jolt", "pokes": "poke",
                "poking": "poke", "shake_shoulders": "shake_awake", "shakes_awake": "shake_awake",
                "disappointment": "disappointed", "slump": "disappointed", "sad_slump": "disappointed"},
+    "bag": {"appears": "here", "lies": "here", "show": "here", "on_floor": "here", "shakes": "shake", "moves": "shake",
+            "moving": "shake", "shaking": "shake", "wiggle": "shake", "opens": "open", "opening": "open",
+            "pops_open": "open", "photo_out": "photo", "picture": "photo", "photo_flies_out": "photo",
+            "removed": "gone", "taken": "gone", "taken_away": "gone"},
     "effect": {"stars": "dizzy", "dizzy_stars": "dizzy", "seeing_stars": "dizzy", "pow": "impact", "bang": "impact",
                "hit_star": "impact", "!": "exclaim", "exclamation": "exclaim", "exclamation_mark": "exclaim",
                "alert": "exclaim", "?": "question", "question_mark": "question", "confused_mark": "question",
@@ -122,7 +127,8 @@ SYN = {
                "average": "normal", "medium": "normal"},
     "build": {"slim": "thin", "skinny": "thin", "lean": "thin", "chubby": "fat", "heavy": "fat", "healthy": "fat",
               "obese": "very_fat", "medium": "normal", "average": "normal", "fit": "normal"},
-    "background": {"chai_ki_tapri": "flat_chai_tapri", "chai_tapri": "flat_chai_tapri", "tapri": "flat_chai_tapri",
+    "background": {"chai_ki_tapri": "flat_chai_tapri", "chacha_ki_chai": "flat_chai_tapri",
+                   "चाचा_की_चाय": "flat_chai_tapri", "chai_tapri": "flat_chai_tapri", "tapri": "flat_chai_tapri",
                    "tea_stall": "flat_chai_tapri", "tea_shop": "flat_chai_tapri", "चाय_की_टपरी": "flat_chai_tapri",
                    "sabzi_mandi": "flat_sabzi_mandi", "mandi": "flat_sabzi_mandi", "vegetable_market": "flat_sabzi_mandi",
                    "सब्ज़ी_मंडी": "flat_sabzi_mandi", "सब्जी_मंडी": "flat_sabzi_mandi", "fruit_market": "flat_market",
@@ -243,6 +249,10 @@ cast: <ids of the characters on screen in this scene, comma separated>
   overlay: "<line 1> | <line 2>"   big bold text on screen until the scene ends (line 2 is smaller)
   lights: on/off            the room light switches on or off
   kadhai: <state>           kitchen only: the kadhai on the stove
+  bag: <state>              a mystery bag lying in the scene: here / shake / open / photo / gone
+                            (photo: a photo flies out and is held up big; the bag stays in later scenes
+                            with the same background; "camera: bag" is a close-up on it; the action
+                            go_to_bag walks up to it)
   cutaway: <cutaway>        the picture cuts to an explainer animation while the line is spoken
 Movement is an action: walk_in / walk_out / run_in / run_out / ride_in / ride_out (on a cycle) / appear / step_back.
 Slapstick is an action too: slip_fall, fall_face, get_up, fly_away, hit_head, freeze, double_take, faint, fight_cloud,
@@ -669,7 +679,7 @@ def parse(text: str) -> dict:
         text = text.strip().strip('"“”').strip()
         ln = dict(speaker=c["id"], text=text, emotion="neutral", action="talk", sound="", popup="", sticker="",
                   lights="", shot="auto", hold=0.0, actor="", actor_action="idle", actor_emotion="neutral",
-                  kadhai="", broll="", overlay="", prop="", effect="")
+                  kadhai="", broll="", overlay="", prop="", effect="", bag="")
         for part in _split_top(attrs, ","):
             k, v = _kv(part)
             if k is None:                                  # a bare word: emotion, action, prop, camera or sound
@@ -715,6 +725,10 @@ def parse(text: str) -> dict:
                 ln["overlay"] = v[:120]
             elif k in ("lights", "light"):
                 ln["lights"] = _key(v) if _key(v) in ("on", "off") else ""
+            elif k in ("bag", "mystery_bag", "suitcase_state"):
+                from .bag import BAG_STATES
+                bv = SYN["bag"].get(_key(v), _key(v))
+                ln["bag"] = bv if bv in BAG_STATES else _bad(warn, "bag state", v, "")
             elif k == "kadhai":
                 ln["kadhai"] = _key(v) if _key(v) in kadhai else _bad(warn, "kadhai state", v, "")
             elif k in ("cutaway", "broll", "b_roll"):
@@ -889,7 +903,7 @@ def export(tl: dict) -> str:
             for k, name in (("popup", "popup"), ("overlay", "overlay")):
                 if ln.get(k):
                     a.append(f"{name}: {q(ln[k])}")
-            for k, name in (("sticker", "sticker"), ("effect", "fx"), ("lights", "lights"), ("kadhai", "kadhai"),
+            for k, name in (("sticker", "sticker"), ("effect", "fx"), ("bag", "bag"), ("lights", "lights"), ("kadhai", "kadhai"),
                             ("broll", "cutaway")):
                 if ln.get(k):
                     a.append(f"{name}: {ln[k]}")

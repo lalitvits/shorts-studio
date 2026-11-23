@@ -266,6 +266,7 @@ function renderScenes() {
           <div class="line-sub four extras">
             <select aria-label="Prop the speaker holds from this line on" title="Something the speaker holds or has with them from this line on" data-path="scenes.${si}.lines.${li}.prop">${opts([{ id: "", label: "Prop: no change" }, { id: "none", label: "Prop: put it away" }].concat((A.props || []).filter(p => p.id).map(p => ({ id: p.id, label: "Prop: " + p.label }))), ln.prop || "")}</select>
             <select aria-label="Kadhai on the stove (kitchen)" data-path="scenes.${si}.lines.${li}.kadhai">${opts(KADHAI, ln.kadhai || "")}</select>
+            <select aria-label="Mystery bag on the floor" title="A bag lying in the scene: it can shake, pop open and let a photo fly out" data-path="scenes.${si}.lines.${li}.bag">${opts(A.bag_states || [{ id: "", label: "Bag: no change" }], ln.bag || "")}</select>
             <select aria-label="Cut-away picture (B-roll)" data-path="scenes.${si}.lines.${li}.broll">${opts(brollOpts(), ln.broll || "")}</select>
             <input aria-label="Big text on screen (optional)" lang="hi" placeholder="Big text on screen (line 1 | line 2)" data-path="scenes.${si}.lines.${li}.overlay" value="${esc(ln.overlay || "")}">
           </div>

@@ -29,6 +29,7 @@ ACTION_LABELS = {
     "run_out": "Run away (leaves running)",
     "sit": "Sit on sofa", "sit_phone": "Sit and use phone", "sit_tea": "Sit and drink tea",
     "sit_read": "Sit and read", "sit_eat": "Sit and eat a snack", "sit_sleep": "Sit and sleep",
+    "go_to_bag": "Walk up to the mystery bag (bends toward it)",
 }
 # slapstick comedy moves (stick.py): they work for the stickmen and the flat cartoon people
 SLAPSTICK_LABELS = {
@@ -229,7 +230,7 @@ FLAT_BACKGROUNDS = {
     "flat_office": "Flat cartoon: office (computers, city window)",
     "flat_market": "Flat cartoon: market (stalls, lights, shoppers)",
     "flat_bedroom": "Flat cartoon: bedroom at night (bed, window, fan)",
-    "flat_chai_tapri": "Flat cartoon: chai ki tapri (chaiwala pouring chai, neem tree)",
+    "flat_chai_tapri": "Flat cartoon: chai ki tapri, Chacha ki Chai (colourful stall, chaiwala pouring chai)",
     "flat_sabzi_mandi": "Flat cartoon: sabzi mandi (vegetable and fruit carts)",
     "flat_airport": "Flat cartoon: airport (departure board, planes)",
     "flat_bus_stop": "Flat cartoon: bus stop (shelter, passing bus)",
@@ -240,7 +241,7 @@ FLAT_BACKGROUNDS = {
 # Camera shot for a line (flat cartoon style). "auto" picks one like a cartoon editor would.
 SHOT_LABELS = {"auto": "Camera: automatic", "wide": "Camera: wide (everyone)", "single": "Camera: on the speaker",
                "ots": "Camera: over the shoulder", "close": "Camera: close-up",
-               "stove": "Camera: close-up on the stove (kitchen)"}
+               "stove": "Camera: close-up on the stove (kitchen)", "bag": "Camera: close-up on the mystery bag"}
 
 # Older saved projects used other ids; they now open as the closest of the three.
 LOOK_ALIASES = {"blue_shirt": "rahul", "rahul_sheet": "rahul", "vikram": "rahul", "vikram_sheet": "rahul",
@@ -311,10 +312,10 @@ SOUND_LABELS = {
     "awooga": "Awooga horn, eyes pop (effect)", "spring": "Spring boing, doing (effect)",
     "fight": "Cartoon fight cloud (effect)",
     "alarm": "Alarm clock ringing (effect)", "buzz": "Fly buzzing (effect)", "snore": "Snoring (effect)",
-    "boop": "Poke, boop (effect)",
+    "boop": "Poke, boop (effect)", "rustle": "Rustling, something moving inside (effect)",
 }
 FX_SOUNDS = {"slip", "slide_up", "slide_down", "zip", "bonk", "tweet", "crash", "glass_break", "crickets", "wah_wah",
-             "tiptoe", "awooga", "spring", "fight", "alarm", "buzz", "snore", "boop",
+             "tiptoe", "awooga", "spring", "fight", "alarm", "buzz", "snore", "boop", "rustle",
              "punch", "slap", "whoosh", "pop", "ding", "boing", "thud", "growl", "ping", "doorbell", "chappal",
              "laugh_track", "boom", "dun_dun", "click", "tick", "scratch", "sizzle", "fire", "splash", "footsteps",
              "clang"}

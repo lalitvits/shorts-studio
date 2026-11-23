@@ -42,7 +42,7 @@ FX_LABELS = {"punch": "Punch hit (effect)", "slap": "Slap (effect)", "whoosh": "
              "tiptoe": "Sneaky tiptoe music (effect)", "awooga": "Awooga horn, eyes pop (effect)",
              "spring": "Spring boing, doing (effect)", "fight": "Cartoon fight cloud (effect)",
              "alarm": "Alarm clock ringing (effect)", "buzz": "Fly buzzing (effect)", "snore": "Snoring (effect)",
-             "boop": "Poke, boop (effect)"}
+             "boop": "Poke, boop (effect)", "rustle": "Rustling, something moving inside (effect)"}
 MUSIC_LABELS = {"happy": "Happy (ukulele-style)", "comedy": "Comedy (bouncy)", "suspense": "Suspense",
                 "emotional": "Emotional (slow)", "heaven": "Heavenly (Swarg)", "hell": "Dark drums (Nark)",
                 "panic": "Panic (fast, tense)", "calm": "Calm, explaining (soft)"}
@@ -628,6 +628,19 @@ def _snore():
     return out
 
 
+def _rustle():
+    """Something moving inside a bag: scratchy rustling bursts."""
+    rnd, out = random.Random(52), []
+    n = int(0.65 * RATE)
+    y = 0.0
+    for i in range(n):
+        t = i / RATE
+        y += 0.5 * (rnd.uniform(-1, 1) - y)
+        burst = max(0.0, math.sin(TWO_PI * 7 * t)) ** 2 * (0.6 + 0.4 * math.sin(TWO_PI * 2.3 * t))
+        out.append(y * burst * math.sin(math.pi * t / 0.65))
+    return out
+
+
 def _step():
     """One soft cartoon footstep (a muffled tap)."""
     n, rnd, out = int(0.12 * RATE), random.Random(3), []
@@ -655,7 +668,7 @@ MAKERS = {"punch": _punch, "slap": _slap, "whoosh": _whoosh, "pop": _pop, "ding"
           "clang": _clang, "slip": _slip, "slide_up": _slide_up, "slide_down": _slide_down, "zip": _zip,
           "bonk": _bonk, "tweet": _tweet, "crash": _crash, "glass_break": _glass_break, "crickets": _crickets,
           "wah_wah": _wah_wah, "tiptoe": _tiptoe, "awooga": _awooga, "spring": _spring, "fight": _fight,
-          "alarm": _alarm, "buzz": _buzz, "snore": _snore, "boop": _boop, "step": _step}
+          "alarm": _alarm, "buzz": _buzz, "snore": _snore, "boop": _boop, "step": _step, "rustle": _rustle}
 
 
 def fx_wav(fx_id: str) -> Path:

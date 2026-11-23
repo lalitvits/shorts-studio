@@ -31,6 +31,7 @@ from .catalog import (ACTIONS, BUILDS, DEFAULT_VOICE, EMOTIONS, GEMINI_FOR_LOOK,
 from .flat import FlatComposer
 from . import fx as fx_mod
 from . import kitchen
+from . import bag
 from . import overlays
 from . import stick
 from .config import GROUND_Y, OUTPUT_DIR, QUALITY, WORLD_W, find_devanagari_font, find_ffmpeg
@@ -132,6 +133,7 @@ def normalize(tl: dict) -> dict:
             hold = min(20.0, _num(ln.get("hold")) or 0.0)
             if not text and not sound and not hold and audio["mode"] != "file":
                 if (ln.get("action") in ("talk", "idle", None, "") and not ln.get("kadhai") and not ln.get("actor")
+                        and not ln.get("bag")
                         and not ln.get("broll") and not ln.get("overlay")):
                     continue                                     # nothing to say, play or show
                 hold = stick.move_hold(ln.get("action"))          # an action with no words: a silent moment
@@ -151,6 +153,7 @@ def normalize(tl: dict) -> dict:
                               popup=" ".join(str(ln.get("popup") or "").split())[:90],
                               sticker=str(ln.get("sticker") or "") if str(ln.get("sticker") or "") in STICKERS else "",
                               effect=ln.get("effect") if ln.get("effect") in stick.EFFECTS else "",
+                              bag=ln.get("bag") if ln.get("bag") in bag.BAG_STATES else "",
                               start=_num(ln.get("start")), end=_num(ln.get("end"))))
         # who is in the scene: the characters the user added (they stay in frame even with no dialogue)
         speakers = []
@@ -212,6 +215,7 @@ class LineT:
     overlay: str = ""       # big bold text over the picture, from this line to the end of the scene
     prop: str = ""          # something the speaker holds from this line on ("none" puts it away)
     effect: str = ""        # a cartoon effect around the speaker: dizzy stars, "!", hearts, rain cloud...
+    bag: str = ""           # the mystery bag: here, shake, open, photo, gone (bag.py)
 
 
 @dataclass
@@ -249,6 +253,7 @@ def _line_extras(lt, ln: dict):
     lt.kadhai, lt.broll, lt.overlay = ln.get("kadhai", ""), ln.get("broll", ""), ln.get("overlay", "")
     lt.prop = ln.get("prop", "")
     lt.effect = ln.get("effect", "")
+    lt.bag = ln.get("bag", "")
     return lt
 
 
@@ -1015,6 +1020,7 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
                 events.append((0.1, "pop", 0.6))
             events += kitchen.sound_events(sched)          # sizzle, fire, thali clang, gas knob, footsteps, splash
             events += stick.sound_events(sched, stick_ids)  # slip, thud, bonk, tweeting birds, zip, crash...
+            events += bag.sound_events(sched)              # the mystery bag rustling, popping open
         events += [(sc.start + 0.05, sc.card_sound, 1.0) for sc in sched if sc.card is not None and sc.card_sound]
         events += [(ln.start, "click", 0.9) for sc in sched for ln in sc.lines if getattr(ln, "lights", "")]
         events += [(ln.start + 0.05, "ping", 0.9) for sc in sched for ln in sc.lines if ln.popup]

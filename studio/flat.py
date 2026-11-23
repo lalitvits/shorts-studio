@@ -23,7 +23,7 @@ from .catalog import BUILD_VALUES, FLAT_BACKGROUNDS, HEIGHT_VALUES, LOOKS, OUTFI
 from .places import PLACES, animate as animate_place, draw_static as draw_place
 from .realms import REALMS, animate as animate_realm, draw_static as draw_realm
 from .rig import KEEP_EMOTION, PERSISTENT, blink_amount
-from . import kitchen, stick
+from . import bag, kitchen, stick
 
 OUT = (36, 31, 32)          # outline colour
 OL = 5.5                    # outline width (world units)
@@ -32,8 +32,8 @@ STRONG = {"angry", "shocked", "surprised", "crying", "laughing", "scared", "exci
 SHOTS = ("auto", "wide", "single", "ots", "close")
 PHONE_ACTIONS = {"use_phone", "sit_phone", "phone_call"}
 # actions a character keeps doing while someone else talks (on top of the rig's long activities)
-FLAT_PERSIST = PERSISTENT | {"cook", "hold_jug", "lower_jug", "hand_on_shoulder", "look_camera"} | stick.STAYS | \
-    stick.LOOPS
+FLAT_PERSIST = PERSISTENT | {"cook", "hold_jug", "lower_jug", "hand_on_shoulder", "look_camera", "go_to_bag"} | \
+    stick.STAYS | stick.LOOPS
 TWO_PERSON = {"grab_hand", "hand_on_shoulder"} | stick.TWO_PERSON
 SMOOTH_ACTIONS = {"eat", "sit_eat", "drink_tea", "sit_tea", "cook"} | set(stick.SLAPSTICK)   # drawn at 15 poses a second even when silent            # the actor walks up to the nearest other character
 MOVE_S = 0.5                                              # seconds that walk-up takes
@@ -428,6 +428,11 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
     elif action == "look_camera":           # looks straight at the camera
         p["L"] = p["R"] = ("fk", 12, -6)
         p["eyes_dir"] = 0.0
+    elif action == "go_to_bag":            # walks up to the mystery bag and bends toward it
+        p["R"] = ("fk", 62, 38)
+        p["L"] = HIP_T
+        p["head_dy"] = 12
+        p["eyes_dir"] = 0.7
     elif action in stick.SLAPSTICK:         # slip, fall, fly off, faint, chase... (stick.py)
         stick.slapstick_pose(p, action, emotion, t)
     if emotion == "laughing":
@@ -942,6 +947,9 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
     if pose.get("fx"):
         stick.cartoon_fx(pen, set(pose["fx"]), hx, hy, r, t, sp["skin"])
 
+PHONE_W, PHONE_H = 82, 160      # one phone size for every action (using it, holding it, a call at the ear)
+
+
 def _phone_back(pen, cx, cy, w, h, skin=None):
     """A real-sized smartphone seen from the back (what you see when someone looks at their phone):
     dark body, camera module with three lenses and a flash, and the screen's light spilling around the edges."""
@@ -1171,10 +1179,8 @@ def _prop(pen, kind, hand, other=None, skin=None, bite=0):
                                 outline=OUT, width=pen.wd(3))
         pen.circle(x, y + 4, 24, skin or (200, 140, 95), 4)
         return
-    if kind == "phone_hand":                # a mobile held in one hand
-        pen.d.rounded_rectangle(pen.box(x - 26, y - 92, x + 26, y + 10), radius=10 * pen.s, fill=(46, 50, 62),
-                                outline=OUT, width=pen.wd(4))
-        pen.d.rounded_rectangle(pen.box(x - 20, y - 84, x + 20, y + 2), radius=7 * pen.s, fill=(120, 170, 230))
+    if kind == "phone_hand":                # a mobile held in one hand: the same big phone as when using it
+        _phone_back(pen, x, y - 62, PHONE_W, PHONE_H)
         pen.circle(x, y + 2, 24, skin or (200, 140, 95), 4)
         return
     if kind == "flowers":
@@ -1251,12 +1257,9 @@ def _prop(pen, kind, hand, other=None, skin=None, bite=0):
     if kind == "phone":                     # looking at it: held in front, about two-thirds of a head tall
         if other is not None:
             x, y = (hand[0] + other[0]) / 2, (hand[1] + other[1]) / 2
-        _phone_back(pen, x, y + 6, 82, 160, skin)          # top of the phone just under the chin
-    elif kind == "phone_ear":               # a call: pressed to the ear, the hand holds it there
-        pen.d.rounded_rectangle(pen.box(x - 30, y - 92, x + 30, y + 60), radius=13 * pen.s, fill=(46, 50, 62),
-                                outline=OUT, width=pen.wd(4))
-        pen.d.rounded_rectangle(pen.box(x - 24, y - 86, x + 24, y + 54), radius=10 * pen.s, outline=(78, 84, 100),
-                                width=pen.wd(2.5))
+        _phone_back(pen, x, y + 6, PHONE_W, PHONE_H, skin)  # top of the phone just under the chin
+    elif kind == "phone_ear":               # a call: the same phone pressed to the ear, the hand holds it there
+        _phone_back(pen, x + 14, y - 16, PHONE_W, PHONE_H)
     elif kind == "cup":
         pen.poly([(x - 26, y - 34), (x + 26, y - 34), (x + 20, y + 22), (x - 20, y + 22)], (245, 245, 240), 4)
         pen.line([(x - 22, y - 26), (x + 22, y - 26)], (170, 110, 60), 6)
@@ -1670,6 +1673,7 @@ class FlatComposer:
         self.segs: dict = {}
         self.bgs: dict = {}
         self.kev = kitchen.events(sched)                  # the kadhai: frying, fire, covered (kitchen.py)
+        self.bagplan = bag.plan(sched)                    # the mystery bag (bag.py)
 
     def handles(self, sc) -> bool:
         return sc.bg in FLAT_BACKGROUNDS or any(is_flat_look(self.chars[c]["look"]) for c in sc.cast)
@@ -1699,6 +1703,12 @@ class FlatComposer:
             kind = getattr(ln, "shot", "auto") or "auto"
             if kind == "stove" and sc.bg != "flat_kitchen":
                 kind = "auto"
+            if kind == "bag" and not self._bag_scene(sc):
+                kind = "auto"
+            if kind == "auto" and getattr(ln, "bag", "") == "open" and self._bag_scene(sc):
+                kind = "bag"                                  # the bag popping open: the camera goes to it
+            if kind == "auto" and getattr(ln, "bag", "") == "shake" and self._bag_scene(sc) and len(cast) > 1:
+                kind = "wide"                                 # the bag shaking by itself: everyone and the bag in view
             auto = kind == "auto"
             acts = {ln.action, getattr(ln, "actor_action", "")}
             far = False
@@ -1764,6 +1774,8 @@ class FlatComposer:
         t = spec["type"]
         if t == "stove":                                       # close on the kadhai, nobody in the shot
             return dict(bg=(kitchen.KX, 2.1, False, kitchen.KY - 70), actors=[], ground=G)
+        if t == "bag":                                         # close on the mystery bag
+            return dict(bg=(self._bag_x(sc), 2.0, False, G - 230), actors=[], ground=G, type="bag")
         if t == "wide":
             n = len(cast)
             sc_ = 0.82 if n <= 2 else max(0.55, 0.82 - 0.09 * (n - 2))
@@ -1778,6 +1790,8 @@ class FlatComposer:
                         [FW * (0.16 + 0.68 * i / (n - 1)) for i in range(n)]
             if stove:                                          # everyone to the left of the stove
                 xs = [400] if n == 1 else [FW * (0.13 + 0.47 * i / (n - 1)) for i in range(n)]
+            elif self._bag_scene(sc):                          # everyone to the left of the bag
+                xs = [380] if n == 1 else [FW * (0.13 + 0.5 * i / (n - 1)) for i in range(n)]
             for i, cid in enumerate(cast):
                 fd = 1 if xs[i] < 540 else -1 if n > 1 else 1
                 actors.append(dict(cid=cid, view="front", x=xs[i], g=G, scale=sc_, face=fd))
@@ -1850,6 +1864,15 @@ class FlatComposer:
         for q in ("dx", "dy", "head_dx", "head_dy", "crouch"):
             pose[q] = prev.get(q, 0.0) + (pose.get(q, 0.0) - prev.get(q, 0.0)) * w
         return (pa, round(w, 2))
+
+    def _bag_scene(self, sc) -> bool:
+        return id(sc) in self.bagplan
+
+    def _bag_x(self, sc) -> float:
+        """Where the bag lies in the background picture (right of the middle of the scene's wide shot)."""
+        _, _, PW, _G = panorama(sc.bg, self.k)
+        si = self.sched.index(sc) if sc in self.sched else 0
+        return PW / 2 + ((_h(sc.bg, si) % 7) - 3) * 120 + bag.BAG_DX
 
     def _last_scene(self):
         return next((x for x in reversed(self.sched) if x.card is None), None)
@@ -1944,6 +1967,10 @@ class FlatComposer:
             tgt = None
             if action in kitchen.STOVE_ACTIONS and self._stove_scene(sc):
                 tgt, face = (kitchen.KX - x0) * z - 300 * a["scale"], 1
+            elif action == "go_to_bag" and self._bag_scene(sc):
+                bfx = (self._bag_x(sc) - x0) * z
+                side = 1 if bfx > a["x"] else -1
+                tgt, face = bfx - side * (170 * z + 150 * a["scale"]), side
             elif action in TWO_PERSON:
                 others = [o for o in lay["actors"] if o["cid"] != cid and not o.get("back")]
                 if others:
@@ -2131,6 +2158,12 @@ class FlatComposer:
                     px, py = to_px(cx - 130, lane - 120 * (1.08 if j else 1.0))
                     im.paste(spr, (round(px), round(py)), spr)
 
+        bst, bag_px = None, None
+        if self._bag_scene(sc):                  # the mystery bag lies on the floor
+            bst = bag.state_at(self.bagplan[id(sc)], t)
+            if bst:
+                bag_px = to_px(self._bag_x(sc), lay["ground"])
+                bag.draw_bag(im, bag_px[0], bag_px[1], z * k, bst[0], bst[1])
         line = next((l for l in sc.lines if l.start <= t < l.end), None)
         glows = []                               # faces lit by a phone screen (for the dark lighting)
         for a in lay["actors"]:
@@ -2263,6 +2296,9 @@ class FlatComposer:
             if sp.get("kind") == "brain":                   # the inner voice glows on its own in the dark
                 glows.append((fx, fy - 830 * a["scale"] * k, a["scale"] * k, "self"))
 
+        if bst and bst[0] == "photo":            # the photo flies out of the bag and is held up big
+            inview = bag_px if bag_px and 0 <= bag_px[0] <= self.w else None
+            bag.draw_photo(im, (inview[0], inview[1] - 120 * z * k) if inview else None, bst[1], t)
         im = self._light(sc, t, im, glows)
         if kst is not None:
             im = kitchen.glow(im, kst, t, x0, y0, z, k)

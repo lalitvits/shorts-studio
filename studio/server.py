@@ -55,6 +55,7 @@ def assets_payload() -> dict:
         "actions": [{"id": k, "label": ("Comedy: " + v) if k in __import__("studio.catalog", fromlist=["x"]).SLAPSTICK_LABELS
                      else v} for k, v in ACTION_LABELS.items()],
         "effects": [{"id": k, "label": v} for k, v in __import__("studio.catalog", fromlist=["x"]).EFFECT_LABELS.items()],
+        "bag_states": [{"id": k, "label": v} for k, v in __import__("studio.bag", fromlist=["x"]).BAG_LABELS.items()],
         "sounds": [{"id": k, "label": v} for k, v in SOUND_LABELS.items()], "sound_emotions": SOUND_EMOTIONS,
         "script_providers": script_mod.provider_status(),
         "system": {"gemini_voices_left": __import__("studio.gemini_tts", fromlist=["x"]).lines_left(),
