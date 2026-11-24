@@ -23,7 +23,7 @@ from .catalog import BUILD_VALUES, FLAT_BACKGROUNDS, HEIGHT_VALUES, LOOKS, OUTFI
 from .places import PLACES, animate as animate_place, draw_static as draw_place
 from .realms import REALMS, animate as animate_realm, draw_static as draw_realm
 from .rig import KEEP_EMOTION, PERSISTENT, blink_amount
-from . import bag, kitchen, stick
+from . import bag, cinema, kitchen, stick
 
 OUT = (36, 31, 32)          # outline colour
 OL = 5.5                    # outline width (world units)
@@ -35,6 +35,10 @@ PHONE_ACTIONS = {"use_phone", "sit_phone", "phone_call"}
 FLAT_PERSIST = PERSISTENT | {"cook", "hold_jug", "lower_jug", "hand_on_shoulder", "look_camera", "go_to_bag"} | \
     stick.STAYS | stick.LOOPS
 TWO_PERSON = {"grab_hand", "hand_on_shoulder"} | stick.TWO_PERSON
+# actions that need the whole body in the shot (no medium shot from the knees up)
+FULL_BODY = {"walk", "walk_in", "walk_out", "run_in", "run_out", "jump", "dance", "sit", "sit_phone", "sit_tea",
+             "sit_read", "sit_eat", "sit_sleep", "ride_in", "ride_out", "ride_cycle", "step_back", "appear",
+             "go_to_bag", "cook", "turn_off_gas", "cover_kadhai", "hold_jug", "lower_jug", "throw"} | set(stick.SLAPSTICK)
 SMOOTH_ACTIONS = {"eat", "sit_eat", "drink_tea", "sit_tea", "cook"} | set(stick.SLAPSTICK)   # drawn at 15 poses a second even when silent            # the actor walks up to the nearest other character
 MOVE_S = 0.5                                              # seconds that walk-up takes
 
@@ -1633,6 +1637,16 @@ def _blurred_s(bid: str, k: float, _stamp: float):
     return im.filter(ImageFilter.GaussianBlur(7 * ps))
 
 
+def _soft(bid: str, k: float):
+    return _soft_s(bid, k, bg_stamp(bid))
+
+
+@lru_cache(maxsize=6)
+def _soft_s(bid: str, k: float, _stamp: float):
+    im, ps, *_ = panorama(bid, k)
+    return im.filter(ImageFilter.GaussianBlur(2.6 * ps))
+
+
 def _car_draw(color, s):
     W, H = round(260 * s), round(130 * s)
     im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -1659,6 +1673,14 @@ def car_sprite(color, s_q, blur, flip):
     return im
 
 
+# people walking past in the background: (look, speed in picture units a second, start offset)
+PASSERS = {"flat_village": (("flat_aunty", 60, 0), ("flat_kid", -85, 900)),
+           "flat_chai_tapri": (("flat_girl", 55, 300), ("flat_uncle", -45, 1500)),
+           "flat_park": (("flat_girl", 65, 200), ("flat_man", -70, 1300)),
+           "flat_bus_stop": (("flat_aunty", 50, 600),),
+           "flat_city_street": (("flat_man", 75, 100), ("flat_aunty", -55, 1200))}
+
+
 # ===================================================================== camera
 class FlatComposer:
     """Draws the frames of flat-style scenes."""
@@ -1674,6 +1696,7 @@ class FlatComposer:
         self.bgs: dict = {}
         self.kev = kitchen.events(sched)                  # the kadhai: frying, fire, covered (kitchen.py)
         self.bagplan = bag.plan(sched)                    # the mystery bag (bag.py)
+        self.cinema = bool(tl.get("cinematic", True))     # warm grade, depth, passers-by (cinema.py)
 
     def handles(self, sc) -> bool:
         return sc.bg in FLAT_BACKGROUNDS or any(is_flat_look(self.chars[c]["look"]) for c in sc.cast)
@@ -1743,7 +1766,9 @@ class FlatComposer:
                 kind = "single"
             if kind == "ots" and narr:
                 kind = "single"
-            spec = dict(type=kind, subj=subj, partner=partner, far=far)
+            medium = (kind == "single" and self.cinema and not self._stick_scene(sc) and not self._animal(subj)
+                      and not (acts & FULL_BODY) and self.specs[subj]["kind"] in ("human", "3d"))
+            spec = dict(type=kind, subj=subj, partner=partner, far=far, medium=medium)
             dur = ln.end - ln.start
             if auto and partner and dur > 5.5 and kind not in ("wide", "stove") and not narr:   # a reaction shot
                 cut = ln.start + dur * 0.58
@@ -1800,10 +1825,12 @@ class FlatComposer:
             fd = side
             if self._animal(subj):
                 actors.append(dict(cid=subj, view="side", x=520, g=G + 40, scale=1.45, face=fd))
+            elif spec.get("medium"):                            # from the knees up, a little off-centre
+                actors.append(dict(cid=subj, view="front", x=540 - 70 * fd, g=G + 360, scale=1.36, face=fd))
             else:
                 big = 1.18 if self._stick_scene(sc) and not spec.get("far") else 0.8 if spec.get("far") else 1.05
                 actors.append(dict(cid=subj, view="front", x=540, g=G, scale=big, face=fd))
-            bg = (base + 260 * fd, 1.12, False)
+            bg = (base + 260 * fd, 1.12, "soft" if self.cinema and not self._stick_scene(sc) else False)
         elif t == "close":
             fd = side
             if self._animal(subj):
@@ -1864,6 +1891,34 @@ class FlatComposer:
         for q in ("dx", "dy", "head_dx", "head_dy", "crouch"):
             pose[q] = prev.get(q, 0.0) + (pose.get(q, 0.0) - prev.get(q, 0.0)) * w
         return (pa, round(w, 2))
+
+    def _passersby(self, im, bid, t, x0, y0, z, k, G, blur):
+        """Villagers walking past far behind the characters (smaller, hazy, out of focus in a shot on one person)."""
+        _, _, PW, _G = panorama(bid, k)
+        vw = FW / z
+        for j, (look, speed, off) in enumerate(PASSERS[bid]):
+            span = PW + 900
+            X = (off + speed * t) % span - 450 if speed > 0 else span - ((off - speed * t) % span) - 450
+            if not (x0 - 300 < X < x0 + vw + 300):
+                continue
+            face = 1 if speed > 0 else -1
+            ph = int((t % 0.785) / 0.785 * 8)                  # 8 drawings of the walk, used over and over
+            scale_px = 0.5 * z * k
+            ck = ("passer", look, face, round(scale_px, 3), ph, blur == "soft")
+
+            def make(look=look, face=face, ph=ph, scale_px=scale_px):
+                sp = char_spec({"look": look})
+                pose = pose_for("walk", "neutral", ph * 0.785 / 8, False, look)
+                spr, anchor = render_sprite(sp, "front", face, scale_px, pose, "neutral", 0.0, 0.0, 0.0, False)
+                hz = Image.new("RGBA", spr.size, cinema.HAZE + (255,))
+                hz.putalpha(spr.getchannel("A"))
+                spr = Image.blend(spr, hz, 0.3)                    # far away: hazy
+                if blur:
+                    spr = spr.filter(ImageFilter.GaussianBlur(1.6 if blur == "soft" else 3))
+                return spr, anchor
+            spr, (ax, ay) = self.sprites.get(ck, make)
+            px_, py_ = (X - x0) * z * k, (G - 250 - y0) * z * k
+            im.paste(spr, (round(px_ - ax), round(py_ - ay)), spr)
 
     def _bag_scene(self, sc) -> bool:
         return id(sc) in self.bagplan
@@ -1996,12 +2051,14 @@ class FlatComposer:
         if key in self.bgs:
             return self.bgs[key]
         im, ps, PW, G = panorama(bid, self.k)
-        src = _blurred(bid, self.k) if blur else im
+        src = _soft(bid, self.k) if blur == "soft" else _blurred(bid, self.k) if blur else im
         vw, vh = FW / z, FH / z
         x0 = min(max(0.0, cx - vw / 2), PW - vw)
         y0 = G - G / z if len(bg) < 4 else min(max(0.0, bg[3] - vh / 2), FH - vh)
         box = (x0 * ps, y0 * ps, min(src.width, (x0 + vw) * ps), min(src.height, (y0 + vh) * ps))  # rounding
         out = src.resize((self.w, self.h), Image.LANCZOS, box=box)
+        if self.cinema and bid in cinema.OUTDOOR | set(PLACES) and bid not in cinema.NO_GRADE:
+            out = cinema.haze(out, 0.1 if blur else 0.06)           # the air between us and the background
         if len(self.bgs) > 24:
             self.bgs.clear()
         self.bgs[key] = (out, x0, y0, z)
@@ -2164,6 +2221,8 @@ class FlatComposer:
             if bst:
                 bag_px = to_px(self._bag_x(sc), lay["ground"])
                 bag.draw_bag(im, bag_px[0], bag_px[1], z * k, bst[0], bst[1])
+        if self.cinema and bid in PASSERS and lay.get("type") in ("wide", "single"):
+            self._passersby(im, bid, t, x0, y0, z, k, lay["ground"], blur)
         line = next((l for l in sc.lines if l.start <= t < l.end), None)
         glows = []                               # faces lit by a phone screen (for the dark lighting)
         for a in lay["actors"]:
@@ -2299,9 +2358,15 @@ class FlatComposer:
         if bst and bst[0] == "photo":            # the photo flies out of the bag and is held up big
             inview = bag_px if bag_px and 0 <= bag_px[0] <= self.w else None
             bag.draw_photo(im, (inview[0], inview[1] - 120 * z * k) if inview else None, bst[1], t)
+        if self.cinema and bid in cinema.OUTDOOR and lay.get("type") in ("wide", "single", "ots", "close") \
+                and not self._stick_scene(sc):           # out-of-focus grass right in front of the camera
+            h_ = _h(bid, round(seg[0], 2))
+            cinema.foreground(im, h_ % 97, (-1, 1, 0, -1)[h_ % 4])
         im = self._light(sc, t, im, glows)
         if kst is not None:
             im = kitchen.glow(im, kst, t, x0, y0, z, k)
+        if self.cinema and bid not in cinema.NO_GRADE and not self._stick_scene(sc):
+            im = cinema.grade(im, t)                     # warm colour, sun glow, vignette, grain
 
         # slow camera drift inside the shot
         a0, b0 = seg[0], seg[1]

@@ -17,7 +17,7 @@ const fresh = () => ({
     { id: "c2", name: "Priya", look: "priya", voice: "hi-IN-SwaraNeural" },
   ],
   scenes: [], sel: { scene: 0, line: 0 },
-  hook: "", effects: true,
+  hook: "", effects: true, cinematic: true,
   audio: { mode: "tts", id: "", name: "", seconds: 0, url: "", pause: 0.45, musicId: "", musicName: "", musicUrl: "", musicVolume: 20, musicBuiltin: "" },
 });
 const HIST = { list: [], at: -1, last: 0, quiet: false };
@@ -50,7 +50,7 @@ document.addEventListener("keydown", e => {
 });
 const timeline = () => ({ title: S.title, tts: S.tts, characters: S.characters, scenes: S.scenes, look3d: S.look3d !== false,
   captions: S.captions !== false, language: S.language,
-  hook: S.hook || "", effects: S.effects !== false,
+  hook: S.hook || "", effects: S.effects !== false, cinematic: S.cinematic !== false,
   audio: { mode: S.audio.mode, id: S.audio.id, music_id: S.audio.musicId, music_volume: S.audio.musicVolume,
            music_builtin: S.audio.musicBuiltin || "" } });
 

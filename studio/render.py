@@ -188,6 +188,7 @@ def normalize(tl: dict) -> dict:
                 kit=bool(tl["kit"]) if "kit" in tl else None,
                 tts=tl.get("tts") or "auto", audio=audio, look3d=bool(tl.get("look3d", True)),
                 captions=bool(tl.get("captions", True)), language=str(tl.get("language") or "hi"),
+                cinematic=bool(tl.get("cinematic", True)),
                 hook=" ".join(str(tl.get("hook") or "").split())[:80], effects=bool(tl.get("effects", True)))
 
 
@@ -728,7 +729,7 @@ def _chunks(words: list) -> list:
 def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = True, hook: str = "",
              hook_end: float = 2.4, language: str = "hi") -> str:
     """Captions, the hook title and text-card titles, in one ASS subtitle file."""
-    size, outline, margin_v = int(h * 0.05), max(2, int(h * 0.006)), int(h * 0.15)
+    size, outline, margin_v = int(h * 0.05), max(2, int(h * 0.006)), int(h * 0.29)
     head = (
         "[Script Info]\nScriptType: v4.00+\n"
         f"PlayResX: {w}\nPlayResY: {h}\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n"
@@ -736,7 +737,7 @@ def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = Tru
         "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, "
         "Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
         f"Style: Cap,{font_family},{size},&H0000D7FF,&H00FFFFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,"
-        f"{outline},1,8,{int(w * 0.06)},{int(w * 0.06)},{margin_v},1\n"
+        f"{outline},1,2,{int(w * 0.06)},{int(w * 0.06)},{margin_v},1\n"
         f"Style: Hook,{font_family},{int(h * 0.068)},&H00FFFFFF,&H00FFFFFF,&H00141414,&H96000000,-1,0,0,0,100,100,0,0,1,"
         f"{int(outline * 1.8)},3,8,{int(w * 0.07)},{int(w * 0.07)},{int(h * 0.27)},1\n"
         f"Style: Card,{font_family},{int(h * 0.072)},&H00FFFFFF,&H00FFFFFF,&H00202020,&H96000000,-1,0,0,0,100,100,0,0,1,"
@@ -820,7 +821,7 @@ def draw_caption(im: Image.Image, text: str):
         else:
             cur = trial
     lines.append(cur)
-    y = int(h * 0.15)
+    y = int(h * 0.71) - int(size * 1.35) * len(lines)          # lower middle, like the video's captions
     for ln in lines:
         tw = d.textlength(ln, font=font)
         d.text(((w - tw) / 2, y), ln, font=font, fill=(255, 255, 255), stroke_width=max(2, int(h * 0.006)),
