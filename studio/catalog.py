@@ -141,6 +141,40 @@ _FLAT = {
     "stick_boss": ("Stickman: Boss (tie, glasses, mustache)", False, dict(kind="stick", color=(60, 62, 72), tie=True,
                                                                           glasses=True, mustache=True, hair="messy",
                                                                           accent=(200, 40, 50), height=1.04)),
+    # village characters (bald grandpa, saree aunty, girl with a braid, farmer, a cool dog)
+    "flat_dadaji": ("Flat: Dadaji (bald, round glasses, white kurta, gamchha, walking stick)", False, dict(
+        kind="human", skin=(240, 194, 154), top="kurta", top_color=(250, 248, 238), accent=(236, 230, 212),
+        bottom="pants", bottom_color=(244, 240, 228), hat=None, hair="bald", hair_color=(200, 200, 206),
+        mustache="big", glasses=True, buttons=True, plain=True, gamchha=((196, 40, 52), (252, 236, 232)), holds="cane",
+        female=False, height=0.96, build=0.94, shoe=(120, 80, 50))),
+    "flat_village_aunty": ("Flat: Village aunty (saree, long braid, bindi)", True, dict(
+        kind="human", skin=(242, 198, 160), top="kurta", top_color=(236, 112, 44), accent=(196, 30, 96),
+        bottom="dress", bottom_color=(236, 112, 44), hat=None, hair="braid", hair_color=(32, 24, 24),
+        ribbon=(196, 30, 96), mustache=False, female=True, bindi=True, earrings=True, height=0.93)),
+    "flat_village_girl": ("Flat: Village girl (kurta, dupatta, braid with ribbon)", True, dict(
+        kind="human", skin=(246, 204, 168), top="kurta", top_color=(70, 168, 116), accent=(250, 200, 50),
+        bottom="pants", bottom_color=(246, 240, 226), hat=None, hair="braid", hair_color=(30, 24, 24),
+        ribbon=(230, 40, 60), mustache=False, female=True, bindi=False, earrings=True, height=0.87)),
+    "flat_farmer": ("Flat: Farmer (saffron pagdi, kurta-dhoti, big mustache, gamchha)", False, dict(
+        kind="human", skin=(228, 178, 134), top="kurta", top_color=(242, 238, 224), accent=(232, 226, 208),
+        bottom="pants", bottom_color=(248, 246, 236), hat="pagdi", hat_color=(244, 140, 28), hair="short",
+        hair_color=(36, 28, 26), mustache="big", plain=True, gamchha=((40, 110, 200), (240, 246, 255)), female=False,
+        height=1.0, build=1.04, shoe=(110, 70, 40))),
+    "flat_lalit": ("Flat: Lalit (young man, rolled-up blue shirt, side parting, watch)", False, dict(
+        kind="human", skin=(242, 198, 158), top="open_shirt", top_color=(250, 250, 246), shirt_color=(70, 130, 200),
+        bottom="pants", bottom_color=(44, 64, 110), hat=None, hair="real_side", hair_color=(66, 44, 30), mustache=False,
+        stubble=True, watch=True, female=False, height=1.02, build=0.94, shoe=(245, 245, 245))),
+    "flat_rahul": ("Flat: Rahul (young man, yellow t-shirt, quiff, orange gamchha)", False, dict(
+        kind="human", skin=(232, 184, 142), top="tshirt", top_color=(250, 196, 40), bottom="pants",
+        bottom_color=(60, 60, 72), hat=None, hair="real_quiff", hair_color=(58, 38, 26), mustache=False,
+        gamchha=((240, 120, 30), (255, 236, 200)), female=False, height=1.0, build=0.92, shoe=(200, 60, 50))),
+    "flat_deepak": ("Flat: Deepak (young man, fat, glasses, green hoodie)", False, dict(
+        kind="human", skin=(238, 192, 152), top="hoodie", top_color=(60, 150, 100), bottom="pants",
+        bottom_color=(96, 76, 56), hat=None, hair="real_crop", hair_color=(52, 36, 28), mustache=False, glasses=True,
+        female=False, height=0.97, build=1.62, chubby=1.0, shoe=(60, 60, 70))),
+    "flat_cool_dog": ("Flat: Cool dog (sunglasses, cap, gold chain)", False, dict(
+        kind="dog", color=(150, 96, 56), light=(206, 160, 112), shades=True, cap=(40, 96, 210), chain=True,
+        height=1.05)),
     "flat_brain": ("Flat: My brain (inner voice, little devil)", False, dict(
         kind="brain", color=(244, 150, 172), glow=(255, 110, 140), horns=True, height=1.0)),
     "flat_dog": ("Flat: Dog (brown)", False, dict(kind="dog", color=(146, 94, 58), light=(196, 150, 104), height=1.0)),
@@ -178,6 +212,12 @@ LOOKS["narrator"] = dict(label="Narrator (voice-over, not on screen)", style="na
 NARRATOR_LOOKS = {"narrator"}
 for _k, _v in LOOKS.items():
     _v["id"] = _k
+# the characters shown in the Cast menu; every other look is hidden (old projects and scripts using them still work)
+CAST = ["flat_lalit", "flat_rahul", "flat_deepak", "flat_dadaji", "flat_village_aunty", "flat_village_girl",
+        "flat_farmer", "flat_cool_dog", "narrator"]
+CAST_PENDING: set[str] = set()       # new characters waiting for their pictures to be approved
+for _k, _v in LOOKS.items():
+    _v["hidden"] = _k not in CAST or _k in CAST_PENDING
 
 # A character's body (flat cartoon style). "" keeps the look's own.
 HEIGHTS = {"": "Height: as the look", "child": "Height: child", "short": "Height: short", "normal": "Height: normal",
@@ -275,7 +315,8 @@ VOICE_TUNE = {"3d_oldman": (-10, -10), "flat_uncle": (-6, -4), "flat_police": (-
               "flat_aunty": (-2, -4), "flat_boy": (28, 8), "3d_boy": (20, 6), "flat_girl": (12, 4),
               "3d_woman": (6, 2), "flat_man": (0, 2), "3d_youngman": (0, 2), "flat_dog": (8, 10), "flat_cat": (24, 6),
               "flat_kid": (34, 10), "narrator": (-4, -4), "flat_youth_a": (6, 4), "flat_youth_b": (4, 6),
-              "flat_youth_c": (8, 4), "stick_kid": (30, 10), "stick_girl": (12, 4), "stick_boss": (-6, -4),
+              "flat_youth_c": (8, 4), "flat_lalit": (4, 4), "flat_rahul": (8, 6), "flat_deepak": (0, 0), "flat_dadaji": (-12, -12), "flat_village_aunty": (-2, -4),
+              "flat_village_girl": (14, 4), "flat_farmer": (-6, -2), "flat_cool_dog": (6, 8), "stick_kid": (30, 10), "stick_girl": (12, 4), "stick_boss": (-6, -4),
               "clay": (14, 4)}
 # Voice effects (tts.VOICE_FX) and the look that gets one by default
 VOICE_FX_LABELS = {"": "No effect", "echo": "Echo", "devil": "Devil (deep, with echo)",
@@ -283,7 +324,8 @@ VOICE_FX_LABELS = {"": "No effect", "echo": "Echo", "devil": "Devil (deep, with 
                    "phone": "Phone call"}
 VOICE_FX_FOR_LOOK = {"flat_brain": "devil_whisper"}
 # Gemini voice for each look when the engine picks Gemini for a character that has a Microsoft voice
-GEMINI_FOR_LOOK = {"flat_youth_a": "Puck", "flat_youth_b": "Sadachbia", "flat_youth_c": "Achird", "narrator": "Charon", "flat_kid": "Sadachbia", "flat_brain": "Fenrir", "3d_oldman": "Algenib", "flat_uncle": "Algenib", "flat_police": "Orus", "flat_boy": "Sadachbia",
+GEMINI_FOR_LOOK = {"flat_lalit": "Achird", "flat_rahul": "Puck", "flat_deepak": "Sadachbia", "flat_dadaji": "Algenib", "flat_farmer": "Orus", "flat_village_aunty": "Kore",
+                   "flat_village_girl": "Leda", "flat_cool_dog": "Puck", "flat_youth_a": "Puck", "flat_youth_b": "Sadachbia", "flat_youth_c": "Achird", "narrator": "Charon", "flat_kid": "Sadachbia", "flat_brain": "Fenrir", "3d_oldman": "Algenib", "flat_uncle": "Algenib", "flat_police": "Orus", "flat_boy": "Sadachbia",
                    "3d_boy": "Sadachbia", "3d_youngman": "Puck", "flat_man": "Achird", "3d_woman": "Leda",
                    "flat_girl": "Leda", "flat_aunty": "Sulafat", "maa": "Gacrux", "priya": "Kore", "rahul": "Charon",
                    "aman": "Puck"}

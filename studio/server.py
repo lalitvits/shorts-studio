@@ -24,6 +24,12 @@ JOBS: dict[str, dict] = {}
 LOCK = threading.Lock()
 
 
+
+def _cast_order(look_id: str) -> int:
+    """The Cast menu in the order of catalog.CAST (Lalit, Rahul, Deepak, Dadaji...)."""
+    from .catalog import CAST
+    return CAST.index(look_id) if look_id in CAST else len(CAST)
+
 def _has_edge() -> bool:
     try:
         import edge_tts  # noqa: F401
@@ -43,7 +49,7 @@ def assets_payload() -> dict:
                     __import__("studio.catalog", fromlist=["x"]).OUTFIT_COLORS.items()],
         "props": [{"id": k, "label": v} for k, v in __import__("studio.catalog", fromlist=["x"]).PROP_LABELS.items()],
         "looks": [{"id": k, "label": v["label"], "female": bool(v.get("female")), "flat": v.get("style") == "flat"}
-                  for k, v in LOOKS.items() if not v.get("hidden")],
+                  for k, v in sorted(LOOKS.items(), key=lambda kv: _cast_order(kv[0])) if not v.get("hidden")],
         "voice_fx": [{"id": k, "label": v} for k, v in __import__("studio.catalog", fromlist=["x"]).VOICE_FX_LABELS.items()],
         "shots": [{"id": k, "label": v} for k, v in SHOT_LABELS.items()],
         "stickers": list(__import__("studio.overlays", fromlist=["x"]).STICKER_KINDS),

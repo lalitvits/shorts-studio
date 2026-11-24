@@ -309,7 +309,7 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
         raise ScriptError("Paste your script first.")
     if provider == "basic" or not _env("GEMINI_API_KEY"):
         raise ScriptError("Importing a full script needs Gemini (set GEMINI_API_KEY).")
-    looks = "\n".join(f"- {k}: {v['label']}" for k, v in LOOKS.items())
+    looks = "\n".join(f"- {k}: {v['label']}" for k, v in LOOKS.items() if not v.get("hidden"))
     prompt = IMPORT_PROMPT.format(looks=looks, bgs=", ".join(b["id"] for b in list_backgrounds()),
                                   emotions=", ".join(EMOTIONS), actions=", ".join(ACTIONS),
                                   sounds=", ".join(SOUND_LABELS), stickers=", ".join(STICKER_KINDS),
@@ -338,9 +338,9 @@ def import_screenplay(text: str, provider: str = "gemini") -> dict:
         while cid in ids:
             cid += "x"
         ids.add(cid)
-        look = c.get("look") if c.get("look") in LOOKS else ("flat_aunty" if c.get("gender") == "female" else "flat_man")
+        look = c.get("look") if c.get("look") in LOOKS else ("flat_village_aunty" if c.get("gender") == "female" else "flat_lalit")
         if LOOKS[look].get("style") not in ("flat", "narrator"):   # picture / 3D looks: a flat one (all the acting)
-            look = "flat_aunty" if c.get("gender") == "female" or LOOKS[look].get("female") else "flat_man"
+            look = "flat_village_aunty" if c.get("gender") == "female" or LOOKS[look].get("female") else "flat_lalit"
         fem = c.get("gender") == "female" or LOOKS[look].get("female")
         fxv = c.get("voice_fx") if c.get("voice_fx") in VOICE_FX_LABELS else ("devil_whisper" if look == "flat_brain" else "")
         chars.append(dict(id=cid, name=str(c.get("name") or cid)[:30], look=look,

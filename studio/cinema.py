@@ -68,12 +68,58 @@ def _grains(w, h):
     return out
 
 
-def grade(im: Image.Image, t: float) -> Image.Image:
-    """The finished look of one frame: colour, light, vignette, grain."""
+@lru_cache(maxsize=4)
+def _rays(w, h):
+    """Soft beams of sunlight slanting down from the top right."""
+    sw, sh = 120, round(120 * h / w)
+    a = Image.new("L", (sw, sh), 0)
+    d = ImageDraw.Draw(a)
+    sx, sy = sw * 0.95, -sh * 0.06
+    for ang, wd, val in ((118, 5, 46), (128, 7, 34), (139, 4, 40), (150, 8, 26), (162, 5, 30)):
+        r = sw * 2.2
+        a0, a1 = math.radians(ang - wd / 2), math.radians(ang + wd / 2)
+        d.polygon([(sx, sy), (sx + r * math.cos(a0), sy + r * math.sin(a0)), (sx + r * math.cos(a1), sy + r * math.sin(a1))],
+                  fill=val)
+    fade = Image.linear_gradient("L").resize((sw, sh)).point(lambda v: 255 - v)          # strongest at the top
+    a = ImageChops.multiply(a, fade).filter(ImageFilter.GaussianBlur(sw * 0.02))
+    return Image.new("RGB", (w, h), (255, 230, 180)), a.resize((w, h), Image.BICUBIC)
+
+
+@lru_cache(maxsize=4)
+def _mote(px):
+    m = Image.new("L", (px * 2 + 1, px * 2 + 1), 0)
+    ImageDraw.Draw(m).ellipse([0, 0, px * 2, px * 2], fill=190)
+    return m.filter(ImageFilter.GaussianBlur(max(1, px * 0.45)))
+
+
+def dust(im: Image.Image, t: float):
+    """Specks of dust floating in the sunlight."""
+    w, h = im.size
+    rnd = random.Random(11)
+    px = max(1, round(w * 0.0035))
+    for i in range(26):
+        x0, y0 = rnd.uniform(0, w), rnd.uniform(0, h * 0.8)
+        vx, vy = rnd.uniform(-8, 8) * w / 540, rnd.uniform(-10, -3) * w / 540
+        ph = rnd.uniform(0, 6.3)
+        x = (x0 + vx * t + 10 * w / 540 * math.sin(t * 0.7 + ph)) % w
+        y = (y0 + vy * t) % (h * 0.85)
+        k = 0.5 + 0.5 * math.sin(t * 1.3 + ph)
+        if k < 0.25:
+            continue
+        m = _mote(px)
+        im.paste((255, 244, 214), (round(x - px), round(y - px)), m.point(lambda v, k=k: int(v * k)))
+
+
+def grade(im: Image.Image, t: float, outdoor: bool = False) -> Image.Image:
+    """The finished look of one frame: colour, light (sun rays and dust outdoors), vignette, grain."""
     w, h = im.size
     im = im.point(_lut())
     col, a = _glow(w, h)
     im.paste(col, (0, 0), a)
+    if outdoor:
+        rc, ra = _rays(w, h)
+        im.paste(rc, (0, 0), ra)
+        dust(im, t)
     im = ImageChops.multiply(im, _vignette(w, h))
     g = _grains(w, h)[int(t * 24) % 6]
     return ImageChops.overlay(im, g)

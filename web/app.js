@@ -13,8 +13,8 @@ let S = null;   // project state
 const fresh = () => ({
   title: "", scenario: "", language: "hi", seconds: 30, look3d: true, captions: true, tts: "best", provider: "gemini", step: 1, counter: 2,
   characters: [
-    { id: "c1", name: "Rahul", look: "rahul", voice: "hi-IN-MadhurNeural" },
-    { id: "c2", name: "Priya", look: "priya", voice: "hi-IN-SwaraNeural" },
+    { id: "c1", name: "Lalit", look: "flat_lalit", voice: "hi-IN-MadhurNeural" },
+    { id: "c2", name: "Rahul", look: "flat_rahul", voice: "hi-IN-MadhurNeural" },
   ],
   scenes: [], sel: { scene: 0, line: 0 },
   hook: "", effects: true, cinematic: true,
@@ -420,9 +420,11 @@ const ACTIONS = {
   example: () => { Object.assign(S, EXAMPLE); save(); renderStory(); toast("Example added. Press Next to continue."); },
   "add-char": () => {
     S.counter++;
-    const look = ["aman", "maa", "rahul", "priya"][S.counter % 4];
-    S.characters.push({ id: "c" + S.counter, name: look === "maa" ? "Maa" : "Character " + S.counter, look,
-                        voice: ["priya", "maa"].includes(look) ? "hi-IN-SwaraNeural" : A.default_voice });
+    const cast = (A.looks || []).filter(l => l.id !== "narrator");      // the characters in the Cast menu, in turn
+    const pick = cast.length ? cast[S.counter % cast.length] : { id: "flat_lalit", label: "Lalit" };
+    const name = (pick.label || "").replace(/^Flat: /, "").split(" (")[0] || "Character " + S.counter;
+    S.characters.push({ id: "c" + S.counter, name, look: pick.id,
+                        voice: pick.female ? "hi-IN-SwaraNeural" : A.default_voice });
     save(); renderCast();
   },
   "del-char": el => {

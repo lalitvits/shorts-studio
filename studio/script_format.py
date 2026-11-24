@@ -12,7 +12,7 @@ The layout (one item per line; anything after # on a header line is a comment):
     title: ...            hook: ...            language: hi            music: happy
 
     ## CHARACTERS
-    - id: vikram | name: विक्रम | look: flat_man | gender: male | height: tall | build: fat | outfit: blue | voice: male
+    - id: vikram | name: विक्रम | look: flat_lalit | gender: male | height: tall | build: fat | outfit: blue | voice: male
 
     ## SCENE | background: flat_office | lighting: day | music: keep | seconds: 7
     cast: vikram, dost
@@ -140,14 +140,30 @@ SYN = {
                    "park": "flat_park", "heaven": "flat_swarg", "hell": "flat_nark", "white": "flat_white",
                    "plain": "flat_white", "plain_white": "flat_white", "blank": "flat_white", "doodle": "flat_doodle",
                    "notebook": "flat_doodle", "paper": "flat_doodle", "sketch": "flat_doodle"},
-    "look": {"man": "flat_man", "young_man": "flat_man", "woman": "flat_aunty", "lady": "flat_aunty",
-             "aunty": "flat_aunty", "mother": "flat_aunty", "mom": "flat_aunty", "mummy": "flat_aunty",
-             "wife": "flat_girl", "girl": "flat_girl", "young_woman": "flat_girl", "boy": "flat_boy",
-             "kid": "flat_kid", "child": "flat_kid", "son": "flat_kid", "college_boy": "flat_youth_a",
-             "college_student": "flat_youth_a", "youth": "flat_youth_a", "young_boy": "flat_youth_a",
-             "hoodie_boy": "flat_youth_b", "gen_z": "flat_youth_c", "student": "flat_youth_c", "uncle": "flat_uncle",
-             "old_man": "flat_uncle", "father": "flat_uncle", "police": "flat_police", "constable": "flat_police",
-             "brain": "flat_brain", "dog": "flat_dog", "cat": "flat_cat", "vo": "narrator", "voice_over": "narrator",
+    "look": {  # older looks (no longer in the Cast menu) and everyday words -> the cast characters
+             "flat_man": "flat_lalit", "flat_youth_a": "flat_lalit", "flat_youth_b": "flat_rahul",
+             "flat_youth_c": "flat_deepak", "flat_boy": "flat_rahul", "flat_kid": "flat_village_girl",
+             "flat_uncle": "flat_dadaji", "flat_police": "flat_farmer", "flat_aunty": "flat_village_aunty",
+             "flat_girl": "flat_village_girl", "flat_dog": "flat_cool_dog", "flat_cat": "flat_cool_dog",
+             "rahul": "flat_rahul", "aman": "flat_lalit", "priya": "flat_village_girl", "maa": "flat_village_aunty",
+             "clay": "flat_deepak", "3d_oldman": "flat_dadaji", "3d_youngman": "flat_lalit", "3d_boy": "flat_rahul",
+             "3d_woman": "flat_village_aunty", "lalit": "flat_lalit", "deepak": "flat_deepak", "ललित": "flat_lalit",
+             "राहुल": "flat_rahul", "दीपक": "flat_deepak",
+             "man": "flat_lalit", "young_man": "flat_lalit", "woman": "flat_village_aunty", "lady": "flat_village_aunty",
+             "aunty": "flat_village_aunty", "mother": "flat_village_aunty", "mom": "flat_village_aunty",
+             "mummy": "flat_village_aunty", "wife": "flat_village_girl", "girl": "flat_village_girl",
+             "young_woman": "flat_village_girl", "boy": "flat_rahul", "kid": "flat_village_girl",
+             "child": "flat_village_girl", "son": "flat_rahul", "college_boy": "flat_lalit",
+             "college_student": "flat_lalit", "youth": "flat_lalit", "young_boy": "flat_rahul",
+             "hoodie_boy": "flat_deepak", "gen_z": "flat_rahul", "student": "flat_deepak", "uncle": "flat_dadaji",
+             "old_man": "flat_dadaji", "father": "flat_dadaji", "police": "flat_farmer", "constable": "flat_farmer",
+             "brain": "flat_brain", "dog": "flat_cool_dog", "cat": "flat_cool_dog", "vo": "narrator", "voice_over": "narrator",
+             "dadaji": "flat_dadaji", "dada": "flat_dadaji", "grandpa": "flat_dadaji", "grandfather": "flat_dadaji",
+             "दादाजी": "flat_dadaji", "दादा": "flat_dadaji", "village_aunty": "flat_village_aunty",
+             "village_woman": "flat_village_aunty", "saree_aunty": "flat_village_aunty", "bahu": "flat_village_aunty",
+             "बहू": "flat_village_aunty", "village_girl": "flat_village_girl", "गाँव_की_लड़की": "flat_village_girl",
+             "farmer": "flat_farmer", "kisan": "flat_farmer", "किसान": "flat_farmer", "cool_dog": "flat_cool_dog",
+             "swag_dog": "flat_cool_dog", "dog_with_sunglasses": "flat_cool_dog",
              "stickman": "stick_classic", "stick_man": "stick_classic", "stick_figure": "stick_classic",
              "stickman_black": "stick_classic", "stickman_blue": "stick_blue", "stickman_red": "stick_red",
              "stickman_girl": "stick_girl", "stick_woman": "stick_girl", "stickman_kid": "stick_kid",
@@ -295,9 +311,9 @@ language: hi
 music: happy
 
 ## CHARACTERS
-- id: vikram | name: विक्रम | look: flat_man | gender: male | height: tall | build: normal | outfit: blue | voice: male
+- id: vikram | name: विक्रम | look: flat_lalit | gender: male | height: tall | build: normal | outfit: blue | voice: male
 - id: dost | name: दोस्त | look: flat_uncle | gender: male | height: normal | build: fat | voice: male
-- id: chor | name: चोर | look: flat_man | gender: male | build: thin | outfit: black | voice: male
+- id: chor | name: चोर | look: flat_rahul | gender: male | build: thin | outfit: black | voice: male
 - id: narrator | name: वॉइसओवर | look: narrator | voice: male
 
 ## SCENE | background: flat_city_street | lighting: day | seconds: 7
@@ -620,7 +636,7 @@ def parse(text: str) -> dict:
         if not look:
             if f.get("look"):
                 warn.append(f'Look "{f.get("look")}" for {f.get("name") or cid} is not in the app: a flat look is used.')
-            look = "flat_aunty" if gender == "female" else "flat_man"
+            look = "flat_village_aunty" if gender == "female" else "flat_lalit"
         if LOOKS[look].get("female"):
             gender = "female"
         voice = str(f.get("voice") or "").strip()
