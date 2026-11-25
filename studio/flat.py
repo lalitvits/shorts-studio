@@ -22,7 +22,7 @@ from .backgrounds import get_background, stamp as bg_stamp
 from .catalog import BUILD_VALUES, FLAT_BACKGROUNDS, HEIGHT_VALUES, LOOKS, OUTFIT_COLORS
 from .places import PLACES, animate as animate_place, draw_static as draw_place
 from .realms import REALMS, animate as animate_realm, draw_static as draw_realm
-from .rig import KEEP_EMOTION, PERSISTENT, blink_amount
+from .rig import KEEP_EMOTION, PERSISTENT, SIT_ACTIONS, blink_amount
 from . import bag, cinema, kitchen, stick
 
 OUT = (36, 31, 32)          # outline colour
@@ -145,6 +145,39 @@ def hold_prop(pose: dict, prop: str, action: str):
     elif ONE_HAND.get(prop):
         pose["R"] = ONE_HAND[prop]
         pose["prop"] = "phone_hand" if prop == "phone" else prop
+
+
+SIT_DROP = 250            # how much lower a seated body is (character units)
+# Actions that get a seated character up off the sofa for the rest of the scene
+STAND_UP = {"walk", "walk_in", "walk_out", "run_in", "run_out", "jump", "dance", "step_back", "wake_jolt",
+            "run_across", "cartoon_run", "chase", "sneak_in", "tiptoe", "lie_sleep", "sleep_stand", "kick",
+            "fight_cloud", "crash_wall", "invisible_wall", "go_to_bag", "grab_hand", "hand_on_shoulder", "poke",
+            "shake_awake", "cook", "slip_fall", "fall_face", "fly_away", "faint", "laugh_floor", "ride_in",
+            "ride_out", "ride_cycle", "throw", "punch", "slap", "hold_jug", "turn_off_gas", "cover_kadhai"}
+
+
+def draw_sofa(im, x, ground, u, width=1.0):
+    """A cushioned sofa with a wooden frame (like the living room's), centred at pixel x on the floor at pixel
+    `ground`, in character units of u pixels. It is drawn before the character who sits on it."""
+    pen = Pen(im, x, ground, u)
+    hw = 330 * width
+    cream, dark, light = (238, 222, 182), (222, 200, 152), (250, 238, 206)
+    wood, wood_d = (150, 88, 40), (112, 64, 28)
+
+    def rr(x0, y0, x1, y1, r, fill):
+        pen.d.rounded_rectangle(pen.box(x0, y0, x1, y1), radius=max(1, round(r * u)), fill=fill,
+                                outline=OUT, width=pen.wd(OL))
+    for lx in (-hw + 40, hw - 70):                                   # short wooden legs
+        rr(lx, -46, lx + 30, 0, 4, wood_d)
+    rr(-hw + 20, -610, hw - 20, -230, 60, cream)                     # backrest
+    for cx in ((-hw / 2 + 10, hw / 2 - 10) if width > 1.4 else (0,)):
+        w2 = (hw - 90) / (2 if width > 1.4 else 1)
+        rr(cx - w2, -560, cx + w2, -280, 46, light)                  # back cushions
+    rr(-hw + 30, -300, hw - 30, -52, 26, dark)                       # seat base
+    rr(-hw + 50, -330, hw - 50, -238, 30, light)                     # seat cushion
+    for ax in (-hw, hw - 86):                                        # wooden arms
+        rr(ax, -430, ax + 86, -46, 34, wood)
+        pen.line([(ax + 18, -404), (ax + 68, -404)], wood_d, 8)
 
 
 def is_flat_look(look_id: str) -> bool:
@@ -445,6 +478,12 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
         p["head_dy"] += 8
     if speaking and action not in ("look_around", "dance", "jump"):
         p["head_dx"] += 3 * s(t * 3.1)
+    if action in SIT_ACTIONS:
+        p["sit"] = True
+    if action == "sit_sleep":               # dozing on the sofa: head drops to one side, slow breathing
+        p["head_dx"] += 22
+        p["head_dy"] += 30
+        p["dy"] = 4 * s(t * 1.6)
     return p
 
 
@@ -862,11 +901,13 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         _cycle(Pen(im, ox + pose["dx"] * s, oy, s), 300, -1, t, 0.0, sp.get("cycle_color", (214, 60, 52)))
     if pose.get("ride") is not None:                 # riding: the cycle under them
         _cycle(Pen(im, ox + pose["dx"] * s, oy, s), 0, 1, t, pose["ride"] * 7, sp.get("cycle_color", (214, 60, 52)))
-    pen = Pen(im, ox + pose["dx"] * s, oy + pose["dy"] * s, s)
-    skin, sk_d = sp["skin"], _mix(sp["skin"], 0.85)
     back = view == "back"
     female = sp.get("female")
     dress = sp["bottom"] == "dress"
+    sit = bool(pose.get("sit")) and pose.get("ride") is None and not back
+    drop = SIT_DROP if sit else 0.0                 # seated: the whole body is this much lower
+    pen = Pen(im, ox + pose["dx"] * s, oy + (pose["dy"] + drop) * s, s)
+    skin, sk_d = sp["skin"], _mix(sp["skin"], 0.85)
     hx, hy, r = pose["head_dx"], -890 + pose["head_dy"], 104
     if back:
         hy = -890
@@ -887,7 +928,25 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
             col = sp["bottom_color"] if not dress else _mix(sp["bottom_color"], 1.1)
             pen.limb([hip, knee, foot], 38 * lw ** 0.5, col if sp["bottom"] != "shorts" else skin)
             pen.ellipse(foot[0] - 30, foot[1] - 18, foot[0] + 44, foot[1] + 14, sp.get("shoe", (44, 40, 42)))
-    for side in ((-1, 1) if pose.get("ride") is None else ()):
+    if sit:                                         # seated: a lap toward us, knees apart, shins down to the floor
+        col = sp["bottom_color"] if not dress else _mix(sp["bottom_color"], 1.1)
+        floor = 26 - drop - pose["dy"]             # feet a little forward of the sofa (lower on the screen)
+        ky = hip_y + 66                             # knee height: just below the hips (thighs come toward us)
+        kx = 92 * lw
+        for side in (-1, 1):
+            knee, foot = (side * kx, ky), (side * (kx + 6), floor - 30)
+            if sp["bottom"] == "shorts":
+                pen.limb([knee, foot], 30, skin)
+            else:
+                pen.limb([(knee[0], knee[1] - 10), foot], (36 if dress else 40) * lw ** 0.5, col)
+            pen.ellipse(foot[0] - 40 + side * 6, floor - 50, foot[0] + 40 + side * 6, floor - 6,
+                        sp.get("shoe", (44, 40, 42)))
+        if not dress:                               # the lap: both thighs seen end-on, knees as round caps
+            pen.poly(_sup(0, hip_y + 34, kx + 36, 62, n=3.2), col)
+            for side in (-1, 1):
+                pen.ellipse(side * kx - 40, ky - 42, side * kx + 40, ky + 30, _mix(col, 1.08))
+            pen.line([(0, hip_y + 4), (0, hip_y + 74)], _mix(col, 0.8), 5)
+    for side in ((-1, 1) if pose.get("ride") is None and not sit else ()):
         sw = 26 * math.sin(wk * 8) * side if wk else 0
         top, foot = (side * 44 * lw, hip_y), (side * 50 * lw + sw, -34)
         if side > 0 and pose.get("kick"):              # a kick: the right leg swings forward
@@ -2467,6 +2526,16 @@ class FlatComposer:
             return 0.03 * FW + 450 * su, -1, 0.03 * FW + 1040 * su           # (feet anchor x, face, head x)
         return 0.97 * FW - 450 * su, 1, 0.97 * FW - 1040 * su
 
+    def _sits(self, sc, cid) -> bool:
+        """Sits on a sofa in this scene: has a sit_* line (own or meanwhile)."""
+        return any(m[2] in SIT_ACTIONS for m in self._acts(sc, cid))
+
+    def _seated(self, sc, cid, t) -> bool:
+        """On the sofa at time t: from the start of the scene until an action that gets them up."""
+        if not self._sits(sc, cid):
+            return False
+        return not any(m[0] <= t and m[2] in STAND_UP for m in self._acts(sc, cid))
+
     def _stove_scene(self, sc) -> bool:
         """A kitchen scene where the kadhai matters: the camera keeps the stove in view."""
         if sc.bg != "flat_kitchen":
@@ -2724,6 +2793,12 @@ class FlatComposer:
         if self.cinema and bid in PASSERS and lay.get("type") in ("wide", "single"):
             self._passersby(im, bid, t, x0, y0, z, k, lay["ground"], blur)
         line = next((l for l in sc.lines if l.start <= t < l.end), None)
+        for a in lay["actors"]:                  # a sofa under everyone who sits in this scene
+            sp_ = self.specs[a["cid"]]
+            if sp_["kind"] in ("human", "stick", "3d") and not a.get("back") and self._sits(sc, a["cid"]):
+                u = a["scale"] * k * sp_.get("height", 1.0)
+                draw_sofa(im, a["x"] * k, a["g"] * k, u * 1.04 * sp_.get("build", 1.0) ** 0.25,
+                          width=max(1.0, sp_.get("build", 1.0) ** 0.8))
         glows = []                               # faces lit by a phone screen (for the dark lighting)
         for a in lay["actors"]:
             cid = a["cid"]
@@ -2784,6 +2859,8 @@ class FlatComposer:
                 sp = sp["fallback"]
             if sp["kind"] in ("human", "brain", "stick"):
                 pose = pose_for(action, emotion, tq, speaking, key)
+                if sp["kind"] == "human" and not walk and self._seated(sc, cid, t):
+                    pose["sit"] = True             # stays on the sofa while talking, gesturing or listening
             else:
                 pose = dict(dy=0.0, walk=tq if action == "walk" else 0.0)
             eff = ""                                   # the line's cartoon effect (dizzy stars, "!", hearts...)
@@ -2820,7 +2897,7 @@ class FlatComposer:
                     pose["dy"] = 0.0
             scale_px = a["scale"] * k
             ck = (cid, a["view"], a["face"], round(scale_px, 3), action, emotion, mq, round(blink, 1), tq, speaking, key,
-                  held, eff, reach_down, blend, pose.get("turn", 0.0))
+                  held, eff, reach_down, blend, pose.get("turn", 0.0), bool(pose.get("sit")))
             below = (FH - a["g"]) * k
             rim = self.cinema and not self._stick_scene(sc) and bid not in cinema.NO_GRADE
             spr, (ax, ay) = self.sprites.get(ck, lambda: render_sprite(sp, a["view"], a["face"], scale_px, pose,

@@ -23,8 +23,10 @@ import array
 import asyncio
 import hashlib
 import math
+import os
 import random
 import subprocess
+import time
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -110,9 +112,18 @@ def _edge_to_wav(text: str, voice: str, rate: str, out_wav: Path, pitch: str = "
     mp3 = out_wav.with_suffix(".mp3")
 
     async def run():
-        await edge_tts.Communicate(text, voice, rate=rate, pitch=pitch, volume=volume).save(str(mp3))
+        proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") or None   # behind a proxy: use it
+        await edge_tts.Communicate(text, voice, rate=rate, pitch=pitch, volume=volume, proxy=proxy).save(str(mp3))
 
-    asyncio.run(run())
+    for attempt in range(3):                # the service sometimes answers with no audio: try again
+        try:
+            asyncio.run(run())
+            if mp3.exists() and mp3.stat().st_size > 0:
+                break
+        except Exception:  # noqa: BLE001
+            if attempt == 2:
+                raise
+        time.sleep(1.0 + attempt)
     if not mp3.exists() or mp3.stat().st_size == 0:
         raise TTSError("The voice service returned no audio.")
     r = subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", str(mp3), "-af", TIGHTEN, "-ar", str(RATE), "-ac", "1",
