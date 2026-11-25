@@ -307,6 +307,37 @@ _GEMINI = [
 for _n, _g, _d in _GEMINI:
     VOICES.append(dict(id=f"gemini:{_n}", label=f"Gemini, {_g}: {_n} ({_d}, follows emotion)", lang="any",
                        gender=_g, engine="gemini"))
+# Sarvam voices (Sarvam AI Bulbul v3, uses SARVAM_API_KEY): natural Hindi and Indian English. The description is how
+# each one sounds, from its measured pitch.
+_SARVAM = [
+    ("kabir", "male", "deep"), ("shubh", "male", "deep"), ("soham", "male", "deep"), ("varun", "male", "deep"),
+    ("mani", "male", "deep"), ("gokul", "male", "low"), ("vijay", "male", "low"), ("ratan", "male", "low"),
+    ("aditya", "male", "medium"), ("rehan", "male", "medium"), ("aayan", "male", "medium"),
+    ("anand", "male", "medium"), ("rahul", "male", "medium"), ("amit", "male", "medium"), ("tarun", "male", "medium"),
+    ("sunny", "male", "medium"), ("advait", "male", "medium"), ("sumit", "male", "light"),
+    ("manan", "male", "light, young"), ("mohit", "male", "light, young"), ("ashutosh", "male", "light, young"),
+    ("rohan", "male", "light, young"), ("dev", "male", "high, boyish"),
+    ("neha", "female", "low, mature"), ("simran", "female", "medium"), ("priya", "female", "medium"),
+    ("pooja", "female", "medium"), ("shruti", "female", "medium"), ("roopa", "female", "medium"),
+    ("ishita", "female", "medium"), ("rupali", "female", "medium"), ("shreya", "female", "medium"),
+    ("tanya", "female", "high"), ("suhani", "female", "high"), ("kavya", "female", "high"),
+    ("ritu", "female", "high"), ("kavitha", "female", "very high"),
+]
+for _n, _g, _d in _SARVAM:
+    VOICES.append(dict(id=f"sarvam:{_n}", label=f"Sarvam, {_g}: {_n.title()} ({_d}, natural Hindi)", lang="any",
+                       gender=_g, engine="sarvam"))
+# Sarvam voice for each look when the engine is "Sarvam voices for everyone"
+SARVAM_FOR_LOOK = {
+    "rahul": "aditya", "aman": "rohan", "priya": "priya", "maa": "neha", "clay": "dev", "flat_uncle": "kabir",
+    "flat_aunty": "pooja", "flat_boy": "dev", "flat_man": "amit", "flat_girl": "kavya", "flat_police": "shubh",
+    "flat_kid": "dev", "flat_youth_a": "rohan", "flat_youth_b": "manan", "flat_youth_c": "mohit",
+    "stick_classic": "sumit", "stick_blue": "varun", "stick_red": "vijay", "stick_girl": "tanya", "stick_kid": "dev",
+    "stick_boss": "anand", "flat_dadaji": "ratan", "flat_village_aunty": "roopa", "flat_village_girl": "suhani",
+    "flat_farmer": "gokul", "flat_lalit": "aditya", "flat_rahul": "rahul", "flat_deepak": "tarun",
+    "flat_cool_dog": "sunny", "flat_brain": "rehan", "flat_dog": "mani", "flat_cat": "kavitha",
+    "3d_oldman": "ratan", "3d_youngman": "amit", "3d_boy": "dev", "3d_woman": "shreya", "narrator": "kabir",
+}
+SARVAM_FOR_GENDER = {"male": "aditya", "female": "priya"}
 # Edge voice used when a Gemini voice fails or its daily limit is used up, and the Gemini voice used for an
 # Edge voice when the engine is "Gemini for everyone".
 EDGE_FOR_GENDER = {"male": "hi-IN-MadhurNeural", "female": "hi-IN-SwaraNeural"}
