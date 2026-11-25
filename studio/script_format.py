@@ -222,6 +222,7 @@ def build_format(idea: str = "", language: str = "hi", seconds: int = 45) -> str
     music = ", ".join(_music())
     kadhai, explainers = _kitchen()
     gem = ", ".join(v["id"].split(":", 1)[1] for v in VOICES if v["id"].startswith("gemini:"))
+    sar = ", ".join(v["id"].split(":", 1)[1] for v in VOICES if v["id"].startswith("sarvam:"))
     lang = {"hi": "Hindi in Devanagari script", "hinglish": "Hinglish in Roman letters", "en": "simple English"}.get(
         language, language)
     idea_line = idea.strip() or "<WRITE YOUR STORY IDEA HERE>"
@@ -283,7 +284,7 @@ LOOKS (character drawings):
 HEIGHT: {", ".join(k for k in HEIGHTS if k)} (or a number like 1.1 = 10% taller than the look)
 BUILD: {", ".join(k for k in BUILDS if k)}
 OUTFIT colours: {", ".join(k for k in OUTFIT_COLORS if k)}
-VOICES: male, female, or a Gemini voice: {gem}
+VOICES: male, female, a Gemini voice: {gem}, or a Sarvam voice written as sarvam:<name>: {sar}
 VOICE EFFECTS: {", ".join(k or "none" for k in VOICE_FX_LABELS)}
 BACKGROUNDS:
 {bgs}
@@ -646,6 +647,8 @@ def parse(text: str) -> dict:
             voice = gem[vk]
         elif voice.lower().startswith("gemini:") and voice.split(":", 1)[1].lower() in gem:
             voice = gem[voice.split(":", 1)[1].lower()]
+        elif voice.lower().startswith("sarvam:") and any(v["id"] == voice.lower() for v in VOICES):
+            voice = voice.lower()
         elif any(v["id"] == voice for v in VOICES):
             pass
         else:

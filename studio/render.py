@@ -26,7 +26,7 @@ from .backgrounds import get_background, get_background_3d
 from .shading import shade_3d, soft_shadow
 from .visemes import build_track
 from .catalog import (ACTIONS, BUILDS, DEFAULT_VOICE, EMOTIONS, GEMINI_FOR_LOOK, HEIGHTS, LOOK_ALIASES, LOOKS,
-                      NARRATOR_LOOKS, OUTFIT_COLORS, PROPS, SHOT_LABELS, SOUND_LABELS, VOICE_FX_FOR_LOOK,
+                      NARRATOR_LOOKS, OUTFIT_COLORS, PROPS, SARVAM_FOR_LOOK, SHOT_LABELS, SOUND_LABELS, VOICE_FX_FOR_LOOK,
                       VOICE_FX_LABELS, VOICE_TUNE)
 from .flat import FlatComposer
 from . import fx as fx_mod
@@ -305,6 +305,9 @@ def make_clip(ln: dict, ch: dict, engine: str, warnings: list | None = None) -> 
     if engine == "gemini" and not voice.startswith("gemini:"):        # the Gemini voice that suits this look
         g = GEMINI_FOR_LOOK.get(ch["look"])
         voice = f"gemini:{g}" if g else voice
+    elif engine == "sarvam" and not voice.startswith("sarvam:"):      # the Sarvam voice that suits this look
+        s = SARVAM_FOR_LOOK.get(ch["look"])
+        voice = f"sarvam:{s}" if s else voice
     c = get_clip(ln["text"], voice, engine, emotion=ln["emotion"], voice_pitch=ch.get("voice_pitch", 0),
                  voice_rate=ch.get("voice_rate", 0), voice_fx=ch.get("voice_fx", ""))
     if warnings is not None and c.warning and c.warning not in warnings:
@@ -318,10 +321,11 @@ def choose_engine(tl: dict, warnings: list | None = None) -> str:
     eng = tl.get("tts") or "auto"
     if eng != "best":
         return eng
-    from . import gemini_tts
+    from . import gemini_tts, sarvam_tts
     from .tts import CACHE_DIR as _C, _key
+    fallback = "sarvam" if sarvam_tts.ready() else "auto"     # natural Hindi when there is a Sarvam key
     if not gemini_tts.ready():
-        return "auto"
+        return fallback
     by_id = {c["id"]: c for c in tl["characters"]}
     need = 0
     for sc in tl["scenes"]:
@@ -337,9 +341,9 @@ def choose_engine(tl: dict, warnings: list | None = None) -> str:
         return "gemini"
     if warnings is not None:
         warnings.append(f"Voices: this video needs {need} new Gemini voice lines but only about {left} are left today "
-                        "(free tier), so the Microsoft voices with emotion were used. Lines already made with Gemini "
-                        "are kept for next time.")
-    return "auto"
+                        "(free tier), so the " + ("Sarvam" if fallback == "sarvam" else "Microsoft voices with emotion")
+                        + " voices were used. Lines already made with Gemini are kept for next time.")
+    return fallback
 
 
 def build_schedule(tl: dict, clip_for) -> tuple[list, float]:

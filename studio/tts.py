@@ -14,6 +14,8 @@ Engines
   gemini  Google Gemini text-to-speech for every character (see gemini_tts.py); the line's emotion sets how it is
           spoken. A character with a "Gemini" voice uses Gemini with any engine except silent. When Gemini fails
           or its free limit is used up, the line uses the Microsoft voice instead (with a warning).
+  sarvam  Sarvam AI Bulbul voices for every character (see sarvam_tts.py): natural Hindi. A character with a
+          "Sarvam" voice uses Sarvam with any engine except silent; when Sarvam fails, the Microsoft voice is used.
 """
 from __future__ import annotations
 
@@ -140,6 +142,17 @@ def _gemini_clip(text: str, voice: str, emotion: str) -> Clip:
     return Clip(wav, len(s) / RATE, compute_env(s))
 
 
+def _sarvam_clip(text: str, voice: str, emotion: str, voice_rate: int = 0) -> Clip:
+    from . import sarvam_tts
+    name = voice.split(":", 1)[1]
+    said = shape_text(text, emotion)
+    wav = CACHE_DIR / "tts" / f"{_key('sarvam1', said, name, emotion, voice_rate)}.wav"
+    if not wav.exists():
+        sarvam_tts.synthesize(said, name, emotion, wav, RATE, voice_rate, TIGHTEN)
+    s = read_samples(wav)
+    return Clip(wav, len(s) / RATE, compute_env(s))
+
+
 # How each emotion changes the Microsoft voices (they have no acting styles, so the delivery is shaped with
 # speed %, pitch Hz and volume %, plus pauses and exclamation marks in the text). Checked by ear-tests with Gemini:
 # the sad and excited versions were clearly picked over the flat one; anger is only a subtle change with these
@@ -219,7 +232,17 @@ def get_clip(text: str, voice: str, engine: str = "auto", rate: str = "+0%", emo
         return apply_voice_fx(get_clip(text, voice, engine, rate, emotion, voice_pitch, voice_rate), voice_fx)
     text = " ".join(text.split())
     warning = ""
-    from .catalog import EDGE_FOR_GENDER, GEMINI_FOR_GENDER
+    from .catalog import EDGE_FOR_GENDER, GEMINI_FOR_GENDER, SARVAM_FOR_GENDER
+    sar = voice.startswith("sarvam:")
+    if engine != "silent" and (sar or engine == "sarvam"):
+        svoice = voice if sar else "sarvam:" + SARVAM_FOR_GENDER[_gender(voice)]
+        try:
+            return _sarvam_clip(text, svoice, emotion, voice_rate)
+        except Exception as e:  # noqa: BLE001  (no key, out of credits, network, ...)
+            warning = f"Sarvam voice: {e}"
+            engine = "auto"
+    if sar:                                   # Sarvam failed, or the silent engine: the Microsoft voice of that gender
+        voice = EDGE_FOR_GENDER[_gender(voice)]
     gem = voice.startswith("gemini:")
     if engine != "silent" and (gem or engine == "gemini"):
         gvoice = voice if gem else "gemini:" + GEMINI_FOR_GENDER[_gender(voice)]
