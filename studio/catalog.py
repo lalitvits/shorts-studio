@@ -172,6 +172,25 @@ _FLAT = {
         kind="human", skin=(238, 192, 152), top="hoodie", top_color=(60, 150, 100), bottom="pants",
         bottom_color=(96, 76, 56), hat=None, hair="real_crop", hair_color=(52, 36, 28), mustache=False, glasses=True,
         female=False, height=0.97, build=1.62, chubby=1.0, shoe=(60, 60, 70))),
+    # road characters (speed breaker comedy): two labourers, an uncle on his scooter, a biker
+    "flat_majdoor_a": ("Flat: Labourer A (red hard hat, green shirt)", False, dict(
+        kind="human", skin=(184, 122, 80), top="tshirt", top_color=(108, 140, 92), bottom="pants",
+        bottom_color=(92, 92, 84), hat="hardhat", hat_color=(226, 84, 40), hair="short", hair_color=(30, 24, 22),
+        mustache=False, stubble=True, female=False, height=0.98, build=0.95, shoe=(90, 70, 50))),
+    "flat_majdoor_b": ("Flat: Labourer B (blue hard hat, brown shirt)", False, dict(
+        kind="human", skin=(170, 110, 72), top="tshirt", top_color=(150, 102, 62), bottom="pants",
+        bottom_color=(110, 84, 60), hat="hardhat", hat_color=(52, 110, 206), hair="short", hair_color=(30, 24, 22),
+        mustache=True, female=False, height=1.02, build=0.92, shoe=(80, 60, 44))),
+    "flat_scooter_uncle": ("Flat: Scooter uncle (white helmet, glasses, mustache, yellow shirt, tie, red scooter)",
+                           False, dict(
+        kind="human", skin=(232, 182, 140), top="tshirt", top_color=(240, 190, 50), bottom="pants",
+        bottom_color=(120, 86, 52), hat="helmet", hat_color=(246, 246, 240), hair="short", hair_color=(60, 44, 36),
+        mustache="big", glasses=True, tie=(170, 40, 40), female=False, height=0.98, build=1.15, shoe=(90, 60, 40),
+        vehicle="scooter", vehicle_color=(212, 42, 38))),
+    "flat_biker": ("Flat: Biker (black jacket, sunglasses, black motorbike)", False, dict(
+        kind="human", skin=(222, 170, 128), top="hoodie", top_color=(38, 38, 44), bottom="pants",
+        bottom_color=(40, 46, 70), hat=None, hair="spiky", hair_color=(24, 20, 20), mustache=False, shades=True,
+        female=False, height=1.0, build=0.95, shoe=(30, 30, 34), vehicle="bike", vehicle_color=(34, 34, 40))),
     "flat_cool_dog": ("Flat: Cool dog (sunglasses, cap, gold chain)", False, dict(
         kind="dog", color=(150, 96, 56), light=(206, 160, 112), shades=True, cap=(40, 96, 210), chain=True,
         height=1.05)),
@@ -242,6 +261,7 @@ PROP_LABELS = {"": "Prop: none", "phone": "Mobile phone (in the hand)", "glass":
                # food
                "samosa": "Samosa", "jalebi": "Jalebi", "vada_pav": "Vada pav", "cutting_chai": "Cutting chai (small glass)",
                "kulhad": "Kulhad chai (clay cup)", "plate_samosa": "Plate of samosas (both hands)",
+               "tasla": "Tasla (iron pan of cement, both hands)",
                # fruit
                "banana": "Banana", "apple": "Apple", "mango": "Mango", "orange": "Orange", "grapes": "Grapes",
                "watermelon": "Watermelon slice",
@@ -274,6 +294,7 @@ FLAT_BACKGROUNDS = {
     "flat_sabzi_mandi": "Flat cartoon: sabzi mandi (vegetable and fruit carts)",
     "flat_airport": "Flat cartoon: airport (departure board, planes)",
     "flat_bus_stop": "Flat cartoon: bus stop (shelter, passing bus)",
+    "flat_highway": "Flat cartoon: highway with a speed breaker (trees, marker posts, golden hour)",
     "flat_white": "Plain white (stickman comedy)",
     "flat_doodle": "Doodle paper (hand-drawn hills, sun, clouds)",
 }
@@ -336,6 +357,7 @@ SARVAM_FOR_LOOK = {
     "flat_farmer": "gokul", "flat_lalit": "aditya", "flat_rahul": "rahul", "flat_deepak": "tarun",
     "flat_cool_dog": "sunny", "flat_brain": "rehan", "flat_dog": "mani", "flat_cat": "kavitha",
     "3d_oldman": "ratan", "3d_youngman": "amit", "3d_boy": "dev", "3d_woman": "shreya", "narrator": "kabir",
+    "flat_majdoor_a": "gokul", "flat_majdoor_b": "vijay", "flat_scooter_uncle": "ratan", "flat_biker": "varun",
 }
 SARVAM_FOR_GENDER = {"male": "aditya", "female": "priya"}
 # Edge voice used when a Gemini voice fails or its daily limit is used up, and the Gemini voice used for an

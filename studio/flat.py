@@ -110,7 +110,8 @@ for _f in FOODS:
 # (the left arm's x is mirrored: a positive x is out to the left)
 TWO_HAND = {"book": (("ik", -55, -700), ("ik", 55, -700)), "newspaper": (("ik", 130, -720), ("ik", 130, -720)),
             "laptop": (("ik", 70, -690), ("ik", 70, -690)), "parcel": (("ik", -48, -610), ("ik", 48, -610)),
-            "jug": (("ik", 0, -690), ("ik", 110, -720)), "plate_samosa": (("ik", 20, -640), ("ik", 80, -640))}
+            "jug": (("ik", 0, -690), ("ik", 110, -720)), "plate_samosa": (("ik", 20, -640), ("ik", 80, -640)),
+            "tasla": (("ik", 150, -560), ("ik", 150, -560))}
 BUSY_HANDS = {"clap", "cry", "facepalm", "wipe_tears", "punch", "slap", "throw", "grab_hand", "cover_kadhai",
               "hold_jug", "lower_jug", "turn_off_gas", "cook", "use_phone", "sit_phone", "phone_call", "read_book",
               "sit_read", "drink_tea", "sit_tea", "eat", "sit_eat", "hold_parcel", "hide_behind", "think",
@@ -778,6 +779,33 @@ def _cap(pen, sp, hx, hy, r, back):
         pen.circle(hx, hy - r * 1.18, r * 0.08, dark, 3)
 
 
+def _hardhat(pen, sp, hx, hy, r, back):
+    """A construction worker's hard hat: a shiny dome with a ridge and a brim all round."""
+    c = sp.get("hat_color", (230, 80, 40))
+    dark, light = _mix(c, 0.78), _mix(c, 1.25)
+    pen.ellipse(hx - r * 1.3, hy - r * 0.52, hx + r * 1.3, hy - r * 0.22, dark)                      # brim
+    pen.pie(hx - r * 1.04, hy - r * 1.42, hx + r * 1.04, hy + r * 0.2, 180, 360, c)                  # dome
+    pen.poly([(hx - r * 0.12, hy - r * 1.4), (hx + r * 0.12, hy - r * 1.4), (hx + r * 0.16, hy - r * 0.62),
+              (hx - r * 0.16, hy - r * 0.62)], dark, 3)                                               # ridge
+    if not back:
+        pen.arc(hx - r * 0.8, hy - r * 1.25, hx + r * 0.1, hy - r * 0.2, 200, 250, 7, light)            # shine
+
+
+def _helmet(pen, sp, hx, hy, r, back):
+    """An open-face motorcycle helmet (white with a red stripe) that covers the top and the sides of the head."""
+    c = sp.get("hat_color", (246, 246, 240))
+    stripe = sp.get("hat_stripe", (210, 40, 40))
+    pen.pie(hx - r * 1.2, hy - r * 1.42, hx + r * 1.2, hy + r * 0.9, 180, 360, c)                    # shell top
+    for side in (-1, 1):                                                                             # ear flaps
+        pen.poly([(hx + side * r * 1.2, hy - r * 0.28), (hx + side * r * 0.86, hy - r * 0.28),
+                  (hx + side * r * 0.8, hy + r * 0.52), (hx + side * r * 1.1, hy + r * 0.62)], c, 4)
+    pen.poly([(hx - r * 0.2, hy - r * 1.42), (hx + r * 0.2, hy - r * 1.42), (hx + r * 0.24, hy - r * 0.3),
+              (hx - r * 0.24, hy - r * 0.3)], stripe, 3)                                              # stripe
+    pen.line([(hx - r * 1.16, hy - r * 0.28), (hx + r * 1.16, hy - r * 0.28)], _mix(c, 0.75), 6)       # rim
+    if not back:
+        pen.arc(hx - r * 0.95, hy - r * 1.3, hx + r * 0.2, hy - r * 0.1, 200, 245, 8, (255, 255, 255))
+
+
 def _pagdi(pen, sp, hx, hy, r, back):
     """A village turban (pagdi): wrapped cloth over the top of the head, with its folds and a tail at the back."""
     c = sp.get("hat_color", (240, 140, 30))
@@ -892,14 +920,74 @@ def _cycle(pen, bx, f, t, spin, color=(214, 60, 52)):
         pen.line([(px - 18, py), (px + 18, py)], (40, 40, 46), 9)
 
 
+def _vehicle_front(pen, kind, color, t, jit=0.0):
+    """A scooter (kind "scooter") or a motorbike ("bike") coming straight at the camera, drawn in front of the
+    rider (feet origin on the road). The rider's hands go on the grips at (+-180, -470)."""
+    dark, light = _mix(color, 0.72), _mix(color, 1.3)
+    pen.d.rounded_rectangle(pen.box(-40, -250, 40, 0), radius=30 * pen.s, fill=(34, 34, 38), outline=OUT,
+                            width=pen.wd(OL))                                                        # tyre
+    pen.line([(-30, -170 + 40 * math.sin(t * 20)), (30, -170 + 40 * math.sin(t * 20))], (70, 70, 76), 5)
+    if kind == "scooter":
+        pen.poly([(-62, -300), (62, -300), (50, -190), (-50, -190)], color)                           # mudguard
+        pen.poly([(-152, -540), (152, -540), (128, -250), (-128, -250)], color)                       # leg shield
+        pen.poly([(-96, -510), (96, -510), (80, -290), (-80, -290)], light, 0)
+        pen.d.rounded_rectangle(pen.box(-50, -282, 50, -238), radius=6 * pen.s, fill=(250, 250, 246),
+                                outline=OUT, width=pen.wd(3))                                       # number plate
+        bar_y, lamp_y, lamp_r = -470, -520, 60
+    else:
+        for side in (-1, 1):                                                                        # fork legs
+            pen.limb([(side * 46, -380), (side * 38, -140)], 18, (190, 192, 200), 3)
+        pen.poly([(-120, -600), (120, -600), (86, -380), (-86, -380)], color)                         # fairing
+        pen.poly([(-70, -650), (70, -650), (100, -600), (-100, -600)], (150, 190, 220), 3)            # windscreen
+        pen.d.rounded_rectangle(pen.box(-44, -300, 44, -262), radius=6 * pen.s, fill=(250, 250, 246),
+                                outline=OUT, width=pen.wd(3))
+        bar_y, lamp_y, lamp_r = -470, -500, 48
+    for side in (-1, 1):
+        pen.line([(side * 150, bar_y - 20), (side * 200, bar_y - 170)], (150, 152, 160), 7)          # mirror stalks
+        pen.ellipse(side * 205 - 34, bar_y - 210, side * 205 + 34, bar_y - 150, (200, 210, 222))
+        pen.circle(side * 112, lamp_y + 14, 15, (250, 160, 40), 3)                                    # indicators
+    pen.limb([(-215, bar_y), (215, bar_y)], 16, (60, 62, 70), 3)                                      # handlebar
+    for side in (-1, 1):
+        pen.limb([(side * 168, bar_y), (side * 222, bar_y)], 24, (28, 28, 32), 3)                     # grips
+    pen.circle(0, lamp_y, lamp_r + 12, dark)                                                          # headlight
+    pen.circle(0, lamp_y, lamp_r, (255, 248, 206), 4)
+    pen.circle(-lamp_r * 0.3, lamp_y - lamp_r * 0.3, lamp_r * 0.28, (255, 255, 255), 0)
+
+
+def _vehicle_side(pen, kind, color, f, t):
+    """A motorbike or scooter seen from the side (f = 1: front to the right), wheels turning."""
+    dark = _mix(color, 0.72)
+    spin = t * 30
+    for cx in (-260 * f, 270 * f):
+        pen.circle(cx, -112, 112, (34, 34, 38))
+        pen.circle(cx, -112, 58, (170, 172, 180), 4)
+        for k in range(3):
+            a = spin + k * math.pi / 3
+            pen.line([(cx - 54 * math.cos(a), -112 - 54 * math.sin(a)), (cx + 54 * math.cos(a), -112 + 54 * math.sin(a))],
+                     (120, 122, 130), 4)
+    pen.limb([(-60 * f, -210), (-330 * f, -170)], 22, (196, 198, 206), 3)                             # exhaust
+    pen.d.rounded_rectangle(pen.box(-90 * f, -330, 120 * f, -170), radius=24 * pen.s, fill=(90, 92, 100),
+                            outline=OUT, width=pen.wd(OL))                                         # engine
+    pen.limb([(250 * f, -560), (275 * f, -112)], 20, (190, 192, 200), 3)                               # fork
+    pen.poly([(-40 * f, -440), (200 * f, -470), (240 * f, -380), (60 * f, -330), (-60 * f, -360)], color)  # tank
+    pen.poly([(-330 * f, -300), (-60 * f, -350), (-60 * f, -300), (-300 * f, -260)], dark)               # tail
+    pen.d.rounded_rectangle(pen.box(-240 * f, -380, 20 * f, -334), radius=18 * pen.s, fill=(30, 30, 34),
+                            outline=OUT, width=pen.wd(4))                                          # seat
+    pen.limb([(230 * f, -560), (170 * f, -600)], 16, (40, 40, 46), 3)                                  # handlebar
+    pen.circle(290 * f, -500, 36, (255, 248, 206), 4)                                                  # headlight
+
+
 def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
     bw = sp.get("build", 1.0)                       # 0.86 thin .. 1.5 very fat
     if pose.get("cloud"):                            # fighting inside a dust cloud: only the cloud shows
         stick.cartoon_fx(Pen(im, ox, oy, s), set(pose.get("fx", ())), 0, -890, 104, t, sp["skin"])
         return
-    if pose.get("cycle") and view != "back":         # standing with a cycle: it is beside them
+    veh = sp.get("vehicle") if pose.get("ride") is not None and view != "back" else None
+    if veh:                                          # riding a scooter / motorbike: hands on the grips
+        pose = dict(pose, L=("ik", 180, -580), R=("ik", 180, -580))
+    if pose.get("cycle") and view != "back" and not sp.get("vehicle"):   # standing with a cycle: it is beside them
         _cycle(Pen(im, ox + pose["dx"] * s, oy, s), 300, -1, t, 0.0, sp.get("cycle_color", (214, 60, 52)))
-    if pose.get("ride") is not None:                 # riding: the cycle under them
+    if pose.get("ride") is not None and not veh:     # riding: the cycle under them
         _cycle(Pen(im, ox + pose["dx"] * s, oy, s), 0, 1, t, pose["ride"] * 7, sp.get("cycle_color", (214, 60, 52)))
     back = view == "back"
     female = sp.get("female")
@@ -919,7 +1007,7 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
     hip_y = -260 if dress else -470
     wk = pose["walk"]
     lw = 1 + 0.6 * (bw - 1)                          # legs further apart on a wider body
-    if pose.get("ride") is not None:                 # pedalling: feet on the pedals, knees bent forward
+    if pose.get("ride") is not None and not veh:     # pedalling: feet on the pedals, knees bent forward
         for side in (-1, 1):
             a = pose["ride"] * 7 * 1.4 + (0 if side > 0 else math.pi)
             foot = (10 + 46 * math.cos(a), -130 + 46 * math.sin(a) - pose["dy"])
@@ -946,7 +1034,7 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
             for side in (-1, 1):
                 pen.ellipse(side * kx - 40, ky - 42, side * kx + 40, ky + 30, _mix(col, 1.08))
             pen.line([(0, hip_y + 4), (0, hip_y + 74)], _mix(col, 0.8), 5)
-    for side in ((-1, 1) if pose.get("ride") is None and not sit else ()):
+    for side in ((-1, 1) if pose.get("ride") is None and not sit else ()):   # (a vehicle hides the legs)
         sw = 26 * math.sin(wk * 8) * side if wk else 0
         top, foot = (side * 44 * lw, hip_y), (side * 50 * lw + sw, -34)
         if side > 0 and pose.get("kick"):              # a kick: the right leg swings forward
@@ -1117,6 +1205,10 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         pen.poly([(x, y), (x + 32, y + 34), (x - 4, y + 26)], rib, 3)
         pen.limb([(x, y + 10), (x + 3, y + 54)], 12, hc, 3)
 
+    if sp.get("tie") and not back:                          # a necktie
+        tc_ = sp["tie"]
+        pen.poly([(-16, -786), (16, -786), (10, -760), (-10, -760)], _mix(tc_, 0.8), 3)
+        pen.poly([(-10, -760), (10, -760), (24, -560), (0, -526), (-24, -560)], tc_, 3.5)
     # head (drawn before arms, so hands can touch the face)
     tn = 0.0 if back else pose.get("turn", 0.0)             # turned toward where they face (3/4 view)
     if pose.get("nohead"):                                  # side view: the head is drawn in profile afterwards
@@ -1148,6 +1240,10 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         _beret(pen, sp, hx, hy, r, back)
     elif sp.get("hat") == "pagdi":
         _pagdi(pen, sp, hx, hy, r, back)
+    elif sp.get("hat") == "hardhat":
+        _hardhat(pen, sp, hx, hy, r, back)
+    elif sp.get("hat") == "helmet":
+        _helmet(pen, sp, hx, hy, r, back)
     if sp["hair"] == "bald" and not sp.get("hat"):          # the shine on a bald head
         pen.arc(hx - r * 0.82, hy - r * 0.92, hx + r * 0.32, hy + r * 0.12, 200, 245, 9, (255, 252, 240))
     if sp.get("earrings") and not back:
@@ -1207,6 +1303,13 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
             pen.line([(fl - 29 * (1 - 0.25 * tn), ey - 6), (hx - r + 4 + 16 * tn, ey - 12)], gcol, 4.5)
             if tn < 0.25:
                 pen.line([(fx_ + 67, ey - 6), (hx + r - 4, ey - 12)], gcol, 4.5)
+        if sp.get("shades"):                                # dark sunglasses over the eyes
+            fl, nr = fx_ - 38 + 8 * tn, fx_ + 38 - 2 * tn
+            for ex_, w_ in ((fl, 34 * (1 - 0.25 * tn)), (nr, 34)):
+                pen.d.rounded_rectangle(pen.box(ex_ - w_, ey - 24, ex_ + w_, ey + 22), radius=14 * pen.s,
+                                        fill=(24, 24, 30), outline=OUT, width=pen.wd(4))
+                pen.line([(ex_ - w_ * 0.5, ey - 12), (ex_ - w_ * 0.1, ey - 16)], (120, 130, 150), 4)
+            pen.line([(fl + 30, ey - 8), (nr - 30, ey - 8)], (24, 24, 30), 6)
         if female and cfg["mouth"] in ("smile", "smile_s", "flat") and mouth <= 0.08:
             pass
         _effects(pen, cfg["fx"], fx_, hy, r, t)
@@ -1220,6 +1323,12 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         pen.d.rounded_rectangle(pen.box(-170 * bw, -520, -60 * bw, -400), radius=12 * pen.s, fill=(150, 96, 56),
                                 outline=OUT, width=pen.wd(4))
         pen.line([(-160 * bw, -490), (-70 * bw, -490)], (110, 70, 40), 5)
+    if veh:                                          # the scooter / motorbike in front, hands on its grips
+        jit = 7 * math.sin(t * 61) if "shiver" in pose.get("fx", ()) else 0.0
+        vp = Pen(im, ox + (pose["dx"] + jit) * s, oy, s)
+        _vehicle_front(vp, veh, sp.get("vehicle_color", (210, 40, 36)), t)
+        for side in (-1, 1):
+            vp.circle(side * 190, -484, 26, skin)
     if pose.get("fx"):
         stick.cartoon_fx(pen, set(pose["fx"]), hx, hy, r, t, sp["skin"])
 
@@ -1288,6 +1397,17 @@ def draw_human_side(im, ox, oy, s, sp, pose, emotion, mouth, blink, t):
         pen.circle(hand[0], hand[1], 24, _mix(skin, k))
         return el, hand
 
+    veh = sp.get("vehicle") if pose.get("ride") is not None else None
+    if veh:                                           # on the motorbike: the bike under them, legs bent onto it
+        _vehicle_side(Pen(im, ox + pose["dx"] * s, oy, s), veh, sp.get("vehicle_color", (30, 30, 34)), 1, t)
+
+        def leg(sign, far):                           # noqa: F811
+            col = bc if sp["bottom"] != "shorts" else skin
+            c = _mix(col, 0.8) if far else col
+            knee, foot = (hip[0] + 190, hip[1] + 40), (hip[0] + 130, -150 - pose["dy"])
+            pen.limb([hip, knee, foot], 40 * bw ** 0.5, c)
+            sc_ = _mix(shoe, 0.8) if far else shoe
+            pen.ellipse(foot[0] - 22, foot[1] - 22, foot[0] + 58, foot[1] + 14, sc_)
     # far leg and far arm, behind the body
     leg(-1, True)
     if not pose.get("ride"):
@@ -1374,6 +1494,10 @@ def draw_profile_head(pen, sp, pose, emotion, mouth, blink, t):
         _police_cap(pen, sp, hx, hy, r, False)
     elif sp.get("hat") == "pagdi":
         _pagdi(pen, sp, hx, hy, r, False)
+    elif sp.get("hat") == "hardhat":
+        _hardhat(pen, sp, hx, hy, r, False)
+    elif sp.get("hat") == "helmet":
+        _helmet(pen, sp, hx, hy, r, False)
         c_ = sp.get("hat_color", (240, 140, 30))                    # its tail hangs at the back
         pen.poly([(hx - r * 0.95, hy - r * 0.6), (hx - r * 0.6, hy - r * 0.6), (hx - r * 0.75, hy + r * 0.8),
                   (hx - r * 1.05, hy + r * 0.75)], c_)
@@ -1603,6 +1727,14 @@ def _prop(pen, kind, hand, other=None, skin=None, bite=0):
             pen.poly([(x - 24, y - 56), (x + 24, y - 56), (x + 16, y + 8), (x - 16, y + 8)], (178, 92, 58), 4)
             pen.ellipse(x - 22, y - 62, x + 22, y - 50, (176, 110, 56), 2)
         pen.circle(x, y - 4, 22, skin or (200, 140, 95), 4)
+        return
+    if kind == "tasla" and other is not None:    # an iron pan of wet cement, held by its rim in both hands
+        cx, cy = (hand[0] + other[0]) / 2, (hand[1] + other[1]) / 2 + 10
+        pen.pie(cx - 190, cy - 110, cx + 190, cy + 90, 0, 180, (70, 72, 78))                    # bowl
+        pen.ellipse(cx - 200, cy - 34, cx + 200, cy + 24, (96, 98, 104))                         # rim
+        pen.ellipse(cx - 172, cy - 26, cx + 172, cy + 14, (150, 150, 146), 0)                    # cement
+        pen.ellipse(cx - 120, cy - 52, cx + 90, cy + 4, (166, 166, 160), 3)                      # heaped up
+        pen.arc(cx - 90, cy - 46, cx + 20, cy - 10, 200, 300, 4, (196, 196, 190))
         return
     if kind == "plate_samosa" and other is not None:
         cx, cy = (hand[0] + other[0]) / 2, (hand[1] + other[1]) / 2
@@ -2573,8 +2705,9 @@ class FlatComposer:
             for l in scx.lines:
                 if l.start > t:
                     break
-                if l.char == cid and getattr(l, "prop", ""):
-                    prop = None if l.prop == "none" else l.prop
+                if getattr(l, "prop", "") and (l.char == cid or (getattr(l, "actor", "") == cid
+                                                                   and l.char not in scx.cast)):
+                    prop = None if l.prop == "none" else l.prop     # (a narrator's line gives it to the actor)
                 elif (l.char == cid and l.action in ("ride_in", "ride_out", "ride_cycle")) or \
                         (getattr(l, "actor", "") == cid and l.actor_action in ("ride_in", "ride_out", "ride_cycle")):
                     prop = "cycle"
@@ -2917,7 +3050,7 @@ class FlatComposer:
                 wpx = round((300 if sp["kind"] in ("human", "stick") else 360) * scale_px)
                 sh = _shadow(wpx, max(2, round(wpx * 0.12)))
                 im.paste(sh, (round(fx - sh.width / 2), round(fy - sh.height / 2)), sh)
-            if action == "slip_fall" and t_act < 3:  # the banana peel that did it
+            if action == "slip_fall" and t_act < 3 and not sp.get("vehicle"):  # the banana peel that did it
                 stick.draw_peel(im, fx, fy, scale_px * sp.get("height", 1.0), a["face"], t_act)
             if eff == "alarm":                        # a ringing alarm clock beside them (by the head when lying)
                 hk = scale_px * sp.get("height", 1.0)

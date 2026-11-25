@@ -17,7 +17,8 @@ from PIL import ImageDraw, ImageFont
 
 from .realms import OUT, _sky
 
-MORE = ("flat_chai_tapri", "flat_sabzi_mandi", "flat_airport", "flat_bus_stop", "flat_white", "flat_doodle")
+MORE = ("flat_chai_tapri", "flat_sabzi_mandi", "flat_airport", "flat_bus_stop", "flat_white", "flat_doodle",
+        "flat_highway")
 
 
 def _mix(c, k):
@@ -535,6 +536,72 @@ def _bus_stop(im, d, P, L, PW, ps, rnd):
     _text(d, P, ps, 2160, 610, "BUS STOP", 38, (255, 255, 255))
 
 
+def _highway(im, d, P, L, PW, ps, rnd):
+    """A country highway at golden hour running straight into the distance, trees on both sides, red-and-white
+    marker posts, and a speed breaker (yellow and white strips) across the road just behind the characters."""
+    _sky(d, im.width, ps, [(0, (246, 204, 120)), (520, (250, 226, 160)), (820, (252, 238, 196))])
+    vx, vy = PW / 2, 820                                                     # vanishing point on the horizon
+    d.ellipse(P(PW * 0.72 - 120, 250, PW * 0.72 + 120, 490), fill=(255, 236, 170))           # low sun
+    d.ellipse(P(PW * 0.72 - 90, 280, PW * 0.72 + 90, 460), fill=(255, 246, 210))
+    d.rectangle(P(0, vy, PW, 1920), fill=(214, 188, 120))                    # dry ground / fields
+    for i in range(7):                                                       # field bands toward the horizon
+        y = vy + 30 + i * i * 22
+        d.line(P(0, y, PW, y), fill=(200, 172, 104), width=L(3))
+
+    def edge(side, y):                                                       # road edge x at height y
+        u = (y - vy) / (1920 - vy)
+        return vx + side * (40 + u * (PW * 0.40))
+
+    def poly(pts, fill, w=0):
+        d.polygon([tuple(P(*p)) for p in pts], fill=fill, outline=OUT if w else None, width=L(w) if w else 0)
+
+    for side in (-1, 1):                                                     # grass verges
+        poly([(edge(side, vy), vy), (edge(side, vy) + side * 160, vy), (edge(side, 1920) + side * 700, 1920),
+              (edge(side, 1920), 1920)], (150, 176, 86))
+    poly([(edge(-1, vy), vy), (edge(1, vy), vy), (edge(1, 1920), 1920), (edge(-1, 1920), 1920)], (92, 96, 108))
+    for side in (-1, 1):                                                     # white edge lines
+        poly([(edge(side, vy) - side * 4, vy), (edge(side, vy) - side * 8, vy),
+              (edge(side, 1920) - side * 60, 1920), (edge(side, 1920) - side * 22, 1920)], (236, 232, 220))
+    y = vy + 6                                                               # centre dashes, longer when near
+    while y < 1920:
+        u = (y - vy) / (1920 - vy)
+        ln, gap, w = 20 + 260 * u, 16 + 200 * u, 3 + 26 * u
+        poly([(vx - w / 2, y), (vx + w / 2, y), (vx + w * 0.6, min(1920, y + ln)), (vx - w * 0.6, min(1920, y + ln))],
+             (240, 236, 224))
+        y += ln + gap
+
+    def bump(y0, y1):                                                        # one speed breaker band
+        xl0, xr0, xl1, xr1 = edge(-1, y0), edge(1, y0), edge(-1, y1), edge(1, y1)
+        n = 14
+        for i in range(n):
+            a, b = i / n, (i + 1) / n
+            col = (246, 196, 40) if i % 2 == 0 else (244, 242, 234)
+            poly([(xl0 + (xr0 - xl0) * a, y0), (xl0 + (xr0 - xl0) * b, y0),
+                  (xl1 + (xr1 - xl1) * b, y1), (xl1 + (xr1 - xl1) * a, y1)], col)
+        poly([(xl1, y1), (xr1, y1), (xr1, y1 + (y1 - y0) * 0.35), (xl1, y1 + (y1 - y0) * 0.35)], (60, 62, 70))
+        d.line(P(xl0, y0, xr0, y0), fill=OUT, width=L(3))
+        d.line(P(xl1, y1, xr1, y1), fill=OUT, width=L(3))
+    for y0 in (1300, 1352, 1404):                                            # three strips, like the real ones
+        bump(y0, y0 + 30)
+    for side in (-1, 1):                                                     # trees and marker posts, far to near
+        for i in range(10, -1, -1):
+            u = (i / 10) ** 1.8
+            y = vy + 12 + u * (1500 - vy)
+            k = 0.12 + 0.9 * (y - vy) / (1920 - vy)
+            x = edge(side, y) + side * (120 + 260 * k)
+            tw = 22 * k * 3
+            d.rectangle(P(x - tw / 2, y - 260 * k * 2.2, x + tw / 2, y), fill=(120, 80, 46), outline=OUT,
+                        width=L(max(1, 4 * k)))
+            for dx, dy, r in ((0, -720, 190), (-140, -600, 150), (140, -600, 150), (0, -560, 170)):
+                d.ellipse(P(x + dx * k - r * k, y + dy * k - r * k, x + dx * k + r * k, y + dy * k + r * k),
+                          fill=(84, 150, 70) if dx else (96, 164, 78), outline=OUT, width=L(max(1, 5 * k)))
+            px_ = edge(side, y) + side * 40 * k                              # red and white marker post
+            ph = 150 * k
+            d.rectangle(P(px_ - 12 * k, y - ph, px_ + 12 * k, y), fill=(246, 244, 236), outline=OUT,
+                        width=L(max(1, 3 * k)))
+            d.rectangle(P(px_ - 12 * k, y - ph, px_ + 12 * k, y - ph * 0.7), fill=(210, 50, 44))
+
+
 def _white(im, d, P, L, PW, ps, rnd):
     """Plain white, the classic stickman look: only a faint floor line."""
     d.rectangle(P(0, 0, PW, 1920), fill=(252, 252, 250))
@@ -587,7 +654,7 @@ def _doodle(im, d, P, L, PW, ps, rnd):
 
 
 DRAW = {"flat_chai_tapri": _chai_tapri, "flat_sabzi_mandi": _sabzi_mandi, "flat_airport": _airport,
-        "flat_bus_stop": _bus_stop, "flat_white": _white, "flat_doodle": _doodle}
+        "flat_bus_stop": _bus_stop, "flat_white": _white, "flat_doodle": _doodle, "flat_highway": _highway}
 
 
 def draw(bid, im, d, P, L, PW, ps, rnd):

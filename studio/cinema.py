@@ -12,7 +12,7 @@ from functools import lru_cache
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 HAZE = (252, 214, 168)                 # warm late-afternoon air
-OUTDOOR = {"flat_village", "flat_chai_tapri", "flat_park", "flat_sabzi_mandi", "flat_bus_stop", "flat_city_street",
+OUTDOOR = {"flat_highway", "flat_village", "flat_chai_tapri", "flat_park", "flat_sabzi_mandi", "flat_bus_stop", "flat_city_street",
            "flat_market"}
 NO_GRADE = {"flat_white", "flat_doodle"}
 
