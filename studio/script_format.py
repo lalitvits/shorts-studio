@@ -261,7 +261,11 @@ cast: <ids of the characters on screen in this scene, comma separated>
   sound: <sound>            a sound effect at the start of the line
   meanwhile: <id> <emotion> <action>   someone ELSE acts while this line is spoken (use it with the narrator)
   silent: <seconds>         no words: an acting moment of this many seconds
-  popup: "<text>"           a phone notification shown on screen
+  popup: "<app>: <sender>: <text>"   a phone notification shown on screen, with that app's icon. Apps:
+                            whatsapp, messages, phone (missed call), bank (UPI, salary, Rs), food, shopping,
+                            instagram, youtube, gmail, calendar, alarm, battery, settings, telegram, facebook, news.
+                            Sender is optional: popup: "whatsapp: Mummy: खाना खा लिया?" or popup: "bank: Rs 50,000 credited".
+                            Without an app the words choose one (a plain message when nothing fits)
   sticker: <sticker>        a sticker pops up next to the speaker
   fx: <effect>              a cartoon effect around the speaker (dizzy stars, "!", "?", hearts, rain cloud...)
   overlay: "<line 1> | <line 2>"   big bold text on screen until the scene ends (line 2 is smaller)

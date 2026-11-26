@@ -252,7 +252,7 @@ function renderScenes() {
             <select aria-label="Camera shot (flat cartoon style)" title="Camera shot, used by flat cartoon scenes" data-path="scenes.${si}.lines.${li}.shot">${opts(A.shots || [], ln.shot || "auto")}</select>
           </div>
           <div class="line-sub four extras">
-            <input aria-label="Phone notification on screen (optional)" lang="hi" placeholder="Notification pop-up (optional)" data-path="scenes.${si}.lines.${li}.popup" value="${esc(ln.popup || "")}">
+            <input aria-label="Phone notification on screen (optional)" lang="hi" placeholder="Notification (optional), e.g. whatsapp: Mummy: खाना खा लिया?" title="Start with the app to choose its icon: whatsapp, messages, phone, bank, food, shopping, instagram, youtube, gmail, calendar, alarm, battery, settings, telegram, facebook, news. Add a sender with a second colon." data-path="scenes.${si}.lines.${li}.popup" value="${esc(ln.popup || "")}">
             <select aria-label="Sticker" data-path="scenes.${si}.lines.${li}.sticker"><option value="">No sticker</option>${opts((A.stickers || []).map(x => ({ id: x, label: "Sticker: " + x })), ln.sticker || "")}</select>
             <select aria-label="Cartoon effect around the speaker" title="Drawn around the speaker during this line: dizzy stars, !, ?, hearts, rain cloud..." data-path="scenes.${si}.lines.${li}.effect">${opts(A.effects || [{ id: "", label: "Effect: none" }], ln.effect || "")}</select>
             <select aria-label="Room light" data-path="scenes.${si}.lines.${li}.lights">${opts([{ id: "", label: "Light: no change" }, { id: "on", label: "Light switches ON" }, { id: "off", label: "Light switches OFF" }], ln.lights || "")}</select>

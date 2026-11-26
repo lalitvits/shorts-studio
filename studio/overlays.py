@@ -31,8 +31,189 @@ def banner_y(t: float, a: float) -> float:
     return max(0.0, min(1.0, 1 - (1 - u) ** 3)) if u >= 0 else 0.0
 
 
-@lru_cache(maxsize=8)
-def _banner_card(w: int, h: int):
+# Apps a notification can come from: id -> (name shown in the banner, words that pick it when no app is written).
+# Write the app first in the pop-up text to choose it: "whatsapp: Rahul: कल आ रहा है?" (app: sender: message) or
+# "bank: ₹50,000 credited". Without an app the words pick one; anything else is a plain text message.
+APPS = {
+    "whatsapp": ("WhatsApp", ("whatsapp", "व्हाट्सएप", "msg", "message", "मैसेज", "मेसेज", "typing", "online", "group",
+                              "ग्रुप", "voice note")),
+    "bank": ("Bank", ("₹", "rs.", "rs ", "inr", "credited", "debited", "salary", "सैलरी", "upi", "paid", "balance",
+                      "बैलेंस", "otp", "account", "खाते", "transfer")),
+    "phone": ("Phone", ("missed call", "मिस्ड कॉल", "calling", "कॉल", "call")),
+    "food": ("FoodieApp", ("order", "ऑर्डर", "delivery", "डिलीवरी", "pizza", "पिज़्ज़ा", "food", "खाना", "biryani",
+                           "बिरयानी", "restaurant")),
+    "shopping": ("ShopKart", ("sale", "सेल", "cart", "कार्ट", "shipped", "out for delivery", "discount", "offer")),
+    "instagram": ("Instagram", ("instagram", "इंस्टा", "liked", "लाइक", "followed", "follow", "फॉलो", "reel", "रील",
+                                "story", "स्टोरी", "commented")),
+    "youtube": ("YouTube", ("youtube", "यूट्यूब", "subscribe", "सब्सक्राइब", "uploaded", "views", "व्यूज़", "video",
+                            "वीडियो", "live now")),
+    "gmail": ("Gmail", ("mail", "मेल", "email", "ईमेल", "inbox", "resignation", "offer letter")),
+    "calendar": ("Calendar", ("meeting", "मीटिंग", "reminder", "रिमाइंडर", "birthday", "बर्थडे", "anniversary",
+                              "tomorrow", "deadline")),
+    "alarm": ("Clock", ("alarm", "अलार्म", "wake up", "उठो", "timer")),
+    "battery": ("Battery", ("battery", "बैटरी", "charging", "चार्ज", "low power")),
+    "settings": ("Settings", ("vibration", "वाइब्रेशन", "silent mode", "update", "अपडेट", "wifi", "storage",
+                              "airplane", "do not disturb")),
+    "telegram": ("Telegram", ("telegram", "टेलीग्राम")),
+    "facebook": ("Facebook", ("facebook", "फेसबुक", "friend request", "फ्रेंड रिक्वेस्ट")),
+    "news": ("News", ("breaking", "ब्रेकिंग", "news", "न्यूज़", "खबर")),
+    "messages": ("Messages", ()),
+}
+ALIASES = {"wa": "whatsapp", "whatsap": "whatsapp", "sms": "messages", "message": "messages", "msg": "messages",
+           "text": "messages", "upi": "bank", "paytm": "bank", "gpay": "bank", "phonepe": "bank", "money": "bank",
+           "call": "phone", "missed_call": "phone", "zomato": "food", "swiggy": "food", "foodie": "food",
+           "amazon": "shopping", "flipkart": "shopping", "shop": "shopping", "insta": "instagram", "ig": "instagram",
+           "yt": "youtube", "mail": "gmail", "email": "gmail", "clock": "alarm", "system": "settings",
+           "fb": "facebook", "reminder": "calendar"}
+
+
+def parse_popup(text: str) -> tuple[str, str, str]:
+    """(app id, sender or "", message) from a line's pop-up text."""
+    t = " ".join(str(text or "").split())
+    m = re.match(r"^\s*([A-Za-z_]{2,12})\s*[:|]\s*(.*)$", t)
+    if m:
+        key = m.group(1).lower()
+        app = key if key in APPS else ALIASES.get(key)
+        if app:
+            rest = m.group(2)
+            m2 = re.match(r"^([^:|]{1,24})\s*[:|]\s*(.+)$", rest)          # "sender: message"
+            if m2 and not re.search(r"https?$", m2.group(1)):
+                return app, m2.group(1).strip(), m2.group(2).strip()
+            return app, "", rest.strip()
+    low = t.lower()
+    for app, (_name, words) in APPS.items():
+        if any(w in low for w in words):
+            return app, "", t
+    return "messages", "", t
+
+
+def _font(px: int, bold: bool = True):
+    from PIL import ImageFont
+    for p in ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "C:/Windows/Fonts/arialbd.ttf",
+              "/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/Library/Fonts/Arial Bold.ttf"):
+        try:
+            return ImageFont.truetype(p, max(6, px))
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def _letter(d, cx, cy, ch, px, fill):
+    f = _font(px)
+    w = d.textlength(ch, font=f)
+    d.text((cx - w / 2, cy - px * 0.62), ch, font=f, fill=fill)
+
+
+def _bubble(d, cx, cy, r, fill, k):
+    """A round speech bubble with a little tail at the bottom left."""
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=fill)
+    d.polygon([(cx - r * 0.75, cy + r * 0.35), (cx - r * 1.05, cy + r * 1.05), (cx - r * 0.2, cy + r * 0.82)], fill=fill)
+
+
+def _handset(d, cx, cy, r, fill, k):
+    """A phone handset (receiver), tilted."""
+    w = max(2, int(r * 0.42))
+    d.arc([cx - r, cy - r, cx + r, cy + r], 110, 250, fill=fill, width=w)
+    for a in (110, 250):
+        x = cx + r * math.cos(math.radians(a))
+        y = cy + r * math.sin(math.radians(a))
+        d.ellipse([x - w * 0.8, y - w * 0.8, x + w * 0.8, y + w * 0.8], fill=fill)
+
+
+def _pizza(d, cx, cy, r, k):
+    d.polygon([(cx - r, cy - r * 0.7), (cx + r, cy - r * 0.7), (cx, cy + r)], fill=(255, 210, 90, 255))
+    d.line([(cx - r, cy - r * 0.7), (cx + r, cy - r * 0.7)], fill=(190, 110, 40, 255), width=max(2, int(6 * k)))
+    for px, py in ((cx - r * 0.3, cy - r * 0.25), (cx + r * 0.25, cy - r * 0.3), (cx, cy + r * 0.25)):
+        d.ellipse([px - r * 0.14, py - r * 0.14, px + r * 0.14, py + r * 0.14], fill=(214, 50, 40, 255))
+
+
+def draw_app_icon(d, app: str, ix, iy, s, k):
+    """The app's icon in a rounded square at (ix, iy), size s."""
+    cx, cy = ix + s / 2, iy + s / 2
+    W = (255, 255, 255, 255)
+
+    def tile(fill):
+        d.rounded_rectangle([ix, iy, ix + s, iy + s], radius=22 * k, fill=fill)
+    if app == "whatsapp":
+        tile((37, 211, 102, 255))
+        _bubble(d, cx + s * 0.03, cy - s * 0.03, s * 0.32, W, k)
+        _bubble(d, cx + s * 0.03, cy - s * 0.03, s * 0.24, (37, 211, 102, 255), k)
+        _handset(d, cx + s * 0.03, cy - s * 0.03, s * 0.13, W, k)
+    elif app == "messages":
+        tile((52, 199, 89, 255))
+        d.ellipse([cx - s * 0.32, cy - s * 0.26, cx + s * 0.32, cy + s * 0.2], fill=W)
+        d.polygon([(cx - s * 0.2, cy + s * 0.1), (cx - s * 0.3, cy + s * 0.3), (cx - s * 0.02, cy + s * 0.17)], fill=W)
+    elif app == "instagram":
+        tile((221, 42, 123, 255))
+        d.rounded_rectangle([cx - s * 0.28, cy - s * 0.28, cx + s * 0.28, cy + s * 0.28], radius=s * 0.1, outline=W,
+                            width=max(2, int(s * 0.07)))
+        d.ellipse([cx - s * 0.12, cy - s * 0.12, cx + s * 0.12, cy + s * 0.12], outline=W, width=max(2, int(s * 0.06)))
+        d.ellipse([cx + s * 0.13, cy - s * 0.2, cx + s * 0.2, cy - s * 0.13], fill=W)
+    elif app == "youtube":
+        tile((255, 255, 255, 255))
+        d.rounded_rectangle([cx - s * 0.36, cy - s * 0.25, cx + s * 0.36, cy + s * 0.25], radius=s * 0.1,
+                            fill=(255, 0, 0, 255))
+        d.polygon([(cx - s * 0.09, cy - s * 0.13), (cx - s * 0.09, cy + s * 0.13), (cx + s * 0.14, cy)], fill=W)
+    elif app == "gmail":
+        tile((255, 255, 255, 255))
+        x0, x1, y0, y1 = cx - s * 0.32, cx + s * 0.32, cy - s * 0.22, cy + s * 0.24
+        d.rectangle([x0, y0, x1, y1], fill=(242, 242, 242, 255))
+        lw = max(3, int(s * 0.09))
+        d.line([(x0, y1), (x0, y0), (cx, cy + s * 0.04), (x1, y0), (x1, y1)], fill=(234, 67, 53, 255), width=lw,
+               joint="curve")
+    elif app == "phone":
+        tile((52, 199, 89, 255))
+        _handset(d, cx, cy, s * 0.24, W, k)
+    elif app == "bank":
+        tile((30, 90, 200, 255))
+        _letter(d, cx, cy, "₹", int(s * 0.62), W)
+    elif app == "food":
+        tile((252, 98, 44, 255))
+        _pizza(d, cx, cy + 4 * k, s * 0.36, k)
+    elif app == "shopping":
+        tile((255, 170, 30, 255))
+        d.rounded_rectangle([cx - s * 0.24, cy - s * 0.12, cx + s * 0.24, cy + s * 0.28], radius=s * 0.05, fill=W)
+        d.arc([cx - s * 0.13, cy - s * 0.3, cx + s * 0.13, cy + s * 0.02], 180, 360, fill=W, width=max(2, int(s * 0.06)))
+    elif app == "calendar":
+        tile((255, 255, 255, 255))
+        d.rounded_rectangle([ix, iy, ix + s, iy + s * 0.3], radius=22 * k, fill=(234, 67, 53, 255))
+        d.rectangle([ix, iy + s * 0.18, ix + s, iy + s * 0.3], fill=(234, 67, 53, 255))
+        _letter(d, cx, cy + s * 0.14, "17", int(s * 0.44), (40, 40, 44, 255))
+    elif app == "alarm":
+        tile((30, 30, 34, 255))
+        d.ellipse([cx - s * 0.27, cy - s * 0.24, cx + s * 0.27, cy + s * 0.3], outline=W, width=max(2, int(s * 0.07)))
+        d.line([(cx, cy + s * 0.03), (cx, cy - s * 0.13)], fill=(255, 150, 0, 255), width=max(2, int(s * 0.06)))
+        d.line([(cx, cy + s * 0.03), (cx + s * 0.12, cy + s * 0.08)], fill=(255, 150, 0, 255), width=max(2, int(s * 0.06)))
+    elif app == "battery":
+        tile((40, 40, 44, 255))
+        d.rounded_rectangle([cx - s * 0.3, cy - s * 0.15, cx + s * 0.24, cy + s * 0.15], radius=s * 0.05, outline=W,
+                            width=max(2, int(s * 0.05)))
+        d.rectangle([cx + s * 0.25, cy - s * 0.06, cx + s * 0.31, cy + s * 0.06], fill=W)
+        d.rectangle([cx - s * 0.25, cy - s * 0.1, cx - s * 0.14, cy + s * 0.1], fill=(255, 59, 48, 255))
+    elif app == "settings":
+        tile((142, 142, 147, 255))
+        for i in range(8):
+            a = math.radians(i * 45)
+            x, y = cx + s * 0.27 * math.cos(a), cy + s * 0.27 * math.sin(a)
+            d.ellipse([x - s * 0.08, y - s * 0.08, x + s * 0.08, y + s * 0.08], fill=W)
+        d.ellipse([cx - s * 0.26, cy - s * 0.26, cx + s * 0.26, cy + s * 0.26], fill=W)
+        d.ellipse([cx - s * 0.11, cy - s * 0.11, cx + s * 0.11, cy + s * 0.11], fill=(142, 142, 147, 255))
+    elif app == "telegram":
+        tile((42, 171, 238, 255))
+        d.polygon([(cx - s * 0.3, cy), (cx + s * 0.3, cy - s * 0.24), (cx + s * 0.16, cy + s * 0.28),
+                   (cx - s * 0.04, cy + s * 0.08)], fill=W)
+    elif app == "facebook":
+        tile((24, 119, 242, 255))
+        _letter(d, cx + s * 0.04, cy + s * 0.06, "f", int(s * 0.78), W)
+    elif app == "news":
+        tile((200, 30, 40, 255))
+        _letter(d, cx, cy, "N", int(s * 0.6), W)
+    else:
+        tile((52, 199, 89, 255))
+
+
+@lru_cache(maxsize=32)
+def _banner_card(w: int, h: int, app: str = "messages"):
     k = w / 1080
     x0, y0, x1, y1 = [v * k for v in BANNER]
     W, H = int(x1 - x0 + 40 * k), int(y1 - y0 + 40 * k)
@@ -44,17 +225,8 @@ def _banner_card(w: int, h: int):
     d = ImageDraw.Draw(card)
     d.rounded_rectangle([20 * k, 20 * k, W - 20 * k, H - 20 * k], radius=36 * k, fill=(250, 250, 252, 255),
                         outline=(210, 214, 222, 255), width=max(1, int(2 * k)))
-    ix, iy, s = 52 * k, 52 * k, 92 * k                                                # app icon
-    d.rounded_rectangle([ix, iy, ix + s, iy + s], radius=22 * k, fill=(252, 98, 44, 255))
-    _pizza(d, ix + s / 2, iy + s / 2 + 4 * k, s * 0.36, k)
+    draw_app_icon(d, app, 52 * k, 52 * k, 92 * k, k)                                   # the app's icon
     return card
-
-
-def _pizza(d, cx, cy, r, k):
-    d.polygon([(cx - r, cy - r * 0.7), (cx + r, cy - r * 0.7), (cx, cy + r)], fill=(255, 210, 90, 255))
-    d.line([(cx - r, cy - r * 0.7), (cx + r, cy - r * 0.7)], fill=(190, 110, 40, 255), width=max(2, int(6 * k)))
-    for px, py in ((cx - r * 0.3, cy - r * 0.25), (cx + r * 0.25, cy - r * 0.3), (cx, cy + r * 0.25)):
-        d.ellipse([px - r * 0.14, py - r * 0.14, px + r * 0.14, py + r * 0.14], fill=(214, 50, 40, 255))
 
 
 def draw_popup(im: Image.Image, t: float, ln, w: int, h: int):
@@ -64,7 +236,7 @@ def draw_popup(im: Image.Image, t: float, ln, w: int, h: int):
     k = w / 1080
     y = banner_y(t, a)
     fade = max(0.0, min(1.0, (b - t) / 0.25))
-    card = _banner_card(w, h)
+    card = _banner_card(w, h, parse_popup(ln.popup)[0])
     if fade < 1:
         card = card.copy()
         card.putalpha(card.getchannel("A").point(lambda v: int(v * fade)))
@@ -81,12 +253,15 @@ def popup_ass_events(sched, w: int, h: int, ass_time) -> list:
             if not getattr(ln, "popup", ""):
                 continue
             a, b = _span(ln)
-            x = int(170 * k)
+            x = int(196 * k)
             dy = int((BANNER[3] - BANNER[1] + 120) * k)
             ms = int(SLIDE * 1000)
-            body = re.sub(r"[\U00010000-\U0010FFFF️‍]", "", ln.popup)   # no colour emoji in subtitles
+            app, sender, body = parse_popup(ln.popup)
+            body = re.sub(r"[\U00010000-\U0010FFFF️‍]", "", body)   # no colour emoji in subtitles
             body = body.replace("{", "").replace("}", "").strip()
-            for txt, y, style in (("FoodieApp  ·  अभी", 84, "PopTitle"), (body, 128, "Pop")):
+            sender = re.sub(r"[\U00010000-\U0010FFFF️‍{}]", "", sender).strip()
+            title = "  ·  ".join([APPS[app][0]] + ([sender] if sender else []) + ["अभी"])
+            for txt, y, style in ((title, 84, "PopTitle"), (body, 128, "Pop")):
                 yy = int(y * k)
                 out.append(f"Dialogue: 3,{ass_time(a)},{ass_time(b)},{style},,0,0,0,,"
                            f"{{\\move({x},{yy - dy},{x},{yy},0,{ms})\\fad(0,250)}}{txt}")
@@ -95,7 +270,7 @@ def popup_ass_events(sched, w: int, h: int, ass_time) -> list:
 
 def popup_ass_styles(w: int, h: int, family: str) -> str:
     k = w / 1080
-    ml, mr = int(170 * k), int(w - 1000 * k)          # wrap the text inside the banner
+    ml, mr = int(196 * k), int(w - 1000 * k)          # wrap the text inside the banner
     return (f"Style: PopTitle,{family},{int(36 * k)},&H00707070,&H00707070,&H00FFFFFF,&H00000000,-1,0,0,0,100,100,0,0,1,"
             f"0,0,7,{ml},{mr},0,1\n"
             f"Style: Pop,{family},{int(54 * k)},&H00201818,&H00201818,&H00FFFFFF,&H00000000,-1,0,0,0,100,100,0,0,1,"
