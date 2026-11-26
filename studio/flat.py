@@ -2089,6 +2089,10 @@ BRAIN_BOX = (-330, -1130, 330, 40)
 def draw_brain(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t, speaking):
     """'My brain': a floating pink cartoon brain with a face, little devil horns, tiny arms and a soft glow."""
     bob = 18 * math.sin(t * 2.4) + (6 * math.sin(t * 9) if speaking else 0)
+    if emotion == "laughing":                         # bouncing with laughter
+        bob += 14 * abs(math.sin(t * 11))
+    elif emotion == "angry":                          # trembling with rage
+        bob += 4 * math.sin(t * 40)
     pen = Pen(im, ox, oy + bob * s, s)
     col, dark = sp.get("color", (244, 150, 172)), _mix(sp.get("color", (244, 150, 172)), 0.8)
     cx, cy, rx, ry = 0, -830, 205, 160               # floats at head height
@@ -2115,14 +2119,24 @@ def draw_brain(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t, speaking
             foot = (side * 64, cy + 330)
             pen.limb([hip, knee, foot], 15, OUT, 0)
             pen.ellipse(foot[0] - 30 + side * 10, foot[1] - 14, foot[0] + 30 + side * 10, foot[1] + 16, (40, 36, 40))
-        for side, key in ((-1, "L"), (1, "R")):       # little arms
+        for side, key in ((-1, "L"), (1, "R")):       # little arms: body language for each emotion
             spec = pose.get(key, ("fk", 20, -10))
             sx, sy = side * 190 * k, cy - 10
             if spec[0] in ("ik", "ikd"):
                 spec = ("fk", 40, 70) if speaking else ("fk", 25, -10)
             a, e = spec[1], spec[2]
-            if speaking:
-                a += 25 * math.sin(t * 7 + side)
+            wave = 25 if speaking else 0
+            if emotion == "laughing":                 # holding its belly, shaking with laughter
+                a, e, wave = 20, 120 + 10 * math.sin(t * 20), 6
+            elif emotion == "angry":                  # fists up, shaking
+                a, e, wave = 95, 95, 12
+            elif emotion in ("shocked", "surprised", "scared"):   # arms flung up
+                a, e, wave = 150, 20, 8
+            elif emotion in ("sad", "crying"):        # drooping
+                a, e, wave = 5, 10, 3
+            elif emotion == "proud":                  # hands on its hips
+                a, e, wave = 30, 140, 0
+            a += wave * math.sin(t * (14 if emotion == "angry" else 7) + side)
             elbow, hand = _fk(sx, sy, min(160, a), e, 80, 70, side)
             pen.limb([(sx, sy), elbow, hand], 15, OUT, 0)
             pen.circle(hand[0], hand[1], 17, (250, 250, 250), 4)
@@ -2146,7 +2160,16 @@ def draw_brain(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t, speaking
         _eye(pen, cx - 56, fy0, cfg["eyes"], blink, look)
         _eye(pen, cx + 56, fy0, cfg["eyes"], blink, look)
         _brows(pen, cx, fy0 - 44, cfg["brow"])
-        _mouth(pen, cx + 2, fy0 + 78, cfg["mouth"], mouth, t)
+        if emotion == "laughing":                     # a wide open laugh, with tears of joy
+            op = 0.75 + 0.25 * abs(math.sin(t * 11))
+            pen.pie(cx - 62, fy0 + 30, cx + 62, fy0 + 30 + 110 * op, 0, 180, (110, 20, 34), 5)
+            pen.pie(cx - 30, fy0 + 52 + 40 * op, cx + 30, fy0 + 30 + 110 * op, 180, 360, (236, 110, 120), 0)
+            pen.line([(cx - 50, fy0 + 36), (cx + 50, fy0 + 36)], (255, 255, 255), 10)        # teeth
+            for side in (-1, 1):
+                ty = fy0 + 10 + (t * 60 % 50)
+                pen.ellipse(cx + side * 96 - 9, ty - 12, cx + side * 96 + 9, ty + 12, (120, 190, 250), 2)
+        else:
+            _mouth(pen, cx + 2, fy0 + 78, cfg["mouth"], mouth, t)
         _effects(pen, cfg["fx"], cx, fy0 - 30, 180, t)
         return
     # horns (devil)
