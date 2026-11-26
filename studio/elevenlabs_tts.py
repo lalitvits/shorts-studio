@@ -15,7 +15,11 @@ import urllib.request
 from pathlib import Path
 
 from .config import find_ffmpeg
-from .script import _env
+
+
+def _env(name: str):
+    from .script import _env as env          # imported here: the catalog loads this module (no circular import)
+    return env(name)
 
 API = "https://api.elevenlabs.io/v1/text-to-speech/{voice}?output_format=mp3_44100_128"
 DEFAULT_MODEL = "eleven_v3"
