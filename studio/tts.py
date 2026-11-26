@@ -221,6 +221,7 @@ VOICE_FX = {
                      "aecho=0.8:0.6:45|95:0.4|0.25,volume=0.85",
     "chipmunk": f"asetrate={RATE}*1.35,aresample={RATE},atempo=0.7407",
     "phone": "highpass=f=380,lowpass=f=3300,acompressor=threshold=0.1:ratio=4,volume=1.6",
+    "muffled": "lowpass=f=700,lowpass=f=900,aecho=0.8:0.5:30:0.25,volume=2.2",
 }
 
 

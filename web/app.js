@@ -250,6 +250,7 @@ function renderScenes() {
               <button class="icon" data-act="hear-sound" data-si="${si}" data-li="${li}" aria-label="Hear this sound">▶</button>
             </div>
             <select aria-label="Camera shot (flat cartoon style)" title="Camera shot, used by flat cartoon scenes" data-path="scenes.${si}.lines.${li}.shot">${opts(A.shots || [], ln.shot || "auto")}</select>
+            <select aria-label="Camera movement" title="How the camera moves during this line: zoom in or out, a snap zoom, a tilted or low angle, a pan or a shake (automatic follows the emotion)" data-path="scenes.${si}.lines.${li}.move">${opts(A.moves || [], ln.move || "auto")}</select>
           </div>
           <div class="line-sub four extras">
             <input aria-label="Phone notification on screen (optional)" lang="hi" placeholder="Notification (optional), e.g. whatsapp: Mummy: खाना खा लिया?" title="Start with the app to choose its icon: whatsapp, messages, phone, bank, food, shopping, instagram, youtube, gmail, calendar, alarm, battery, settings, telegram, facebook, news. Add a sender with a second colon." data-path="scenes.${si}.lines.${li}.popup" value="${esc(ln.popup || "")}">

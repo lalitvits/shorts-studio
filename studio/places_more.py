@@ -18,7 +18,7 @@ from PIL import ImageDraw, ImageFont
 from .realms import OUT, _sky
 
 MORE = ("flat_chai_tapri", "flat_sabzi_mandi", "flat_airport", "flat_bus_stop", "flat_white", "flat_doodle",
-        "flat_highway")
+        "flat_highway", "flat_bathroom")
 
 
 def _mix(c, k):
@@ -602,6 +602,65 @@ def _highway(im, d, P, L, PW, ps, rnd):
             d.rectangle(P(px_ - 12 * k, y - ph, px_ + 12 * k, y - ph * 0.7), fill=(210, 50, 44))
 
 
+def _bathroom(im, d, P, L, PW, ps, rnd):
+    """An Indian bathroom: tiled walls, a shower curtain, a mirror over the basin, a blue bucket and mug, a towel on
+    a hook, a small exhaust window, and a wooden door on the right (the one someone bangs on)."""
+    d.rectangle(P(0, 0, PW, 1300), fill=(196, 222, 222))                                     # wall
+    for y in range(0, 1300, 110):                                                            # wall tiles
+        d.line(P(0, y, PW, y), fill=(168, 198, 198), width=L(4))
+    for x in range(0, PW, 110):
+        d.line(P(x, 0, x, 1300), fill=(168, 198, 198), width=L(4))
+    d.rectangle(P(0, 1180, PW, 1240), fill=(92, 140, 150))                                   # border tiles
+    _ground(d, im, ps, 1300, (214, 210, 200), (176, 170, 160))                               # floor
+    for x in range(-400, PW + 400, 180):
+        d.line(P(x, 1300, x + (x - PW / 2) * 0.6, 1920), fill=(190, 184, 172), width=L(4))
+    d.line(P(0, 1300, PW, 1300), fill=OUT, width=L(6))
+    # shower corner with a curtain on the left
+    d.rectangle(P(60, 160, 560, 180), fill=(170, 170, 180), outline=OUT, width=L(4))           # rod
+    for i in range(8):
+        x0 = 70 + i * 60
+        col = (120, 170, 220) if i % 2 == 0 else (150, 196, 236)
+        d.polygon([tuple(P(x0, 180)), tuple(P(x0 + 60, 180)), tuple(P(x0 + 70 + 8 * (i % 3), 1260)),
+                   tuple(P(x0 - 6, 1260))], fill=col, outline=OUT)
+        d.ellipse(P(x0 + 20, 160, x0 + 40, 180), outline=(140, 140, 150), width=L(4))
+    d.ellipse(P(600, 220, 700, 270), fill=(200, 200, 210), outline=OUT, width=L(4))           # shower head
+    d.line(P(650, 270, 650, 160), fill=(170, 170, 180), width=L(10))
+    # small exhaust window, high up
+    d.rectangle(P(820, 140, 1060, 300), fill=(60, 70, 90), outline=OUT, width=L(6))
+    for k in range(4):
+        d.line(P(830, 170 + k * 36, 1050, 170 + k * 36), fill=(150, 160, 170), width=L(10))
+    # mirror and basin
+    d.rounded_rectangle(P(1000, 420, 1360, 820), radius=L(30), fill=(214, 236, 246), outline=OUT, width=L(8))
+    d.line(P(1060, 480, 1160, 580), fill=(255, 255, 255), width=L(12))
+    d.line(P(1060, 560, 1120, 620), fill=(255, 255, 255), width=L(8))
+    d.rectangle(P(1150, 940, 1210, 1300), fill=(236, 236, 240), outline=OUT, width=L(5))       # basin stand
+    d.chord(P(1020, 860, 1340, 1040), 0, 180, fill=(246, 246, 250), outline=OUT, width=L(6))   # basin
+    d.rectangle(P(1020, 900, 1340, 950), fill=(246, 246, 250), outline=OUT, width=L(6))
+    d.rectangle(P(1170, 860, 1190, 900), fill=(180, 180, 190), outline=OUT, width=L(3))       # tap
+    # blue bucket and mug on the floor
+    d.polygon([tuple(P(560, 1330)), tuple(P(780, 1330)), tuple(P(750, 1560)), tuple(P(590, 1560))],
+              fill=(40, 110, 210), outline=OUT)
+    d.ellipse(P(560, 1305, 780, 1355), fill=(30, 90, 180), outline=OUT, width=L(5))
+    d.ellipse(P(580, 1315, 760, 1345), fill=(150, 200, 236))
+    d.arc(P(580, 1220, 760, 1360), 200, 340, fill=(30, 80, 160), width=L(8))                 # handle
+    d.rounded_rectangle(P(820, 1470, 920, 1580), radius=L(10), fill=(230, 60, 60), outline=OUT, width=L(5))   # mug
+    d.arc(P(900, 1490, 960, 1550), 270, 90, fill=(230, 60, 60), width=L(12))
+    # towel on a hook
+    d.ellipse(P(1520, 520, 1550, 550), fill=(170, 170, 180), outline=OUT, width=L(3))
+    d.polygon([tuple(P(1470, 545)), tuple(P(1600, 545)), tuple(P(1620, 900)), tuple(P(1450, 900))],
+              fill=(250, 196, 70), outline=OUT)
+    for y in (820, 850):
+        d.line(P(1455, y, 1615, y), fill=(220, 110, 60), width=L(10))
+    # the wooden door on the right
+    d.rectangle(P(1820, 260, 2300, 1300), fill=(118, 72, 40), outline=OUT, width=L(8))         # frame
+    d.rectangle(P(1860, 300, 2260, 1300), fill=(156, 98, 56), outline=OUT, width=L(6))
+    for y0, y1 in ((360, 760), (840, 1240)):                                                  # panels
+        d.rectangle(P(1910, y0, 2210, y1), fill=(146, 90, 50), outline=(110, 66, 34), width=L(6))
+    d.rounded_rectangle(P(1890, 760, 1950, 800), radius=L(8), fill=(220, 190, 90), outline=OUT, width=L(4))  # handle
+    d.rectangle(P(1905, 820, 1925, 870), fill=(70, 50, 30))                                   # keyhole
+    d.rectangle(P(1860, 1290, 2260, 1300), fill=(255, 236, 170))                              # light under the door
+
+
 def _white(im, d, P, L, PW, ps, rnd):
     """Plain white, the classic stickman look: only a faint floor line."""
     d.rectangle(P(0, 0, PW, 1920), fill=(252, 252, 250))
@@ -654,7 +713,8 @@ def _doodle(im, d, P, L, PW, ps, rnd):
 
 
 DRAW = {"flat_chai_tapri": _chai_tapri, "flat_sabzi_mandi": _sabzi_mandi, "flat_airport": _airport,
-        "flat_bus_stop": _bus_stop, "flat_white": _white, "flat_doodle": _doodle, "flat_highway": _highway}
+        "flat_bus_stop": _bus_stop, "flat_white": _white, "flat_doodle": _doodle, "flat_highway": _highway,
+        "flat_bathroom": _bathroom}
 
 
 def draw(bid, im, d, P, L, PW, ps, rnd):

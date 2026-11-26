@@ -25,7 +25,7 @@ from .audio import AudioError, env_segments, fit_segments, get_audio, load_env
 from .backgrounds import get_background, get_background_3d
 from .shading import shade_3d, soft_shadow
 from .visemes import build_track
-from .catalog import (ACTIONS, BUILDS, DEFAULT_VOICE, EMOTIONS, GEMINI_FOR_LOOK, HEIGHTS, LOOK_ALIASES, LOOKS,
+from .catalog import (CAMERA_MOVES, ACTIONS, BUILDS, DEFAULT_VOICE, EMOTIONS, GEMINI_FOR_LOOK, HEIGHTS, LOOK_ALIASES, LOOKS,
                       NARRATOR_LOOKS, OUTFIT_COLORS, PROPS, SARVAM_FOR_LOOK, SHOT_LABELS, SOUND_LABELS, VOICE_FX_FOR_LOOK,
                       VOICE_FX_LABELS, VOICE_TUNE)
 from .flat import FlatComposer
@@ -59,7 +59,7 @@ def _num(v):
 
 
 CARD_STYLES = ("dark", "black", "bright")
-LIGHTING = ("day", "dark", "phone", "bw")
+LIGHTING = ("day", "dark", "phone", "bw", "dim")
 STICKERS = ("pizza", "burger", "money", "heart", "idea", "angry", "laugh", "question", "exclaim", "sleep", "fire")
 
 
@@ -149,6 +149,7 @@ def normalize(tl: dict) -> dict:
                               emotion=ln.get("emotion") if ln.get("emotion") in EMOTIONS else "neutral",
                               action=ln.get("action") if ln.get("action") in ACTIONS else "talk",
                               shot=ln.get("shot") if ln.get("shot") in SHOT_LABELS else "auto",
+                              move=ln.get("move") if ln.get("move") in CAMERA_MOVES else "auto",
                               lights=ln.get("lights") if ln.get("lights") in ("on", "off") else "",
                               popup=" ".join(str(ln.get("popup") or "").split())[:90],
                               sticker=str(ln.get("sticker") or "") if str(ln.get("sticker") or "") in STICKERS else "",
@@ -204,6 +205,7 @@ class LineT:
     sfx: object = None      # an emotional sound to mix in on top (own-audio mode)
     reaction: bool = False  # a sound with no words: the sprite's own mouth is kept (no lip-sync)
     shot: str = "auto"      # camera shot (flat cartoon style)
+    move: str = "auto"      # camera movement during the line (catalog.CAMERA_MOVES)
     lights: str = ""        # "on" / "off": the room light switches when this line starts
     popup: str = ""         # a phone-notification banner shown during this line
     sticker: str = ""       # a sticker that pops up next to the speaker
@@ -255,6 +257,7 @@ def _line_extras(lt, ln: dict):
     lt.prop = ln.get("prop", "")
     lt.effect = ln.get("effect", "")
     lt.bag = ln.get("bag", "")
+    lt.move = ln.get("move", "auto")
     return lt
 
 

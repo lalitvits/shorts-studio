@@ -42,7 +42,8 @@ FX_LABELS = {"punch": "Punch hit (effect)", "slap": "Slap (effect)", "whoosh": "
              "tiptoe": "Sneaky tiptoe music (effect)", "awooga": "Awooga horn, eyes pop (effect)",
              "spring": "Spring boing, doing (effect)", "fight": "Cartoon fight cloud (effect)",
              "alarm": "Alarm clock ringing (effect)", "buzz": "Fly buzzing (effect)", "snore": "Snoring (effect)",
-             "boop": "Poke, boop (effect)", "rustle": "Rustling, something moving inside (effect)"}
+             "boop": "Poke, boop (effect)", "rustle": "Rustling, something moving inside (effect)",
+             "knock": "Banging on the door, dham dham (effect)", "door_open": "Door creaking open (effect)"}
 MUSIC_LABELS = {"happy": "Happy (ukulele-style)", "comedy": "Comedy (bouncy)", "suspense": "Suspense",
                 "emotional": "Emotional (slow)", "heaven": "Heavenly (Swarg)", "hell": "Dark drums (Nark)",
                 "panic": "Panic (fast, tense)", "calm": "Calm, explaining (soft)"}
@@ -331,6 +332,43 @@ def _tick():
         for i in range(int(0.04 * RATE)):
             if s + i < n:
                 out[s + i] += math.sin(TWO_PI * f * i / RATE) * math.exp(-(i / RATE) * 120)
+    return out
+
+
+def _knock():
+    """Someone banging on a door with a fist: two heavy, booming thumps (dham! dham!), a pause, then two more."""
+    n, rnd = int(2.2 * RATE), random.Random(21)
+    out = [0.0] * n
+    for t0 in (0.0, 0.42, 1.15, 1.5):
+        s0 = int(t0 * RATE)
+        ph = 0.0
+        for i in range(int(0.45 * RATE)):
+            if s0 + i >= n:
+                break
+            t = i / RATE
+            ph += (70 + 60 * math.exp(-t * 30)) / RATE                  # the wooden door booming
+            v = math.sin(TWO_PI * ph) * math.exp(-t * 11) + 0.35 * math.sin(TWO_PI * 2.7 * ph) * math.exp(-t * 18)
+            v += rnd.uniform(-1, 1) * math.exp(-t * 90) * 0.8           # the knuckle hit
+            out[s0 + i] += v
+    return _lowpass(out, 0.35)
+
+
+def _door_open():
+    """A door handle clicks, then the door creaks open (a slow, wobbly squeak)."""
+    n, rnd = int(1.6 * RATE), random.Random(22)
+    out, ph = [], 0.0
+    for i in range(n):
+        t = i / RATE
+        v = 0.0
+        if t < 0.06:                                                     # the latch
+            v += rnd.uniform(-1, 1) * math.exp(-t * 120) + 0.5 * math.sin(TWO_PI * 1800 * t) * math.exp(-t * 80)
+        if 0.18 < t < 1.5:
+            u = (t - 0.18) / 1.32
+            f = 420 + 260 * u + 40 * math.sin(t * 37) + 25 * math.sin(t * 71)
+            ph += f / RATE
+            env = math.sin(math.pi * u) ** 0.6
+            v += 0.45 * env * (math.sin(TWO_PI * ph) + 0.4 * math.sin(TWO_PI * 2 * ph) + 0.2 * math.sin(TWO_PI * 3 * ph))
+        out.append(v)
     return out
 
 
@@ -668,7 +706,8 @@ MAKERS = {"punch": _punch, "slap": _slap, "whoosh": _whoosh, "pop": _pop, "ding"
           "clang": _clang, "slip": _slip, "slide_up": _slide_up, "slide_down": _slide_down, "zip": _zip,
           "bonk": _bonk, "tweet": _tweet, "crash": _crash, "glass_break": _glass_break, "crickets": _crickets,
           "wah_wah": _wah_wah, "tiptoe": _tiptoe, "awooga": _awooga, "spring": _spring, "fight": _fight,
-          "alarm": _alarm, "buzz": _buzz, "snore": _snore, "boop": _boop, "step": _step, "rustle": _rustle}
+          "alarm": _alarm, "buzz": _buzz, "snore": _snore, "boop": _boop, "step": _step, "rustle": _rustle,
+          "knock": _knock, "door_open": _door_open}
 
 
 def fx_wav(fx_id: str) -> Path:

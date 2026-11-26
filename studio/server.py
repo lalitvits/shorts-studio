@@ -52,6 +52,7 @@ def assets_payload() -> dict:
                   for k, v in sorted(LOOKS.items(), key=lambda kv: _cast_order(kv[0])) if not v.get("hidden")],
         "voice_fx": [{"id": k, "label": v} for k, v in __import__("studio.catalog", fromlist=["x"]).VOICE_FX_LABELS.items()],
         "shots": [{"id": k, "label": v} for k, v in SHOT_LABELS.items()],
+        "moves": [{"id": k, "label": v} for k, v in __import__("studio.catalog", fromlist=["x"]).CAMERA_MOVES.items()],
         "stickers": list(__import__("studio.overlays", fromlist=["x"]).STICKER_KINDS),
         "music": [{"id": k, "label": v} for k, v in __import__("studio.fx", fromlist=["x"]).MUSIC_LABELS.items()],
         "explainers": [{"id": k, "label": v} for k, v in __import__("studio.kitchen", fromlist=["x"]).EXPLAINERS.items()],

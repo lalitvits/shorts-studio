@@ -27,12 +27,12 @@ from __future__ import annotations
 import re
 
 from .catalog import (ACTION_LABELS, BUILDS, EFFECT_LABELS, EMOTIONS, HEIGHTS, LOOKS, OUTFIT_COLORS, PROP_LABELS,
-                      SHOT_LABELS,
+                      SHOT_LABELS, CAMERA_MOVES,
                       SOUND_LABELS, VOICE_FX_LABELS, VOICES, EDGE_FOR_GENDER, DEFAULT_VOICE, FLAT_BACKGROUNDS)
 
 HEADER = "### SHORTS STUDIO SCRIPT v1"
 LIGHTING = {"day": "normal", "dark": "night, lights off", "phone": "dark, faces lit by a phone screen",
-            "bw": "black and white (a shocked freeze)"}
+            "bw": "black and white (a shocked freeze)", "dim": "lights low, cold and gloomy (suspense)"}
 CARD_STYLES = {"dark": "dark with a ticking clock", "black": "black screen", "bright": "bright comic burst"}
 
 # ------------------------------------------------------------------ words other AI apps tend to use
@@ -258,6 +258,8 @@ cast: <ids of the characters on screen in this scene, comma separated>
   <action>                  what they do while speaking: gestures, movement, activity (see ACTIONS)
   prop: <prop>              something they hold or have with them from this line on; "prop: none" puts it away
   camera: <camera>          the camera shot for this line
+  move: <move>              how the camera moves during the line (zoom in/out, snap zoom, tilt, low angle, pan,
+                            shake); leave it out and the camera moves with the emotion by itself
   sound: <sound>            a sound effect at the start of the line
   meanwhile: <id> <emotion> <action>   someone ELSE acts while this line is spoken (use it with the narrator)
   silent: <seconds>         no words: an acting moment of this many seconds
@@ -302,6 +304,7 @@ PROPS:
 {props}
 CAMERA:
 {cams}
+CAMERA MOVES: {", ".join(k for k in CAMERA_MOVES if k != "auto")}
 SOUNDS: {sounds}
 STICKERS: {", ".join(_stickers())}
 CARTOON EFFECTS (fx):
@@ -733,6 +736,12 @@ def parse(text: str) -> dict:
                 ln["action"] = _pick("action", v, acts_allowed) or _bad(warn, "action", v, "talk")
             elif k in ("prop", "holds", "holding", "object"):
                 ln["prop"] = _pick("prop", v, props_allowed) or _bad(warn, "prop", v, "")
+            elif k in ("move", "camera_move", "movement", "zoom"):
+                mv = _key(v).replace("-", "_")
+                mv = {"zoom_in": "push_in", "zoom_out": "pull_out", "snap_zoom": "punch_in", "tilt": "dutch",
+                      "dutch_angle": "dutch", "low_angle": "low", "shaky": "shake", "crash_zoom": "crash",
+                      "none": "static", "still": "static"}.get(mv, mv)
+                ln["move"] = mv if mv in CAMERA_MOVES else _bad(warn, "camera move", v, "auto")
             elif k in ("camera", "shot", "angle", "camera_angle"):
                 ln["shot"] = _pick("camera", v, cams) or _bad(warn, "camera", v, "auto")
             elif k in ("fx", "cartoon_effect", "visual_effect", "vfx") or (k == "effect" and _pick("effect", v, fx_allowed)):
@@ -918,6 +927,8 @@ def export(tl: dict) -> str:
                 a.append(f"prop: {ln['prop']}")
             if ln.get("shot") and ln["shot"] != "auto":
                 a.append(f"camera: {ln['shot']}")
+            if ln.get("move") and ln["move"] != "auto":
+                a.append(f"move: {ln['move']}")
             if ln.get("sound"):
                 a.append(f"sound: {ln['sound']}")
             if ln.get("actor"):

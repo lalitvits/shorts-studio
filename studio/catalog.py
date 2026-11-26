@@ -28,7 +28,8 @@ ACTION_LABELS = {
     "ride_in": "Ride in on a cycle", "ride_out": "Ride away on a cycle", "ride_cycle": "Ride a cycle (in place)",
     "run_out": "Run away (leaves running)",
     "sit": "Sit on sofa", "sit_phone": "Sit and use phone", "sit_tea": "Sit and drink tea",
-    "sit_read": "Sit and read", "sit_eat": "Sit and eat a snack", "sit_sleep": "Sit and sleep", "sit_call": "Sit and talk on the phone",
+    "sit_read": "Sit and read", "sit_eat": "Sit and eat a snack", "sit_sleep": "Sit and sleep", "sit_call": "Sit and talk on the phone", "folded_hands": "Folded hands (pleading, namaste)",
+    "wipe_sweat": "Wipe sweat off the forehead (nervous)",
     "go_to_bag": "Walk up to the mystery bag (bends toward it)",
 }
 # slapstick comedy moves (stick.py): they work for the stickmen and the flat cartoon people
@@ -308,9 +309,19 @@ FLAT_BACKGROUNDS = {
     "flat_airport": "Flat cartoon: airport (departure board, planes)",
     "flat_bus_stop": "Flat cartoon: bus stop (shelter, passing bus)",
     "flat_highway": "Flat cartoon: highway with a speed breaker (trees, marker posts, golden hour)",
+    "flat_bathroom": "Flat cartoon: bathroom (tiles, shower curtain, bucket and mug, wooden door)",
     "flat_white": "Plain white (stickman comedy)",
     "flat_doodle": "Doodle paper (hand-drawn hills, sun, clouds)",
 }
+
+# Camera movement during a line (flat cartoon style). "auto" picks one from the line's emotion and never repeats
+# the same move twice in a row, so the camera is never still for long.
+CAMERA_MOVES = {"auto": "Move: automatic (follows the emotion)", "static": "Move: none (steady)",
+                "push_in": "Move: slow zoom in", "pull_out": "Move: slow zoom out",
+                "punch_in": "Move: snap zoom in (shock)", "punch_out": "Move: snap zoom out",
+                "dutch": "Move: tilted angle (tension)", "low": "Move: low angle (looking up)",
+                "pan": "Move: slow pan across", "shake": "Move: shaky camera (panic)",
+                "crash": "Move: crash zoom with a shake (big moment)"}
 
 # Camera shot for a line (flat cartoon style). "auto" picks one like a cartoon editor would.
 SHOT_LABELS = {"auto": "Camera: automatic", "wide": "Camera: wide (everyone)", "single": "Camera: on the speaker",
@@ -388,7 +399,7 @@ VOICE_TUNE = {"3d_oldman": (-10, -10), "flat_uncle": (-6, -4), "flat_police": (-
 # Voice effects (tts.VOICE_FX) and the look that gets one by default
 VOICE_FX_LABELS = {"": "No effect", "echo": "Echo", "devil": "Devil (deep, with echo)",
                    "devil_whisper": "Devil whisper (inner voice)", "chipmunk": "Chipmunk (high)",
-                   "phone": "Phone call"}
+                   "phone": "Phone call", "muffled": "Muffled (from behind a door)"}
 VOICE_FX_FOR_LOOK = {"flat_brain": "devil_whisper"}
 # Gemini voice for each look when the engine picks Gemini for a character that has a Microsoft voice
 GEMINI_FOR_LOOK = {"flat_lalit": "Achird", "flat_rahul": "Puck", "flat_deepak": "Sadachbia", "flat_dadaji": "Algenib", "flat_farmer": "Orus", "flat_village_aunty": "Kore",
@@ -422,12 +433,13 @@ SOUND_LABELS = {
     "fight": "Cartoon fight cloud (effect)",
     "alarm": "Alarm clock ringing (effect)", "buzz": "Fly buzzing (effect)", "snore": "Snoring (effect)",
     "boop": "Poke, boop (effect)", "rustle": "Rustling, something moving inside (effect)",
+    "knock": "Banging on the door, dham dham (effect)", "door_open": "Door creaking open (effect)",
 }
 FX_SOUNDS = {"slip", "slide_up", "slide_down", "zip", "bonk", "tweet", "crash", "glass_break", "crickets", "wah_wah",
              "tiptoe", "awooga", "spring", "fight", "alarm", "buzz", "snore", "boop", "rustle",
              "punch", "slap", "whoosh", "pop", "ding", "boing", "thud", "growl", "ping", "doorbell", "chappal",
              "laugh_track", "boom", "dun_dun", "click", "tick", "scratch", "sizzle", "fire", "splash", "footsteps",
-             "clang"}
+             "clang", "knock", "door_open"}
 # The emotion that usually goes with each sound (the app suggests it when the line is still "neutral").
 SOUND_EMOTIONS = {"laugh": "laughing", "giggle": "happy", "cry": "crying", "angry": "angry", "frustrated": "angry",
                   "sigh": "sad", "gasp": "surprised", "scream": "scared", "yawn": "sleepy", "hmm": "thinking"}

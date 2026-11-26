@@ -29,6 +29,12 @@ OUT = (36, 31, 32)          # outline colour
 OL = 5.5                    # outline width (world units)
 FW, FH = 1080, 1920         # frame in world units
 STRONG = {"angry", "shocked", "surprised", "crying", "laughing", "scared", "excited"}
+# the camera move that suits a line's emotion (when the line's move is "auto")
+MOVE_FOR = {"scared": "push_in", "worried": "push_in", "sad": "push_in", "crying": "push_in",
+            "thinking": "push_in", "shocked": "punch_in", "surprised": "punch_in", "angry": "shake",
+            "happy": "pull_out", "laughing": "pull_out", "relieved": "pull_out", "proud": "low",
+            "excited": "punch_in", "embarrassed": "pull_out", "confused": "dutch", "disgusted": "dutch"}
+MOVE_CYCLE = ("push_in", "pan", "pull_out")
 SHOTS = ("auto", "wide", "single", "ots", "close")
 PHONE_ACTIONS = {"use_phone", "sit_phone", "phone_call", "sit_call"}
 # actions a character keeps doing while someone else talks (on top of the rig's long activities)
@@ -406,6 +412,14 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
         p["L"] = ("ik", -10, -690)
         p["prop"] = "phone"
         p["head_dy"] = 10
+    elif action == "folded_hands":          # hands joined in front of the chest: pleading, namaste
+        p["L"] = ("ik", 8, -700 + 6 * s(t * 5))
+        p["R"] = ("ik", 8, -700 + 6 * s(t * 5))
+        p["head_dy"] = 6
+    elif action == "wipe_sweat":            # wiping the forehead with the back of the hand
+        p["R"] = ("ik", -10 + 60 * s(t * 4), -960)
+        p["L"] = ("fk", 14, -8)
+        p["fx"] = {"sweat"}
     elif action == "wipe_tears":            # rubbing an eye with the back of the hand
         p["R"] = ("ik", 40 + 10 * s(t * 9), -900)
         p["L"] = ("fk", 14, -8)
@@ -2147,6 +2161,18 @@ class SpriteCache:
         return v
 
 
+@lru_cache(maxsize=4)
+def _vignette(size):
+    """Darker towards the corners (for dim lighting)."""
+    w, h = size
+    m = Image.new("L", (64, 114), 0)
+    d = ImageDraw.Draw(m)
+    for i in range(30):
+        v = int(255 * (0.35 + 0.65 * i / 29))
+        d.ellipse([-30 + i * 1.6, -40 + i * 2.8, 94 - i * 1.6, 154 - i * 2.8], fill=v)
+    return m.filter(ImageFilter.GaussianBlur(6)).resize((w, h), Image.BILINEAR).convert("RGB")
+
+
 @lru_cache(maxsize=16)
 def _shade_grad(w, h):
     g = Image.linear_gradient("L").rotate(90, expand=True).resize((w, h))   # 255 at left -> 0 at right
@@ -2505,7 +2531,8 @@ class FlatComposer:
                 kind = "single"
             medium = (kind == "single" and self.cinema and not self._stick_scene(sc) and not self._animal(subj)
                       and not (acts & FULL_BODY) and self.specs[subj]["kind"] in ("human", "3d"))
-            spec = dict(type=kind, subj=subj, partner=partner, far=far, medium=medium)
+            spec = dict(type=kind, subj=subj, partner=partner, far=far, medium=medium,
+                        move=self._move_for(sc, ln, i, segs))
             dur = ln.end - ln.start
             if auto and partner and dur > 5.5 and kind not in ("wide", "stove") and not narr:   # a reaction shot
                 cut = ln.start + dur * 0.58
@@ -2519,6 +2546,22 @@ class FlatComposer:
                 segs.append((a, b, spec))
         self.segs[key] = segs
         return segs
+
+    def _move_for(self, sc, ln, i, segs):
+        """The camera move for a line: the one it asks for, or (auto) one that suits its emotion, never the same
+        move twice in a row."""
+        mv = getattr(ln, "move", "auto") or "auto"
+        if mv != "auto":
+            return mv
+        if self._stick_scene(sc):                   # stickman comedy has its own camera
+            return "static"
+        emo = ln.emotion if ln.char in sc.cast else (getattr(ln, "actor_emotion", "") or ln.emotion)
+        prev = segs[-1][2].get("move") if segs else None
+        mv = MOVE_FOR.get(emo) or MOVE_CYCLE[i % len(MOVE_CYCLE)]
+        if mv == prev and mv not in ("punch_in", "shake"):
+            mv = {"push_in": "dutch", "pull_out": "pan", "pan": "push_in", "dutch": "push_in",
+                  "low": "pull_out"}.get(mv, "push_in")
+        return mv
 
     def layout(self, sc, spec):
         """Background view and where each character stands for one shot (in frame units)."""
@@ -2828,6 +2871,9 @@ class FlatComposer:
 
     def _light(self, sc, t, im, glows):
         mode, since = self.lighting_at(sc, t)
+        if mode == "dim":                                  # lights low: a dim, cold room with dark corners
+            dim = ImageChops.multiply(im, Image.new("RGB", im.size, (150, 156, 186)))
+            return ImageChops.multiply(dim, _vignette(im.size))
         if mode == "bw":                                   # black and white (a shocked freeze, a flashback)
             return ImageOps.autocontrast(ImageOps.grayscale(im), cutoff=1).convert("RGB")
         if mode == "day":
@@ -3139,22 +3185,63 @@ class FlatComposer:
         if self.cinema and bid not in cinema.NO_GRADE and not self._stick_scene(sc):
             im = cinema.grade(im, t, bid in cinema.OUTDOOR)   # warm colour, sun glow, rays, dust, vignette, grain
 
-        # slow camera drift inside the shot
+        # the camera inside the shot: a move (zoom in or out, snap zoom, tilt, low angle, pan, shake) or a slow drift
         a0, b0 = seg[0], seg[1]
         u = min(1.0, max(0.0, (t - a0) / max(0.5, b0 - a0)))
         u = u * u * (3 - 2 * u)
-        zoom = 1.0 + 0.045 * u
-        if self._stick_scene(sc) and sc is self._last_scene() and si == len(segs) - 1:
-            zoom = 1.0 + 0.16 * u                      # the punchline: push in
-        dirx = 1 if _h(round(a0, 2)) % 2 else -1
-        cw, ch = self.w / zoom, self.h / zoom
-        cx = self.w / 2 + dirx * 16 * k * u
-        cy = self.h * 0.56
+        dt = t - a0
+        mv = seg[2].get("move", "static")
+        W, H = self.w, self.h
+        fx_, fy_ = W / 2, H * 0.56                       # what the camera looks at: the subject's face
+        subj = seg[2].get("subj")
+        act = next((a for a in lay["actors"] if a["cid"] == subj and not a.get("back")), None)
+        if act is not None:
+            hk = act["scale"] * self.specs[subj].get("height", 1.0)
+            drop = SIT_DROP if self._seated(sc, subj, t) else 0
+            fx_ = act["x"] * k
+            fy_ = (act["g"] - (870 - drop) * hk) * k
+        rot, jx, jy, pan, low = 0.0, 0.0, 0.0, 0.0, 0.0
+        if mv == "push_in":
+            zoom = 1.0 + 0.24 * u
+        elif mv == "pull_out":
+            zoom = 1.24 - 0.22 * u
+        elif mv in ("punch_in", "crash"):
+            e = min(1.0, dt / 0.2)
+            zoom = 1.0 + 0.34 * (1 - (1 - e) ** 3) + 0.04 * u
+        elif mv == "punch_out":
+            e = min(1.0, dt / 0.25)
+            zoom = 1.36 - 0.34 * (1 - (1 - e) ** 3)
+        elif mv == "dutch":
+            rot = -6.5 * (0.5 + 0.5 * u)
+            zoom = 1.05 + 0.1 * u
+        elif mv == "low":
+            rot, low = 3.0, 0.07
+            zoom = 1.12 + 0.1 * u
+        elif mv == "pan":
+            zoom, pan = 1.2, -0.07 + 0.14 * u
+        elif mv == "shake":
+            zoom = 1.12 + 0.08 * u
+        else:                                            # static: a slow drift
+            zoom = 1.0 + 0.045 * u
+            if self._stick_scene(sc) and sc is self._last_scene() and si == len(segs) - 1:
+                zoom = 1.0 + 0.16 * u                    # the punchline: push in
+        if mv in ("shake",) or (mv == "crash" and dt < 0.7):
+            amp = 12 * k * (1.0 if mv == "shake" else (1 - dt / 0.7))
+            jx = amp * (math.sin(t * 47) + 0.6 * math.sin(t * 83 + 1))
+            jy = amp * (math.sin(t * 59 + 2) + 0.5 * math.sin(t * 97))
         if self.cinema and not self._stick_scene(sc):      # a gentle handheld sway
             zoom = max(zoom, 1.03)
-            cw, ch = self.w / zoom, self.h / zoom
-            cx += k * (6 * math.sin(t * 0.83) + 3 * math.sin(t * 1.9 + 1.0))
-            cy += k * (4 * math.sin(t * 0.67 + 2.0) + 2 * math.sin(t * 1.6))
-        box = (max(0, cx - cw / 2), max(0, cy - ch * 0.56), 0, 0)
-        box = (box[0], box[1], min(self.w, box[0] + cw), min(self.h, box[1] + ch))
+            jx += k * (6 * math.sin(t * 0.83) + 3 * math.sin(t * 1.9 + 1.0))
+            jy += k * (4 * math.sin(t * 0.67 + 2.0) + 2 * math.sin(t * 1.6))
+        if rot:                                          # tilt the picture; zoom far enough to hide the corners
+            ar = math.radians(abs(rot))
+            zoom = max(zoom, math.cos(ar) + (H / W) * math.sin(ar) + 0.02)
+            im = im.rotate(rot, resample=Image.BILINEAR, center=(fx_, fy_))
+        cw, ch = W / zoom, H / zoom
+        f = min(1.0, max(0.0, (zoom - 1.0) / 0.3)) * 0.9  # the closer in, the more the face is centred
+        cx = W / 2 + (fx_ - W / 2) * f + pan * W + jx
+        cy = H * 0.56 + (fy_ - H * 0.56) * f * 0.8 + low * H + jy
+        x0b = min(max(0.0, cx - cw / 2), W - cw)
+        y0b = min(max(0.0, cy - ch * 0.5), H - ch)
+        box = (x0b, y0b, x0b + cw, y0b + ch)
         return im.resize((self.w, self.h), Image.BILINEAR, box=box)
