@@ -722,7 +722,42 @@ def draw(bid, im, d, P, L, PW, ps, rnd):
 
 
 # ===================================================================== moving parts
-def animate(d, bid: str, t: float, px, s: float, visible, x0: float, vw: float, PW: int, birds, items):
+def _bathroom_door(d, px, s, t, shake: float, open_: float):
+    """The bathroom door when something happens to it: it rattles in its frame when banged on (shake 0..1), and
+    swings open toward us, letting the light in (open_ 0..1)."""
+    x0, x1, y0, y1 = 1860, 2260, 300, 1300
+    if open_ > 0:
+        a, b = px(x0, y0), px(x1, y1)
+        d.rectangle([a[0], a[1], b[0], b[1]], fill=(255, 242, 200, 255))                     # light from outside
+        a, b = px(x0, y1 - 40), px(x1, y1)
+        d.rectangle([a[0], a[1], b[0], b[1]], fill=(240, 220, 170, 255))
+        w = (x1 - x0) * (1 - 0.82 * open_)                                                   # swung toward the hinge
+        bulge = 70 * open_
+        pts = [px(x1 - w, y0 - bulge), px(x1, y0), px(x1, y1), px(x1 - w, y1 + bulge)]
+        d.polygon(pts, fill=(156, 98, 56, 255), outline=OUT + (255,))
+        hx = x1 - w + 30
+        a, b = px(hx, 760), px(hx + 40 * (1 - open_) + 12, 800)
+        d.rectangle([a[0], a[1], b[0], b[1]], fill=(220, 190, 90, 255))
+        return
+    jit = shake * 14 * math.sin(t * 90)                                                         # rattling
+    a, b = px(x0 + jit, y0 + abs(jit) * 0.3), px(x1 + jit, y1)
+    d.rectangle([a[0], a[1], b[0], b[1]], fill=(156, 98, 56, 255), outline=OUT + (255,), width=max(1, round(6 * s)))
+    for p0, p1 in ((360, 760), (840, 1240)):
+        a, b = px(x0 + 50 + jit, p0), px(x1 - 50 + jit, p1)
+        d.rectangle([a[0], a[1], b[0], b[1]], fill=(146, 90, 50, 255), outline=(110, 66, 34, 255),
+                    width=max(1, round(6 * s)))
+    a, b = px(x0 + 30 + jit, 760), px(x0 + 90 + jit, 800)
+    d.rounded_rectangle([a[0], a[1], b[0], b[1]], radius=8 * s, fill=(220, 190, 90, 255), outline=OUT + (255,))
+    for k in range(3):                                                                         # dust shaken off
+        u = (t * 3 + k / 3) % 1
+        a = px(x0 - 30 + k * 220, y0 - 20 + 300 * u)
+        r = 6 * s
+        d.ellipse([a[0] - r, a[1] - r, a[0] + r, a[1] + r], fill=(220, 210, 190, int(200 * shake * (1 - u))))
+
+
+def animate(d, bid: str, t: float, px, s: float, visible, x0: float, vw: float, PW: int, birds, items, door=None):
+    if bid == "flat_bathroom" and door and (door[0] > 0.02 or door[1] > 0):
+        _bathroom_door(d, px, s, t, *door)
     if bid == "flat_chai_tapri":
         _tapri_animate(d, t, px, s, visible, x0, vw, PW, birds)
     elif bid == "flat_sabzi_mandi":

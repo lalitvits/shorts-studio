@@ -29,6 +29,8 @@ OUT = (36, 31, 32)          # outline colour
 OL = 5.5                    # outline width (world units)
 FW, FH = 1080, 1920         # frame in world units
 STRONG = {"angry", "shocked", "surprised", "crying", "laughing", "scared", "excited"}
+# where the camera looks in a place whose key part must stay in view (picture x): next to the bathroom door
+VIEW_CENTRE = {"flat_bathroom": 1720}
 # the camera move that suits a line's emotion (when the line's move is "auto")
 MOVE_FOR = {"scared": "push_in", "worried": "push_in", "sad": "push_in", "crying": "push_in",
             "thinking": "push_in", "shocked": "punch_in", "surprised": "punch_in", "angry": "shake",
@@ -2547,6 +2549,20 @@ class FlatComposer:
         self.segs[key] = segs
         return segs
 
+    def _door_state(self, sc, t):
+        """(shake 0..1, open 0..1) of the bathroom door: banged on during a "knock" line, opening on "door_open"."""
+        shake, open_ = 0.0, 0.0
+        for ln in sc.lines:
+            snd = getattr(ln, "sound_id", "")
+            dt = t - ln.start
+            if snd == "knock" and 0 <= dt < 2.4:
+                for h in (0.0, 0.42, 1.15, 1.5):                  # the four bangs of the knock sound
+                    if dt >= h:
+                        shake = max(shake, math.exp(-(dt - h) * 7))
+            elif snd == "door_open" and dt >= 0.1:
+                open_ = max(open_, min(1.0, (dt - 0.1) / 0.8))
+        return shake, open_
+
     def _move_for(self, sc, ln, i, segs):
         """The camera move for a line: the one it asks for, or (auto) one that suits its emotion, never the same
         move twice in a row."""
@@ -2569,6 +2585,8 @@ class FlatComposer:
         _, _, PW, G = panorama(bid, self.k)
         si = self.sched.index(sc) if sc in self.sched else 0
         base = PW / 2 + ((_h(bid, si) % 7) - 3) * 120
+        if bid in VIEW_CENTRE:                                  # a place whose key part must be in view (a door)
+            base = VIEW_CENTRE[bid] + ((_h(bid, si) % 3) - 1) * 40
         stove = self._stove_scene(sc)
         if stove:
             base = kitchen.KX - 300
@@ -2984,7 +3002,8 @@ class FlatComposer:
         if bid in REALMS:
             animate_realm(im, bid, t, x0, y0, z, k, panorama(bid, k)[2], blur)
         elif bid in PLACES:
-            animate_place(im, bid, t, x0, y0, z, k, panorama(bid, k)[2], blur, kadhai=kst is not None)
+            animate_place(im, bid, t, x0, y0, z, k, panorama(bid, k)[2], blur, kadhai=kst is not None,
+                          door=self._door_state(sc, t) if bid == "flat_bathroom" else None)
             if kst is not None:
                 kitchen.draw(im, kst, t, x0, y0, z, k)
         elif flat_bg:
@@ -3207,10 +3226,10 @@ class FlatComposer:
             zoom = 1.24 - 0.22 * u
         elif mv in ("punch_in", "crash"):
             e = min(1.0, dt / 0.2)
-            zoom = 1.0 + 0.34 * (1 - (1 - e) ** 3) + 0.04 * u
+            zoom = 1.0 + 0.22 * (1 - (1 - e) ** 3) + 0.03 * u
         elif mv == "punch_out":
             e = min(1.0, dt / 0.25)
-            zoom = 1.36 - 0.34 * (1 - (1 - e) ** 3)
+            zoom = 1.25 - 0.23 * (1 - (1 - e) ** 3)
         elif mv == "dutch":
             rot = -6.5 * (0.5 + 0.5 * u)
             zoom = 1.05 + 0.1 * u
@@ -3226,7 +3245,7 @@ class FlatComposer:
             if self._stick_scene(sc) and sc is self._last_scene() and si == len(segs) - 1:
                 zoom = 1.0 + 0.16 * u                    # the punchline: push in
         if mv in ("shake",) or (mv == "crash" and dt < 0.7):
-            amp = 12 * k * (1.0 if mv == "shake" else (1 - dt / 0.7))
+            amp = 10 * k * (1.0 if mv == "shake" else 0.8 * (1 - dt / 0.7))
             jx = amp * (math.sin(t * 47) + 0.6 * math.sin(t * 83 + 1))
             jy = amp * (math.sin(t * 59 + 2) + 0.5 * math.sin(t * 97))
         if self.cinema and not self._stick_scene(sc):      # a gentle handheld sway
@@ -3242,6 +3261,6 @@ class FlatComposer:
         cx = W / 2 + (fx_ - W / 2) * f + pan * W + jx
         cy = H * 0.56 + (fy_ - H * 0.56) * f * 0.8 + low * H + jy
         x0b = min(max(0.0, cx - cw / 2), W - cw)
-        y0b = min(max(0.0, cy - ch * 0.5), H - ch)
+        y0b = min(max(0.0, cy - ch * (0.5 - 0.12 * f)), H - ch)       # zoomed in: room above the head
         box = (x0b, y0b, x0b + cw, y0b + ch)
         return im.resize((self.w, self.h), Image.BILINEAR, box=box)

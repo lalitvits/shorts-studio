@@ -143,12 +143,22 @@ def _gender(voice: str) -> str:
     return next((v.get("gender", "male") for v in VOICES if v["id"] == voice), "male")
 
 
-def _gemini_clip(text: str, voice: str, emotion: str) -> Clip:
+def _gemini_clip(text: str, voice: str, emotion: str, voice_rate: int = 0) -> Clip:
     from . import gemini_tts
     name = voice.split(":", 1)[1]
     wav = CACHE_DIR / "tts" / f"{_key('gemini-tag', text, name, emotion)}.wav"
     if not wav.exists():
         gemini_tts.synthesize(text, name, emotion, wav, RATE)
+    if voice_rate >= 8:                       # a faster character: speed the line up (the pitch stays the same)
+        fast = CACHE_DIR / "tts" / f"{_key('gemini-fast', wav.name, voice_rate)}.wav"
+        if not fast.exists():
+            r = subprocess.run([find_ffmpeg(), "-y", "-loglevel", "error", "-i", str(wav), "-af",
+                                f"atempo={1 + voice_rate / 100:.2f}", "-ar", str(RATE), "-ac", "1", "-c:a", "pcm_s16le",
+                                str(fast)], capture_output=True)
+            if r.returncode == 0 and fast.exists():
+                wav = fast
+        else:
+            wav = fast
     s = read_samples(wav)
     return Clip(wav, len(s) / RATE, compute_env(s))
 
@@ -259,7 +269,7 @@ def get_clip(text: str, voice: str, engine: str = "auto", rate: str = "+0%", emo
     if engine != "silent" and (gem or engine == "gemini"):
         gvoice = voice if gem else "gemini:" + GEMINI_FOR_GENDER[_gender(voice)]
         try:
-            return _gemini_clip(text, gvoice, emotion)
+            return _gemini_clip(text, gvoice, emotion, voice_rate)
         except Exception as e:  # noqa: BLE001  (no key, limit used up, network, ...)
             warning = f"Gemini voice: {e}"
             if gem:

@@ -206,6 +206,7 @@ class LineT:
     reaction: bool = False  # a sound with no words: the sprite's own mouth is kept (no lip-sync)
     shot: str = "auto"      # camera shot (flat cartoon style)
     move: str = "auto"      # camera movement during the line (catalog.CAMERA_MOVES)
+    sound_id: str = ""      # the line's sound effect (the bathroom door shakes on "knock", opens on "door_open")
     lights: str = ""        # "on" / "off": the room light switches when this line starts
     popup: str = ""         # a phone-notification banner shown during this line
     sticker: str = ""       # a sticker that pops up next to the speaker
@@ -258,6 +259,7 @@ def _line_extras(lt, ln: dict):
     lt.effect = ln.get("effect", "")
     lt.bag = ln.get("bag", "")
     lt.move = ln.get("move", "auto")
+    lt.sound_id = ln.get("sound", "")
     return lt
 
 

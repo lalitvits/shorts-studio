@@ -308,7 +308,7 @@ def _birds(d, x0, vw, t, px, s, n=3, y=300):
 
 
 def animate(im: Image.Image, bid: str, t: float, x0: float, y0: float, z: float, k: float, PW: int, blur: bool,
-            kadhai: bool = False):
+            kadhai: bool = False, door=None):
     vw = 1080 / z
     s = z * k
 
@@ -322,7 +322,7 @@ def animate(im: Image.Image, bid: str, t: float, x0: float, y0: float, z: float,
     d = ImageDraw.Draw(ov)
     it = _items(bid, PW)
     if bid in places_more.MORE:
-        places_more.animate(d, bid, t, px, s, visible, x0, vw, PW, _birds, it)
+        places_more.animate(d, bid, t, px, s, visible, x0, vw, PW, _birds, it, door=door)
     elif bid == "flat_village":
         for cx, cy in it["smoke"]:                               # chimney smoke
             if not visible(cx):
