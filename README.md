@@ -20,6 +20,10 @@ You write a scenario, pick characters and backgrounds from dropdowns, edit the s
 - **Gemini voice lines left today** is shown in the Voices step (free tier: about 10 lines per voice model per day).
 - **Speed:** drawing a full-quality frame is about 30% faster. On computers with 6 or more CPU threads, frames are drawn in parallel; set `SHORTS_WORKERS=1` to turn that off (on a 2-core laptop it did not help, so it stays off there).
 
+## ElevenLabs voices (they act out every emotion)
+
+Set `ELEVENLABS_API_KEY` (elevenlabs.io: Profile, API Keys; in a codespace add it as a Codespaces secret with that name). Pick an "ElevenLabs" voice for a character in the Cast step, or choose "ElevenLabs voices for everyone". Each line is spoken with its emotion (scared, crying, angry, sweet...) by the `eleven_v3` model, which speaks Hindi; set `ELEVENLABS_MODEL` to use another model. In the script format write `voice: eleven:liam` (a ready-made voice) or `voice: eleven:<voice id>` (any voice from your ElevenLabs library). Without a key, or when the month's free characters are used up, the line uses the Microsoft voice and the app warns you. Every line is made once and saved.
+
 ## Sketch-comedy tools (scripts like "2 AM pizza")
 
 - **Paste a full script** (Story step): a screenplay with stage directions in brackets. Gemini turns it into characters, scenes, emotions, actions, sound effects, lighting, phone pop-ups, stickers, text cards and the ending; the dialogue is kept word for word. Gemini's safety filter sometimes refuses comedy with slaps or throws: the app tries three times, then tells you to press Import again or soften that line.

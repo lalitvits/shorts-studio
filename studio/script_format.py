@@ -655,6 +655,10 @@ def parse(text: str) -> dict:
             voice = gem[vk]
         elif voice.lower().startswith("gemini:") and voice.split(":", 1)[1].lower() in gem:
             voice = gem[voice.split(":", 1)[1].lower()]
+        elif voice.lower().startswith("eleven:"):
+            voice = "eleven:" + voice.split(":", 1)[1].strip()          # a ready-made name, or any voice id
+            if voice.lower() in {v["id"] for v in VOICES}:
+                voice = voice.lower()
         elif voice.lower().startswith("sarvam:") and any(v["id"] == voice.lower() for v in VOICES):
             voice = voice.lower()
         elif any(v["id"] == voice for v in VOICES):

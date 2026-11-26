@@ -385,6 +385,16 @@ SARVAM_FOR_LOOK = {
     "flat_boss": "kabir", "flat_employee": "rohan", "flat_employee_angel": "rohan",
 }
 SARVAM_FOR_GENDER = {"male": "aditya", "female": "priya"}
+# ElevenLabs voices (uses ELEVENLABS_API_KEY): the most expressive, they act out the line's emotion
+from .elevenlabs_tts import VOICES as _ELEVEN  # noqa: E402
+for _n, (_id, _g, _d) in _ELEVEN.items():
+    VOICES.append(dict(id=f"eleven:{_n}", label=f"ElevenLabs, {_g}: {_n.title()} ({_d}, acts the emotion)", lang="any",
+                       gender=_g, engine="eleven"))
+ELEVEN_FOR_LOOK = {"flat_lalit": "liam", "flat_rahul": "will", "flat_deepak": "chris", "flat_dadaji": "bill",
+                   "flat_boss": "adam", "flat_employee": "liam", "flat_employee_angel": "liam", "narrator": "brian",
+                   "flat_village_aunty": "lily", "flat_village_girl": "jessica", "flat_aunty": "matilda",
+                   "maa": "lily", "priya": "jessica", "3d_woman": "sarah", "flat_girl": "sarah"}
+ELEVEN_FOR_GENDER = {"male": "liam", "female": "jessica"}
 # Edge voice used when a Gemini voice fails or its daily limit is used up, and the Gemini voice used for an
 # Edge voice when the engine is "Gemini for everyone".
 EDGE_FOR_GENDER = {"male": "hi-IN-MadhurNeural", "female": "hi-IN-SwaraNeural"}

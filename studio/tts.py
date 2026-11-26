@@ -14,6 +14,8 @@ Engines
   gemini  Google Gemini text-to-speech for every character (see gemini_tts.py); the line's emotion sets how it is
           spoken. A character with a "Gemini" voice uses Gemini with any engine except silent. When Gemini fails
           or its free limit is used up, the line uses the Microsoft voice instead (with a warning).
+  eleven  ElevenLabs voices for every character (see elevenlabs_tts.py): they act out each line's emotion.
+          A character with an "ElevenLabs" voice uses it with any engine except silent.
   sarvam  Sarvam AI Bulbul voices for every character (see sarvam_tts.py): natural Hindi. A character with a
           "Sarvam" voice uses Sarvam with any engine except silent; when Sarvam fails, the Microsoft voice is used.
 """
@@ -163,6 +165,16 @@ def _gemini_clip(text: str, voice: str, emotion: str, voice_rate: int = 0) -> Cl
     return Clip(wav, len(s) / RATE, compute_env(s))
 
 
+def _eleven_clip(text: str, voice: str, emotion: str, voice_rate: int = 0) -> Clip:
+    from . import elevenlabs_tts
+    name = voice.split(":", 1)[1]
+    wav = CACHE_DIR / "tts" / f"{_key('eleven1', text, name, emotion, voice_rate)}.wav"
+    if not wav.exists():
+        elevenlabs_tts.synthesize(text, name, emotion, wav, RATE, 1 + max(0, voice_rate) / 100, TIGHTEN)
+    s = read_samples(wav)
+    return Clip(wav, len(s) / RATE, compute_env(s))
+
+
 def _sarvam_clip(text: str, voice: str, emotion: str, voice_rate: int = 0) -> Clip:
     from . import sarvam_tts
     name = voice.split(":", 1)[1]
@@ -255,6 +267,17 @@ def get_clip(text: str, voice: str, engine: str = "auto", rate: str = "+0%", emo
     text = " ".join(text.split())
     warning = ""
     from .catalog import EDGE_FOR_GENDER, GEMINI_FOR_GENDER, SARVAM_FOR_GENDER
+    from .catalog import ELEVEN_FOR_GENDER
+    ele = voice.startswith("eleven:")
+    if engine != "silent" and (ele or engine == "eleven"):
+        evoice = voice if ele else "eleven:" + ELEVEN_FOR_GENDER[_gender(voice)]
+        try:
+            return _eleven_clip(text, evoice, emotion, voice_rate)
+        except Exception as e:  # noqa: BLE001  (no key, out of characters, network, ...)
+            warning = f"ElevenLabs voice: {e}"
+            engine = "auto"
+    if ele:                                   # ElevenLabs failed, or the silent engine: the Microsoft voice of that gender
+        voice = EDGE_FOR_GENDER[_gender(voice)]
     sar = voice.startswith("sarvam:")
     if engine != "silent" and (sar or engine == "sarvam"):
         svoice = voice if sar else "sarvam:" + SARVAM_FOR_GENDER[_gender(voice)]

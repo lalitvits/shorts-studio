@@ -25,7 +25,7 @@ from .audio import AudioError, env_segments, fit_segments, get_audio, load_env
 from .backgrounds import get_background, get_background_3d
 from .shading import shade_3d, soft_shadow
 from .visemes import build_track
-from .catalog import (CAMERA_MOVES, ACTIONS, BUILDS, DEFAULT_VOICE, EMOTIONS, GEMINI_FOR_LOOK, HEIGHTS, LOOK_ALIASES, LOOKS,
+from .catalog import (CAMERA_MOVES, ELEVEN_FOR_LOOK, ACTIONS, BUILDS, DEFAULT_VOICE, EMOTIONS, GEMINI_FOR_LOOK, HEIGHTS, LOOK_ALIASES, LOOKS,
                       NARRATOR_LOOKS, OUTFIT_COLORS, PROPS, SARVAM_FOR_LOOK, SHOT_LABELS, SOUND_LABELS, VOICE_FX_FOR_LOOK,
                       VOICE_FX_LABELS, VOICE_TUNE)
 from .flat import FlatComposer
@@ -310,6 +310,9 @@ def make_clip(ln: dict, ch: dict, engine: str, warnings: list | None = None) -> 
     if engine == "gemini" and not voice.startswith("gemini:"):        # the Gemini voice that suits this look
         g = GEMINI_FOR_LOOK.get(ch["look"])
         voice = f"gemini:{g}" if g else voice
+    elif engine == "eleven" and not voice.startswith("eleven:"):      # the ElevenLabs voice that suits this look
+        e = ELEVEN_FOR_LOOK.get(ch["look"])
+        voice = f"eleven:{e}" if e else voice
     elif engine == "sarvam" and not voice.startswith("sarvam:"):      # the Sarvam voice that suits this look
         s = SARVAM_FOR_LOOK.get(ch["look"])
         voice = f"sarvam:{s}" if s else voice
