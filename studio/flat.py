@@ -2102,6 +2102,53 @@ def draw_brain(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t, speaking
     tint = Image.new("RGBA", im.size, sp.get("glow", (255, 110, 140)) + (255,))
     tint.putalpha(glow)
     im.alpha_composite(tint)
+    heart = sp.get("shape") == "heart"
+    if heart:                                         # a talking heart: beats (lub-dub), faster while it talks
+        bpm = 2.2 if speaking else 1.3
+        ph = (t * bpm) % 1.0
+        beat = max(0.0, math.sin(ph * math.pi / 0.18)) if ph < 0.18 else \
+            0.6 * max(0.0, math.sin((ph - 0.24) * math.pi / 0.16)) if 0.24 <= ph < 0.4 else 0.0
+        k = 1.0 + 0.09 * beat
+        for side in (-1, 1):                          # little legs dangling below
+            hip = (side * 46, cy + 120)
+            knee = (side * 58, cy + 230 + 10 * math.sin(t * 3 + side))
+            foot = (side * 64, cy + 330)
+            pen.limb([hip, knee, foot], 15, OUT, 0)
+            pen.ellipse(foot[0] - 30 + side * 10, foot[1] - 14, foot[0] + 30 + side * 10, foot[1] + 16, (40, 36, 40))
+        for side, key in ((-1, "L"), (1, "R")):       # little arms
+            spec = pose.get(key, ("fk", 20, -10))
+            sx, sy = side * 190 * k, cy - 10
+            if spec[0] in ("ik", "ikd"):
+                spec = ("fk", 40, 70) if speaking else ("fk", 25, -10)
+            a, e = spec[1], spec[2]
+            if speaking:
+                a += 25 * math.sin(t * 7 + side)
+            elbow, hand = _fk(sx, sy, min(160, a), e, 80, 70, side)
+            pen.limb([(sx, sy), elbow, hand], 15, OUT, 0)
+            pen.circle(hand[0], hand[1], 17, (250, 250, 250), 4)
+        pts = []                                      # the heart shape (the classic heart curve)
+        for i in range(72):
+            a = 2 * math.pi * i / 72
+            x = 16 * math.sin(a) ** 3
+            y = 13 * math.cos(a) - 5 * math.cos(2 * a) - 2 * math.cos(3 * a) - math.cos(4 * a)
+            pts.append((cx + x * 13.5 * k, cy - 30 - y * 13.5 * k))
+        pen.poly(pts, col, 6)
+        pen.arc(cx - 170 * k, cy - 190 * k, cx - 40 * k, cy - 20 * k, 200, 260, 14, _mix(col, 1.35))   # shine
+        pen.circle(cx - 120 * k, cy - 120 * k, 12, (255, 220, 225), 0)
+        if view == "back":
+            return
+        cfg = _face_cfg(emotion)
+        fy0 = cy - 40
+        look = pose.get("eyes_dir", 0.0) or 0.3 * math.sin(t * 0.7)
+        if blink < 0.5 and cfg["eyes"] not in ("closed", "happy", "sleepy"):
+            for ex in (cx - 56, cx + 56):                 # big white eyes, readable on the red
+                pen.ellipse(ex - 36, fy0 - 42, ex + 36, fy0 + 40, (255, 255, 255))
+        _eye(pen, cx - 56, fy0, cfg["eyes"], blink, look)
+        _eye(pen, cx + 56, fy0, cfg["eyes"], blink, look)
+        _brows(pen, cx, fy0 - 44, cfg["brow"])
+        _mouth(pen, cx + 2, fy0 + 78, cfg["mouth"], mouth, t)
+        _effects(pen, cfg["fx"], cx, fy0 - 30, 180, t)
+        return
     # horns (devil)
     if sp.get("horns", True):
         for side in (-1, 1):
