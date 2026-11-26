@@ -190,7 +190,8 @@ def normalize(tl: dict) -> dict:
                 tts=tl.get("tts") or "auto", audio=audio, look3d=bool(tl.get("look3d", True)),
                 captions=bool(tl.get("captions", True)), language=str(tl.get("language") or "hi"),
                 cinematic=bool(tl.get("cinematic", True)),
-                hook=" ".join(str(tl.get("hook") or "").split())[:80], effects=bool(tl.get("effects", True)))
+                hook=" ".join(str(tl.get("hook") or "").split())[:80], effects=bool(tl.get("effects", True)),
+                pace="tight" if tl.get("pace") == "tight" else "normal")
 
 
 @dataclass
@@ -367,17 +368,18 @@ def build_schedule(tl: dict, clip_for) -> tuple[list, float]:
         st = SceneT(sc["background"], list(sc["cast"]), t, t, lighting=sc.get("lighting", "day"),
                     music=sc.get("music", ""))
         t0 = t
-        t += 0.25
+        tight = tl.get("pace") == "tight"                  # snappy Shorts: shorter pauses around the lines
+        t += 0.1 if tight else 0.25
         for ln in sc["lines"]:
             clip = clip_for(ln, by_id[ln["speaker"]])
             dur = max(clip.duration, ln.get("hold") or 0.0)          # "hold": the line lasts at least this long
             st.lines.append(_line_extras(LineT(ln["speaker"], ln["text"], ln["emotion"], ln["action"],
                                   t, t + dur, clip, None, not ln["text"] and bool(ln["sound"]), ln["shot"]),
                                   ln))
-            t += dur + 0.18
+            t += dur + (0.06 if tight else 0.18)
         if not sc["lines"]:                      # a scene with only silent characters holds for a moment
             t += 2.0
-        t += 0.4
+        t += 0.12 if tight else 0.4
         if sc.get("seconds") and t - t0 < sc["seconds"]:            # the scene's length from the script
             t = t0 + sc["seconds"]
         st.end = t
