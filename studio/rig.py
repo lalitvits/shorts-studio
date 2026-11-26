@@ -36,7 +36,7 @@ BASE = dict(hips_dx=0.0, hips_dy=0.0, torso=0.0, head=0.0,
             look_x=0.0, look_y=0.0, ua_fs_l=1.0, ua_fs_r=1.0, sit=0, prop=None, bite=0, eyes_closed=0.0,
             mouth_force=0.0, z=0, hand_l="relaxed", hand_r="relaxed", fx=())
 
-SIT_ACTIONS = {"sit", "sit_phone", "sit_tea", "sit_read", "sit_eat", "sit_sleep"}
+SIT_ACTIONS = {"sit", "sit_phone", "sit_tea", "sit_read", "sit_eat", "sit_sleep", "sit_call"}
 # Activities the character keeps doing while someone else is talking.
 PERSISTENT = SIT_ACTIONS | {"use_phone", "phone_call", "drink_tea", "read_book", "eat", "arms_crossed"}
 # Actions that make sense while sitting; anything else falls back to talking.
@@ -196,7 +196,7 @@ def pose_for(action: str | None, emotion: str, t: float, speaking: bool, phase: 
         p["look_y"] = 0.8
         p["eyes_closed"] = 1.0
         p["hand_r"] = "open"
-    elif act == "phone_call":          # phone held to the right ear: lift the arm, tilt the head toward it
+    elif act in ("phone_call", "sit_call"):   # phone held to the right ear: lift the arm, tilt the head toward it
         p["arm_r"], p["ua_fs_r"], p["fore_r"] = 1.55, 0.9, 2.05
         p["head"] = -0.09
         p["prop"] = "phone_ear"

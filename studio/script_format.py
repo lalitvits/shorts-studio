@@ -31,7 +31,8 @@ from .catalog import (ACTION_LABELS, BUILDS, EFFECT_LABELS, EMOTIONS, HEIGHTS, L
                       SOUND_LABELS, VOICE_FX_LABELS, VOICES, EDGE_FOR_GENDER, DEFAULT_VOICE, FLAT_BACKGROUNDS)
 
 HEADER = "### SHORTS STUDIO SCRIPT v1"
-LIGHTING = {"day": "normal", "dark": "night, lights off", "phone": "dark, faces lit by a phone screen"}
+LIGHTING = {"day": "normal", "dark": "night, lights off", "phone": "dark, faces lit by a phone screen",
+            "bw": "black and white (a shocked freeze)"}
 CARD_STYLES = {"dark": "dark with a ticking clock", "black": "black screen", "bright": "bright comic burst"}
 
 # ------------------------------------------------------------------ words other AI apps tend to use

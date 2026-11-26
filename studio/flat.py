@@ -16,7 +16,7 @@ import zlib
 from collections import OrderedDict
 from functools import lru_cache
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
 from .backgrounds import get_background, stamp as bg_stamp
 from .catalog import BUILD_VALUES, FLAT_BACKGROUNDS, HEIGHT_VALUES, LOOKS, OUTFIT_COLORS
@@ -30,7 +30,7 @@ OL = 5.5                    # outline width (world units)
 FW, FH = 1080, 1920         # frame in world units
 STRONG = {"angry", "shocked", "surprised", "crying", "laughing", "scared", "excited"}
 SHOTS = ("auto", "wide", "single", "ots", "close")
-PHONE_ACTIONS = {"use_phone", "sit_phone", "phone_call"}
+PHONE_ACTIONS = {"use_phone", "sit_phone", "phone_call", "sit_call"}
 # actions a character keeps doing while someone else talks (on top of the rig's long activities)
 FLAT_PERSIST = PERSISTENT | {"cook", "hold_jug", "lower_jug", "hand_on_shoulder", "look_camera", "go_to_bag"} | \
     stick.STAYS | stick.LOOPS
@@ -113,7 +113,7 @@ TWO_HAND = {"book": (("ik", -55, -700), ("ik", 55, -700)), "newspaper": (("ik", 
             "jug": (("ik", 0, -690), ("ik", 110, -720)), "plate_samosa": (("ik", 20, -640), ("ik", 80, -640)),
             "tasla": (("ik", 150, -560), ("ik", 150, -560))}
 BUSY_HANDS = {"clap", "cry", "facepalm", "wipe_tears", "punch", "slap", "throw", "grab_hand", "cover_kadhai",
-              "hold_jug", "lower_jug", "turn_off_gas", "cook", "use_phone", "sit_phone", "phone_call", "read_book",
+              "hold_jug", "lower_jug", "turn_off_gas", "cook", "use_phone", "sit_phone", "phone_call", "sit_call", "read_book",
               "sit_read", "drink_tea", "sit_tea", "eat", "sit_eat", "hold_parcel", "hide_behind", "think",
               "arms_crossed", "cheer", "dance", "jump", "stop2", "step_back", "hand_on_shoulder", "ride"}
 
@@ -155,6 +155,49 @@ STAND_UP = {"walk", "walk_in", "walk_out", "run_in", "run_out", "jump", "dance",
             "fight_cloud", "crash_wall", "invisible_wall", "go_to_bag", "grab_hand", "hand_on_shoulder", "poke",
             "shake_awake", "cook", "slip_fall", "fall_face", "fly_away", "faint", "laugh_floor", "ride_in",
             "ride_out", "ride_cycle", "throw", "punch", "slap", "hold_jug", "turn_off_gas", "cover_kadhai"}
+
+
+OFFICE_BGS = {"flat_office", "office"}     # a seated character here gets a boss's chair and a desk
+
+
+def draw_office_chair(im, x, ground, u, width=1.0):
+    """A tall red leather office chair (a boss's chair), drawn before the character who sits in it."""
+    pen = Pen(im, x, ground, u)
+    hw = 300 * width
+    red, dark, light = (168, 36, 34), (120, 22, 24), (200, 70, 60)
+
+    def rr(x0, y0, x1, y1, r, fill):
+        pen.d.rounded_rectangle(pen.box(x0, y0, x1, y1), radius=max(1, round(r * u)), fill=fill,
+                                outline=OUT, width=pen.wd(OL))
+    rr(-hw + 40, -820, hw - 40, -230, 90, red)                       # high back
+    for yy in (-700, -560, -420):                                    # buttoned leather
+        for xx in (-hw * 0.45, 0, hw * 0.45):
+            pen.circle(xx, yy, 9, dark, 0)
+    pen.arc(-hw + 80, -800, -hw + 220, -600, 200, 260, 10, light)
+    rr(-hw + 20, -320, hw - 20, -210, 30, dark)                      # seat
+    for ax in (-hw - 10, hw - 70):                                   # arm rests
+        rr(ax, -420, ax + 80, -250, 26, red)
+    pen.limb([(0, -210), (0, -70)], 34, (70, 70, 76))               # stem and base
+    pen.limb([(-180, -40), (180, -40)], 24, (70, 70, 76))
+
+
+def draw_desk(im, x, ground, u):
+    """A big wooden office desk with files, drawn in front of the character sitting behind it."""
+    pen = Pen(im, x, ground, u)
+    wood, dark, top = (128, 72, 40), (96, 52, 28), (150, 88, 50)
+
+    def rr(x0, y0, x1, y1, r, fill, w=OL):
+        pen.d.rounded_rectangle(pen.box(x0, y0, x1, y1), radius=max(1, round(r * u)), fill=fill,
+                                outline=OUT, width=pen.wd(w))
+    for k, (dx, n) in enumerate(((-420, 5), (-300, 3), (330, 6), (450, 4))):     # stacks of files
+        for i in range(n):
+            col = (250, 248, 240) if (i + k) % 3 else (236, 232, 216)
+            rr(dx - 70, -402 - (i + 1) * 26, dx + 70, -402 - i * 26, 4, col, 3)
+    rr(-560, -410, 560, -364, 10, top)                               # desk top
+    rr(-540, -368, 540, 0, 6, wood)                                  # front
+    for x0 in (-500, 40):                                            # panels
+        rr(x0, -330, x0 + 460, -40, 8, dark, 3)
+    pen.circle(0, -200, 10, (230, 196, 90), 3)
 
 
 def draw_sofa(im, x, ground, u, width=1.0):
@@ -384,7 +427,7 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
         else:
             p["R"] = ("fk", 82, -8)
         p["L"] = HIP_T
-    elif action == "phone_call":
+    elif action in ("phone_call", "sit_call"):
         p["R"] = ("ik", 104, -878)
         p["L"] = HIP_T
         p["prop"] = "phone_ear"
@@ -1244,6 +1287,9 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         _hardhat(pen, sp, hx, hy, r, back)
     elif sp.get("hat") == "helmet":
         _helmet(pen, sp, hx, hy, r, back)
+    if sp.get("halo"):                                      # a glowing halo above the head
+        pen.ellipse(hx - r * 0.85, hy - r * 1.75, hx + r * 0.85, hy - r * 1.35, None, 14, (250, 214, 70))
+        pen.ellipse(hx - r * 0.85, hy - r * 1.75, hx + r * 0.85, hy - r * 1.35, None, 5, (255, 246, 190))
     if sp["hair"] == "bald" and not sp.get("hat"):          # the shine on a bald head
         pen.arc(hx - r * 0.82, hy - r * 0.92, hx + r * 0.32, hy + r * 0.12, 200, 245, 9, (255, 252, 240))
     if sp.get("earrings") and not back:
@@ -2782,6 +2828,8 @@ class FlatComposer:
 
     def _light(self, sc, t, im, glows):
         mode, since = self.lighting_at(sc, t)
+        if mode == "bw":                                   # black and white (a shocked freeze, a flashback)
+            return ImageOps.autocontrast(ImageOps.grayscale(im), cutoff=1).convert("RGB")
         if mode == "day":
             if since < 0.18:                               # the light just came on: a short flash
                 return Image.blend(im, Image.new("RGB", im.size, (255, 255, 245)), 0.45 * (1 - since / 0.18))
@@ -2930,8 +2978,9 @@ class FlatComposer:
             sp_ = self.specs[a["cid"]]
             if sp_["kind"] in ("human", "stick", "3d") and not a.get("back") and self._sits(sc, a["cid"]):
                 u = a["scale"] * k * sp_.get("height", 1.0)
-                draw_sofa(im, a["x"] * k, a["g"] * k, u * 1.04 * sp_.get("build", 1.0) ** 0.25,
-                          width=max(1.0, sp_.get("build", 1.0) ** 0.8))
+                seat = draw_office_chair if bid in OFFICE_BGS else draw_sofa
+                seat(im, a["x"] * k, a["g"] * k, u * 1.04 * sp_.get("build", 1.0) ** 0.25,
+                     width=max(1.0, sp_.get("build", 1.0) ** 0.8))
         glows = []                               # faces lit by a phone screen (for the dark lighting)
         for a in lay["actors"]:
             cid = a["cid"]
@@ -3070,6 +3119,8 @@ class FlatComposer:
                 fx += a["face"] * pose["move"][0] * hk
                 fy += pose["move"][1] * hk
             im.paste(spr, (round(fx - ax), round(fy - ay)), spr)
+            if bid in OFFICE_BGS and sp["kind"] == "human" and self._sits(sc, cid) and self._seated(sc, cid, t):
+                draw_desk(im, fx, fy, scale_px * sp.get("height", 1.0))      # behind a desk in the office
             if action in PHONE_ACTIONS and sp.get("kind") in ("human", "stick"):
                 glows.append((fx, fy - (900 - 120) * a["scale"] * k * sp.get("height", 1.0), a["scale"] * k, "phone"))
             if sp.get("kind") == "brain":                   # the inner voice glows on its own in the dark

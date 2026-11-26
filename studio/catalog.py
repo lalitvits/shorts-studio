@@ -28,7 +28,7 @@ ACTION_LABELS = {
     "ride_in": "Ride in on a cycle", "ride_out": "Ride away on a cycle", "ride_cycle": "Ride a cycle (in place)",
     "run_out": "Run away (leaves running)",
     "sit": "Sit on sofa", "sit_phone": "Sit and use phone", "sit_tea": "Sit and drink tea",
-    "sit_read": "Sit and read", "sit_eat": "Sit and eat a snack", "sit_sleep": "Sit and sleep",
+    "sit_read": "Sit and read", "sit_eat": "Sit and eat a snack", "sit_sleep": "Sit and sleep", "sit_call": "Sit and talk on the phone",
     "go_to_bag": "Walk up to the mystery bag (bends toward it)",
 }
 # slapstick comedy moves (stick.py): they work for the stickmen and the flat cartoon people
@@ -191,6 +191,19 @@ _FLAT = {
         kind="human", skin=(222, 170, 128), top="hoodie", top_color=(38, 38, 44), bottom="pants",
         bottom_color=(40, 46, 70), hat=None, hair="spiky", hair_color=(24, 20, 20), mustache=False, shades=True,
         female=False, height=1.0, build=0.95, shoe=(30, 30, 34), vehicle="bike", vehicle_color=(34, 34, 40))),
+    # office comedy: a corporate boss, and an employee (with a halo for heaven scenes)
+    "flat_boss": ("Flat: Corporate boss (black suit, white shirt, tie, big mustache)", False, dict(
+        kind="human", skin=(236, 188, 146), top="open_shirt", top_color=(250, 250, 248), shirt_color=(34, 34, 40),
+        bottom="pants", bottom_color=(34, 34, 40), hat=None, hair="short", hair_color=(24, 20, 20), mustache="big",
+        tie=(30, 30, 36), female=False, height=1.0, build=1.18, shoe=(24, 24, 28))),
+    "flat_employee": ("Flat: Employee (orange spiky hair, red-white striped t-shirt)", False, dict(
+        kind="human", skin=(250, 232, 216), top="tshirt", top_color=(206, 40, 44), stripes=(250, 246, 240),
+        bottom="pants", bottom_color=(36, 36, 42), hat=None, hair="spiky", hair_color=(236, 112, 30), mustache=False,
+        female=False, height=0.98, build=0.9, shoe=(30, 30, 34))),
+    "flat_employee_angel": ("Flat: Employee in heaven (orange spiky hair, striped t-shirt, halo)", False, dict(
+        kind="human", skin=(250, 232, 216), top="tshirt", top_color=(206, 40, 44), stripes=(250, 246, 240),
+        bottom="pants", bottom_color=(36, 36, 42), hat=None, hair="spiky", hair_color=(236, 112, 30), mustache=False,
+        halo=True, female=False, height=0.98, build=0.9, shoe=(30, 30, 34))),
     "flat_cool_dog": ("Flat: Cool dog (sunglasses, cap, gold chain)", False, dict(
         kind="dog", color=(150, 96, 56), light=(206, 160, 112), shades=True, cap=(40, 96, 210), chain=True,
         height=1.05)),
@@ -358,6 +371,7 @@ SARVAM_FOR_LOOK = {
     "flat_cool_dog": "sunny", "flat_brain": "rehan", "flat_dog": "mani", "flat_cat": "kavitha",
     "3d_oldman": "ratan", "3d_youngman": "amit", "3d_boy": "dev", "3d_woman": "shreya", "narrator": "kabir",
     "flat_majdoor_a": "gokul", "flat_majdoor_b": "vijay", "flat_scooter_uncle": "ratan", "flat_biker": "varun",
+    "flat_boss": "kabir", "flat_employee": "rohan", "flat_employee_angel": "rohan",
 }
 SARVAM_FOR_GENDER = {"male": "aditya", "female": "priya"}
 # Edge voice used when a Gemini voice fails or its daily limit is used up, and the Gemini voice used for an

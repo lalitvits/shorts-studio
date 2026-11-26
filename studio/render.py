@@ -59,7 +59,7 @@ def _num(v):
 
 
 CARD_STYLES = ("dark", "black", "bright")
-LIGHTING = ("day", "dark", "phone")
+LIGHTING = ("day", "dark", "phone", "bw")
 STICKERS = ("pizza", "burger", "money", "heart", "idea", "angry", "laugh", "question", "exclaim", "sleep", "fire")
 
 
@@ -469,7 +469,7 @@ def build_schedule_file(tl: dict, env: list, audio_seconds: float) -> tuple[list
                 for q, (x, y) in zip(range(k, j), fit_segments(segs, j - k, lo, hi)):
                     times[q] = (x, y)
                 k = j
-        st = SceneT(sc["background"], list(sc["cast"]), t, t)
+        st = SceneT(sc["background"], list(sc["cast"]), t, t, lighting=sc.get("lighting", "day"))
         for idx, ln in enumerate(speech):
             sfx = get_sound(ln["sound"], by_id[ln["speaker"]]["voice"]) if ln["sound"] else None
             ls, le = times.get(idx, (ln["start"], ln["end"]))
