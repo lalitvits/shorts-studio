@@ -40,7 +40,7 @@ MOVE_CYCLE = ("push_in", "pan", "pull_out")
 SHOTS = ("auto", "wide", "single", "ots", "close")
 PHONE_ACTIONS = {"use_phone", "sit_phone", "phone_call", "sit_call"}
 # actions a character keeps doing while someone else talks (on top of the rig's long activities)
-FLAT_PERSIST = PERSISTENT | {"cook", "hold_jug", "lower_jug", "hand_on_shoulder", "look_camera", "go_to_bag"} | \
+FLAT_PERSIST = PERSISTENT | {"cook", "hold_jug", "lower_jug", "hand_on_shoulder", "look_camera", "go_to_bag", "dance"} | \
     stick.STAYS | stick.LOOPS
 TWO_PERSON = {"grab_hand", "hand_on_shoulder"} | stick.TWO_PERSON
 # actions that need the whole body in the shot (no medium shot from the knees up)

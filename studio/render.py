@@ -191,7 +191,7 @@ def normalize(tl: dict) -> dict:
                 captions=bool(tl.get("captions", True)), language=str(tl.get("language") or "hi"),
                 cinematic=bool(tl.get("cinematic", True)),
                 hook=" ".join(str(tl.get("hook") or "").split())[:80], effects=bool(tl.get("effects", True)),
-                pace="tight" if tl.get("pace") == "tight" else "normal")
+                pace="tight" if tl.get("pace") == "tight" else "normal", hook_stay=bool(tl.get("hook_stay")))
 
 
 @dataclass
@@ -741,7 +741,7 @@ def _chunks(words: list) -> list:
 
 
 def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = True, hook: str = "",
-             hook_end: float = 2.4, language: str = "hi") -> str:
+             hook_end: float = 2.4, language: str = "hi", hook_stay: bool = False) -> str:
     """Captions, the hook title and text-card titles, in one ASS subtitle file."""
     size, outline, margin_v = int(h * 0.05), max(2, int(h * 0.006)), int(h * 0.29)
     head = (
@@ -754,6 +754,8 @@ def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = Tru
         f"{outline},1,2,{int(w * 0.06)},{int(w * 0.06)},{margin_v},1\n"
         f"Style: Hook,{font_family},{int(h * 0.068)},&H00FFFFFF,&H00FFFFFF,&H00141414,&H96000000,-1,0,0,0,100,100,0,0,1,"
         f"{int(outline * 1.8)},3,8,{int(w * 0.07)},{int(w * 0.07)},{int(h * 0.27)},1\n"
+        f"Style: HookTop,{font_family},{int(h * 0.034)},&H00141414,&H00141414,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,"
+        f"{max(4, int(h * 0.008))},0,8,{int(w * 0.1)},{int(w * 0.1)},{int(h * 0.075)},1\n"
         f"Style: Card,{font_family},{int(h * 0.072)},&H00FFFFFF,&H00FFFFFF,&H00202020,&H96000000,-1,0,0,0,100,100,0,0,1,"
         f"{int(outline * 1.5)},2,5,{int(w * 0.08)},{int(w * 0.08)},0,1\n"
         f"Style: Over,{font_family},{int(h * 0.058)},&H00FFFFFF,&H00FFFFFF,&H002A1FD0,&H002A1FD0,-1,0,0,0,100,100,0,0,3,"
@@ -766,9 +768,12 @@ def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = Tru
     events = []
     if hook:                                    # big opening title that pops in, then fades
         txt = hook.replace("{", "").replace("}", "")
-        events.append(f"Dialogue: 1,{_ass_time(0.12)},{_ass_time(hook_end)},Hook,,0,0,0,,"
-                      "{\\fad(80,300)\\fscx40\\fscy40\\t(0,180,\\fscx112\\fscy112)\\t(180,320,\\fscx100\\fscy100)}"
-                      + txt)
+        if hook_stay:                           # a title that stays all video: a small white box at the top
+            events.append(f"Dialogue: 1,{_ass_time(0.0)},{_ass_time(hook_end)},HookTop,,0,0,0,,{{\\fad(150,0)}}" + txt)
+        else:
+            events.append(f"Dialogue: 1,{_ass_time(0.12)},{_ass_time(hook_end)},Hook,,0,0,0,,"
+                          "{\\fad(80,300)\\fscx40\\fscy40\\t(0,180,\\fscx112\\fscy112)\\t(180,320,\\fscx100\\fscy100)}"
+                          + txt)
     events += overlays.popup_ass_events(sched, w, h, _ass_time)
     for sc in sched:                            # text cards
         if sc.card:
@@ -1019,9 +1024,9 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
         else:
             warnings.append("No Devanagari font found. Hindi captions may show empty boxes. "
                             "Put a font such as Noto Sans Devanagari in assets/fonts (see README).")
-        hook_end = min(2.4, total)
+        hook_end = total if tl.get("hook_stay") else min(2.4, total)      # the title stays all video, or 2.4 s
         (work / "captions.ass").write_text(make_ass(sched, w, h, family, tl["captions"], tl["hook"], hook_end,
-                                                    tl["language"]), encoding="utf-8")
+                                                    tl["language"], bool(tl.get("hook_stay"))), encoding="utf-8")
         events = []                               # sound effects: hits, scene whooshes, the hook's pop
         if tl["effects"]:
             thrown = set(round(x, 3) for x in overlays.throw_hits(sched))
