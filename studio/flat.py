@@ -110,7 +110,7 @@ ONE_HAND = {"phone": ("ik", 62, -650), "glass": ("ik", 62, -640), "bottle": ("ik
             "umbrella": ("ik", 36, -790), "suitcase": ("fk", 14, 4), "lathi": ("fk", 12, -6), "bag": None,
             "cutting_chai": ("ik", 56, -660), "kulhad": ("ik", 56, -660), "veg_basket": ("fk", 18, 6),
             "sabzi_bag": ("fk", 14, 4)}
-FOODS = {"samosa", "jalebi", "vada_pav", "banana", "apple", "mango", "orange", "grapes", "watermelon", "tomato", "onion",
+FOODS = {"chips", "samosa", "jalebi", "vada_pav", "banana", "apple", "mango", "orange", "grapes", "watermelon", "tomato", "onion",
          "potato", "carrot", "brinjal", "chilli", "cabbage", "cucumber", "lemon", "cauliflower", "bhindi", "garlic", "peas",
          "bhutta", "coconut"}
 for _f in FOODS:
@@ -143,9 +143,13 @@ def hold_prop(pose: dict, prop: str, action: str):
     if pose.get("prop") or action in BUSY_HANDS:
         if prop == "bag":
             pose["bag"] = True
+        elif prop == "blanket":
+            pose["blanket"] = True
         return
     if prop == "bag":
         pose["bag"] = True
+    elif prop == "blanket":
+        pose["blanket"] = True
     elif prop == "lathi":
         pose["lathi"] = True
     elif prop in TWO_HAND:
@@ -1385,6 +1389,17 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
         pen.d.rounded_rectangle(pen.box(-170 * bw, -520, -60 * bw, -400), radius=12 * pen.s, fill=(150, 96, 56),
                                 outline=OUT, width=pen.wd(4))
         pen.line([(-160 * bw, -490), (-70 * bw, -490)], (110, 70, 40), 5)
+    if pose.get("blanket") and not back:            # a quilted blanket over the body, up to the chin
+        bc_, bd_ = (110, 120, 200), (86, 94, 170)
+        top = -790
+        pen.d.rounded_rectangle(pen.box(-190 * bw, top, 190 * bw, 20), radius=60 * pen.s, fill=bc_,
+                                outline=OUT, width=pen.wd(OL))
+        for yy in range(top + 120, 0, 140):
+            pen.line([(-180 * bw, yy), (180 * bw, yy)], bd_, 5)
+        for xx in (-90 * bw, 0, 90 * bw):
+            pen.line([(xx, top + 20), (xx, 10)], bd_, 5)
+        pen.d.rounded_rectangle(pen.box(-196 * bw, top - 10, 196 * bw, top + 60), radius=30 * pen.s,
+                                fill=(240, 240, 250), outline=OUT, width=pen.wd(4))      # the folded top edge
     if veh:                                          # the scooter / motorbike in front, hands on its grips
         jit = 7 * math.sin(t * 61) if "shiver" in pose.get("fx", ()) else 0.0
         vp = Pen(im, ox + (pose["dx"] + jit) * s, oy, s)
@@ -1658,6 +1673,15 @@ def _jug(pen, x, y, tilt=0.0, k=1.0):
 
 def _food(pen, kind, x, y):
     """A food / fruit / vegetable, about hand-sized, centred at (x, y)."""
+    if kind == "chips":                     # a crinkly packet of chips, open at the top
+        pen.poly([(x - 48, y - 70), (x + 48, y - 74), (x + 54, y + 60), (x - 54, y + 62)], (250, 196, 30), 4)
+        for k in range(5):
+            pen.line([(x - 48 + k * 24, y - 72), (x - 44 + k * 24, y - 62)], (200, 150, 20), 3)
+        pen.ellipse(x - 30, y - 30, x + 30, y + 22, (214, 40, 40), 3)                        # brand blob
+        pen.line([(x - 18, y - 4), (x + 18, y - 4)], (255, 255, 255), 6)
+        for dx, dy in ((-20, -84), (6, -92), (26, -80)):                                     # chips poking out
+            pen.ellipse(x + dx - 16, y + dy - 10, x + dx + 16, y + dy + 10, (246, 214, 120), 2.5)
+        return
     if kind == "samosa":
         pen.poly([(x - 44, y + 26), (x + 44, y + 26), (x, y - 56)], (226, 172, 84), 4)
         pen.line([(x - 30, y + 14), (x + 30, y + 14)], (196, 140, 60), 4)

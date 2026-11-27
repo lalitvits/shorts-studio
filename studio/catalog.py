@@ -280,6 +280,7 @@ PROP_LABELS = {"": "Prop: none", "phone": "Mobile phone (in the hand)", "glass":
                "samosa": "Samosa", "jalebi": "Jalebi", "vada_pav": "Vada pav", "cutting_chai": "Cutting chai (small glass)",
                "kulhad": "Kulhad chai (clay cup)", "plate_samosa": "Plate of samosas (both hands)",
                "tasla": "Tasla (iron pan of cement, both hands)",
+               "chips": "Packet of chips", "blanket": "Blanket (covers the body: lie_sleep under it)",
                # fruit
                "banana": "Banana", "apple": "Apple", "mango": "Mango", "orange": "Orange", "grapes": "Grapes",
                "watermelon": "Watermelon slice",
