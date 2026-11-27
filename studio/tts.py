@@ -27,6 +27,7 @@ import hashlib
 import math
 import os
 import random
+import re
 import subprocess
 import time
 import wave
@@ -59,6 +60,14 @@ class Clip:
             return 0.0
         seg = self.env[max(0, i - 1): i + 2]
         return min(1.0, max(seg) * 1.35)
+
+
+TAG_RE = re.compile(r"\[[^\[\]]{1,30}\]")
+
+
+def strip_tags(text: str) -> str:
+    """The words without acting tags like [laughs] or [whispers] (those are for the ElevenLabs voices only)."""
+    return " ".join(TAG_RE.sub(" ", text or "").split())
 
 
 def _key(*parts) -> str:
@@ -278,6 +287,7 @@ def get_clip(text: str, voice: str, engine: str = "auto", rate: str = "+0%", emo
             engine = "auto"
     if ele:                                   # ElevenLabs failed, or the silent engine: the Microsoft voice of that gender
         voice = EDGE_FOR_GENDER[_gender(voice)]
+    text = strip_tags(text)                   # acting tags are only for ElevenLabs
     sar = voice.startswith("sarvam:")
     if engine != "silent" and (sar or engine == "sarvam"):
         svoice = voice if sar else "sarvam:" + SARVAM_FOR_GENDER[_gender(voice)]

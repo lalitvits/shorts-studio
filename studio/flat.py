@@ -324,6 +324,18 @@ def _fk(sx, sy, a_deg, e_deg, l1, l2, side):
 HIP_T = ("ik", 126, -520)
 
 
+# gestures a talking character cycles through, by emotion
+TALK_CYCLE = {
+    "neutral": ("explain", "point", "hips", "explain", "shrug"), "happy": ("explain", "wave", "hips", "explain"),
+    "angry": ("hips_point", "wag_finger", "point", "hips_point", "explain"),
+    "worried": ("explain", "stop2", "shrug", "explain"), "excited": ("explain", "point", "cheer", "explain"),
+    "proud": ("hips", "point", "hips", "thumbs_up"), "confused": ("shrug", "think", "shrug", "explain"),
+    "relieved": ("explain", "hips", "explain"), "surprised": ("stop2", "explain", "point"),
+    "shocked": ("stop2", "explain", "stop2"), "sad": ("explain", "shrug", "explain"),
+    "embarrassed": ("shrug", "explain", "facepalm"),
+}
+
+
 def _talk_style(key: str) -> str:
     return ["hips_point", "hips_point", "hips", "explain", "point", "hips"][_h(key) % 6]
 
@@ -334,9 +346,13 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
     p = dict(L=("fk", 12, -6), R=("fk", 12, -6), dx=0.0, dy=3 * s(t * 2.3), head_dx=0.0, head_dy=0.0,
              walk=0.0, prop=None, eyes_dir=0.0)
     if action == "talk":
-        action = {"angry": "hips_point", "laughing": "hips", "crying": "cry", "scared": "stop2",
-                  "proud": "hips", "thinking": "think", "confused": "shrug", "excited": "explain"}.get(
-            emotion, _talk_style(key))
+        cycle = TALK_CYCLE.get(emotion)
+        if speaking and cycle:                      # a new gesture every ~1.2 s while talking (lively, not frozen)
+            action = cycle[(int(t / 1.2) + _h(key)) % len(cycle)]
+        else:
+            action = {"angry": "hips_point", "laughing": "hips", "crying": "cry", "scared": "stop2",
+                      "proud": "hips", "thinking": "think", "confused": "shrug", "excited": "explain"}.get(
+                emotion, _talk_style(key))
     elif action == "idle":
         action = {"angry": "hips", "proud": "hips", "crying": "cry", "thinking": "think", "scared": "stop2",
                   "laughing": "hips", "bored": "arms_crossed"}.get(emotion, "rest")
@@ -418,6 +434,10 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
         p["L"] = ("ik", -10, -690)
         p["prop"] = "phone"
         p["head_dy"] = 10
+    elif action == "wag_finger":            # scolding: the index finger up, wagging side to side
+        p["R"] = ("fk", 150 + 14 * s(t * 13), 25)
+        p["L"] = HIP_T
+        p["head_dx"] = 5 * s(t * 13)
     elif action == "folded_hands":          # hands joined in front of the chest: pleading, namaste
         p["L"] = ("ik", 8, -700 + 6 * s(t * 5))
         p["R"] = ("ik", 8, -700 + 6 * s(t * 5))
@@ -542,6 +562,15 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
         p["head_dy"] += 8
     if speaking and action not in ("look_around", "dance", "jump"):
         p["head_dx"] += 3 * s(t * 3.1)
+    if speaking and action not in stick.SLAPSTICK and action not in ("dance", "jump", "walk"):
+        p["dx"] = p.get("dx", 0.0) + 9 * s(t * 1.7)                      # sways while talking
+        p["head_dx"] += 5 * s(t * 2.3)
+        if emotion in ("angry", "excited", "shocked", "scared"):
+            p["dy"] += 5 * abs(s(t * 5.5))                                # bounces with energy
+    elif not speaking and action in ("rest", "idle", "hips", "arms_crossed", "sit", "sit_phone"):
+        ph = (_h(key) % 100) / 16
+        p["head_dx"] += 5 * s(t * 0.9 + ph)                               # listening: small head moves
+        p["head_dy"] += 4 * max(0.0, s(t * 1.6 + ph))                     # and nods
     if action in SIT_ACTIONS:
         p["sit"] = True
     if action == "sit_sleep":               # dozing on the sofa: head drops to one side, slow breathing

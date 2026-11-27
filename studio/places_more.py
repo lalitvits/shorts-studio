@@ -18,7 +18,7 @@ from PIL import ImageDraw, ImageFont
 from .realms import OUT, _sky
 
 MORE = ("flat_chai_tapri", "flat_sabzi_mandi", "flat_airport", "flat_bus_stop", "flat_white", "flat_doodle",
-        "flat_highway", "flat_bathroom")
+        "flat_highway", "flat_bathroom", "flat_home")
 
 
 def _mix(c, k):
@@ -661,6 +661,93 @@ def _bathroom(im, d, P, L, PW, ps, rnd):
     d.rectangle(P(1860, 1290, 2260, 1300), fill=(255, 236, 170))                              # light under the door
 
 
+HOME_TV = (1700, 640, 2160, 900)        # the TV screen in flat_home (picture units)
+HOME_FAN = (1300, 120)
+HOME_WIN = (300, 300, 760, 860)
+
+
+def _home(im, d, P, L, PW, ps, rnd):
+    """A sunny Indian living room that moves: ceiling fan, a TV playing, curtains in the breeze (see animate)."""
+    d.rectangle(P(0, 0, PW, 1300), fill=(250, 226, 196))                                      # walls
+    d.rectangle(P(0, 1080, PW, 1300), fill=(236, 206, 172))                                   # lower wall
+    d.line(P(0, 1080, PW, 1080), fill=(206, 170, 130), width=L(8))
+    _ground(d, im, ps, 1300, (196, 150, 104), (168, 122, 82))                                  # wooden floor
+    for x in range(-600, PW + 600, 160):
+        d.line(P(x, 1300, x + (x - PW / 2) * 0.8, 1920), fill=(178, 132, 90), width=L(4))
+    d.line(P(0, 1300, PW, 1300), fill=OUT, width=L(6))
+    x0, y0, x1, y1 = HOME_WIN                                                                 # window, blue sky
+    d.rectangle(P(x0, y0, x1, y1), fill=(150, 206, 246), outline=OUT, width=L(8))
+    d.ellipse(P(x0 + 260, y0 + 60, x0 + 380, y0 + 180), fill=(255, 236, 140))
+    for cx, cy in ((x0 + 110, y0 + 330), (x0 + 330, y0 + 420)):
+        d.ellipse(P(cx - 70, cy - 30, cx + 70, cy + 30), fill=(255, 255, 255))
+    d.line(P((x0 + x1) / 2, y0, (x0 + x1) / 2, y1), fill=(240, 240, 240), width=L(10))
+    d.line(P(x0, (y0 + y1) / 2, x1, (y0 + y1) / 2), fill=(240, 240, 240), width=L(10))
+    d.rectangle(P(x0 - 80, y0 - 50, x1 + 80, y0 - 30), fill=(150, 100, 60))                   # curtain rod
+    d.rectangle(P(980, 360, 1220, 560), fill=(244, 236, 220), outline=OUT, width=L(8))        # family photo
+    for i, col in enumerate(((210, 120, 90), (120, 150, 210), (230, 180, 90))):
+        cx = 1030 + i * 70
+        d.ellipse(P(cx - 24, 400, cx + 24, 448), fill=(236, 190, 150))
+        d.rectangle(P(cx - 26, 452, cx + 26, 540), fill=col)
+    d.ellipse(P(1460, 260, 1600, 400), fill=(255, 255, 255), outline=OUT, width=L(6))          # wall clock
+    d.line(P(1530, 330, 1530, 285), fill=OUT, width=L(5))
+    d.line(P(1530, 330, 1565, 340), fill=OUT, width=L(5))
+    tx0, ty0, tx1, ty1 = HOME_TV                                                              # TV on a cabinet
+    d.rounded_rectangle(P(tx0 - 24, ty0 - 24, tx1 + 24, ty1 + 24), radius=L(14), fill=(30, 30, 36))
+    d.rectangle(P(tx0 - 120, 960, tx1 + 120, 1230), fill=(150, 96, 56), outline=OUT, width=L(6))
+    for k in range(3):
+        x = tx0 - 100 + k * 240
+        d.rectangle(P(x, 990, x + 200, 1200), fill=(130, 82, 46), outline=(100, 62, 34), width=L(4))
+    d.rectangle(P(tx0 + 180, 924, tx1 - 180, 960), fill=(40, 40, 46))
+    d.polygon([tuple(P(2320, 1230)), tuple(P(2420, 1230)), tuple(P(2400, 1080)), tuple(P(2340, 1080))],
+              fill=(190, 100, 60), outline=OUT)                                                 # plant pot
+    for a in range(-60, 70, 20):
+        import math as _m
+        d.line(P(2370, 1080, 2370 + 160 * _m.sin(_m.radians(a)), 1080 - 220 * _m.cos(_m.radians(a))),
+               fill=(70, 150, 80), width=L(14))
+    d.ellipse(P(160, 1500, 1100, 1760), fill=(176, 60, 70))                                     # rug
+    d.ellipse(P(230, 1540, 1030, 1720), outline=(236, 190, 110), width=L(10))
+
+
+def _home_animate(d, t, px, s, visible):
+    """flat_home: the fan turns, the TV plays (changing colours and a bouncing shape), the curtains sway."""
+    tx0, ty0, tx1, ty1 = HOME_TV
+    if visible((tx0 + tx1) / 2, 400):
+        k = int(t * 1.4)
+        cols = ((70, 140, 230), (230, 110, 60), (90, 190, 120), (200, 80, 160))
+        a, b = px(tx0, ty0), px(tx1, ty1)
+        d.rectangle([a[0], a[1], b[0], b[1]], fill=cols[k % 4] + (255,))
+        bx = tx0 + 60 + (tx1 - tx0 - 120) * (0.5 + 0.5 * math.sin(t * 2.1))
+        by = ty0 + 60 + (ty1 - ty0 - 120) * abs(math.sin(t * 3.3))
+        c = px(bx, by)
+        r = 34 * s
+        d.ellipse([c[0] - r, c[1] - r, c[0] + r, c[1] + r], fill=(255, 255, 255, 230))
+        a2, b2 = px(tx0, ty1 - 50), px(tx1, ty1)
+        d.rectangle([a2[0], a2[1], b2[0], b2[1]], fill=(20, 20, 30, 160))
+    fx, fy = HOME_FAN
+    if visible(fx, 400):
+        c = px(fx, fy)
+        rod = px(fx, 0)
+        d.line([rod, c], fill=(90, 70, 56, 255), width=max(1, round(10 * s)))
+        for i in range(3):
+            ang = t * 9 + i * 2 * math.pi / 3
+            dx, dy = math.cos(ang) * 260 * s, math.sin(ang) * 38 * s
+            d.polygon([c, (c[0] + dx - dy * 0.3, c[1] + dy - 14 * s), (c[0] + dx + dy * 0.3, c[1] + dy + 14 * s)],
+                      fill=(130, 96, 70, 255))
+        r = 34 * s
+        d.ellipse([c[0] - r, c[1] - 0.7 * r, c[0] + r, c[1] + 0.7 * r], fill=(96, 72, 56, 255))
+    x0, y0, x1, y1 = HOME_WIN
+    if visible((x0 + x1) / 2, 500):
+        for side, xa in ((-1, x0 - 70), (1, x1 + 70)):                                         # swaying curtains
+            sway = 26 * math.sin(t * 1.3 + side)
+            inner = xa + (-side) * 170
+            pts = [px(xa, y0 - 40), px(inner, y0 - 40), px(inner + sway * 0.6, (y0 + y1) / 2),
+                   px(inner + sway, y1 + 120), px(xa, y1 + 120)]
+            d.polygon(pts, fill=(236, 150, 60, 255), outline=OUT + (255,))
+            for k in (0.33, 0.66):
+                xx = xa + (inner - xa) * k
+                d.line([px(xx, y0 - 30), px(xx + sway * k, y1 + 110)], fill=(210, 120, 40, 255), width=max(1, round(5 * s)))
+
+
 def _white(im, d, P, L, PW, ps, rnd):
     """Plain white, the classic stickman look: only a faint floor line."""
     d.rectangle(P(0, 0, PW, 1920), fill=(252, 252, 250))
@@ -714,7 +801,7 @@ def _doodle(im, d, P, L, PW, ps, rnd):
 
 DRAW = {"flat_chai_tapri": _chai_tapri, "flat_sabzi_mandi": _sabzi_mandi, "flat_airport": _airport,
         "flat_bus_stop": _bus_stop, "flat_white": _white, "flat_doodle": _doodle, "flat_highway": _highway,
-        "flat_bathroom": _bathroom}
+        "flat_bathroom": _bathroom, "flat_home": _home}
 
 
 def draw(bid, im, d, P, L, PW, ps, rnd):
@@ -758,6 +845,8 @@ def _bathroom_door(d, px, s, t, shake: float, open_: float):
 def animate(d, bid: str, t: float, px, s: float, visible, x0: float, vw: float, PW: int, birds, items, door=None):
     if bid == "flat_bathroom" and door and (door[0] > 0.02 or door[1] > 0):
         _bathroom_door(d, px, s, t, *door)
+    if bid == "flat_home":
+        _home_animate(d, t, px, s, visible)
     if bid == "flat_chai_tapri":
         _tapri_animate(d, t, px, s, visible, x0, vw, PW, birds)
     elif bid == "flat_sabzi_mandi":

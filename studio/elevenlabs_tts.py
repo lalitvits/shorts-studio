@@ -26,11 +26,14 @@ DEFAULT_MODEL = "eleven_v3"
 
 # How each emotion is acted (eleven_v3 audio tags; the voice performs them and does not read them out).
 TAGS = {
-    "neutral": "", "happy": "[cheerfully]", "sad": "[sad]", "worried": "[nervous]", "angry": "[angry]",
-    "surprised": "[surprised]", "laughing": "[laughing]", "crying": "[crying]", "scared": "[scared] [whispers]",
-    "excited": "[excited]", "sleepy": "[sleepy]", "embarrassed": "[embarrassed]", "confused": "[confused]",
-    "bored": "[bored]", "in_love": "[sweetly]", "proud": "[proudly]", "disgusted": "[disgusted]",
-    "thinking": "[thoughtful]", "shocked": "[shocked] [gasps]", "relieved": "[relieved] [sighs]",
+    "neutral": "[casually]", "happy": "[cheerfully] [warmly]", "sad": "[sad] [sighs] [quietly]",
+    "worried": "[nervous] [stammering] [anxiously]", "angry": "[angry] [shouting] [scolding]",
+    "surprised": "[surprised] [gasps]", "laughing": "[laughing] [laughs]", "crying": "[crying] [sobbing]",
+    "scared": "[scared] [whispers] [trembling]", "excited": "[excited] [energetic] [loudly]",
+    "sleepy": "[sleepy] [yawning] [mumbling]", "embarrassed": "[embarrassed] [awkward laugh]",
+    "confused": "[confused] [hesitant]", "bored": "[bored] [flatly]", "in_love": "[sweetly] [softly]",
+    "proud": "[proudly] [confident]", "disgusted": "[disgusted]", "thinking": "[thoughtful] [slowly]",
+    "shocked": "[shocked] [gasps] [loudly]", "relieved": "[relieved] [long sigh] [exhausted]",
 }
 
 # Ready-made ElevenLabs voices (name -> voice id) that every account has. They speak Hindi with eleven_v3 and
@@ -67,7 +70,12 @@ def voice_id(name: str) -> str:
 
 
 def prompt_for(text: str, emotion: str, model: str) -> str:
-    tag = TAGS.get(emotion, "") if model == "eleven_v3" else ""
+    """The emotion's tags in front of the words. Tags written in the line itself ([laughs], [sarcastic]...) are kept
+    for eleven_v3, which acts them, and removed for other models."""
+    if model != "eleven_v3":
+        import re
+        return " ".join(re.sub(r"\[[^\[\]]{1,30}\]", " ", text).split())
+    tag = TAGS.get(emotion, "")
     return f"{tag} {text}" if tag else text
 
 

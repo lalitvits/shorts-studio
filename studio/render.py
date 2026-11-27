@@ -38,7 +38,7 @@ from .config import GROUND_Y, OUTPUT_DIR, QUALITY, WORLD_W, find_devanagari_font
 from .rig import (BOX_H, BOX_W, KEEP_EMOTION, ORG_X, ORG_Y, PERSISTENT, SIT_ACTIONS, blink_amount,
                   draw_character, draw_sofa, pose_for)
 from .sfx import SoundError, get_sound
-from .tts import ENV_HZ, RATE, Clip, estimate_seconds, get_clip, join_clips, read_samples
+from .tts import strip_tags, ENV_HZ, RATE, Clip, estimate_seconds, get_clip, join_clips, read_samples
 
 
 class RenderError(Exception):
@@ -799,7 +799,7 @@ def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = Tru
                                   "Explain,,0,0,0,,{\\fad(120,120)}" + txt)
     for sc in (sched if captions else []):
         for ln in sc.lines:
-            words = [x.replace("{", "").replace("}", "") for x in ln.text.split()]
+            words = [x.replace("{", "").replace("}", "") for x in strip_tags(ln.text).split()]
             if not words:
                 continue
             weights = [len(x) + 1.5 for x in words]

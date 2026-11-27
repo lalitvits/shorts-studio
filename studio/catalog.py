@@ -28,7 +28,7 @@ ACTION_LABELS = {
     "ride_in": "Ride in on a cycle", "ride_out": "Ride away on a cycle", "ride_cycle": "Ride a cycle (in place)",
     "run_out": "Run away (leaves running)",
     "sit": "Sit on sofa", "sit_phone": "Sit and use phone", "sit_tea": "Sit and drink tea",
-    "sit_read": "Sit and read", "sit_eat": "Sit and eat a snack", "sit_sleep": "Sit and sleep", "sit_call": "Sit and talk on the phone", "folded_hands": "Folded hands (pleading, namaste)",
+    "sit_read": "Sit and read", "sit_eat": "Sit and eat a snack", "sit_sleep": "Sit and sleep", "sit_call": "Sit and talk on the phone", "folded_hands": "Folded hands (pleading, namaste)", "wag_finger": "Wag a finger (scolding)",
     "wipe_sweat": "Wipe sweat off the forehead (nervous)",
     "go_to_bag": "Walk up to the mystery bag (bends toward it)",
 }
@@ -315,6 +315,7 @@ FLAT_BACKGROUNDS = {
     "flat_bus_stop": "Flat cartoon: bus stop (shelter, passing bus)",
     "flat_highway": "Flat cartoon: highway with a speed breaker (trees, marker posts, golden hour)",
     "flat_bathroom": "Flat cartoon: bathroom (tiles, shower curtain, bucket and mug, wooden door)",
+    "flat_home": "Flat cartoon: home living room (ceiling fan turning, TV playing, curtains in the breeze)",
     "flat_white": "Plain white (stickman comedy)",
     "flat_doodle": "Doodle paper (hand-drawn hills, sun, clouds)",
 }
