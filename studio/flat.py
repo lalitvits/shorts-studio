@@ -2148,6 +2148,16 @@ def draw_brain(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t, speaking
             pts.append((cx + x * 13.5 * k, cy - 30 - y * 13.5 * k))
         pen.poly(pts, col, 6)
         pen.arc(cx - 170 * k, cy - 190 * k, cx - 40 * k, cy - 20 * k, 200, 260, 14, _mix(col, 1.35))   # shine
+        if sp.get("broken"):                          # a broken heart: a jagged crack down the middle, and a plaster
+            crack = [(cx - 4, cy - 160 * k), (cx + 30, cy - 105 * k), (cx - 22, cy - 50 * k), (cx + 26, cy + 10 * k),
+                     (cx - 14, cy + 70 * k), (cx + 4, cy + 120 * k)]
+            pen.line(crack, (70, 10, 20), 12)
+            pen.line(crack, (250, 236, 236), 3)
+            bx, by = cx + 95 * k, cy - 115 * k
+            band = [(bx - 62, by - 6), (bx + 40, by - 42), (bx + 52, by - 12), (bx - 50, by + 24)]
+            pen.poly(band, (244, 206, 160), 3)
+            for dx in (-10, 8):
+                pen.circle(bx + dx, by - 9 + dx * 0.3, 4, (200, 150, 110), 0)
         pen.circle(cx - 120 * k, cy - 120 * k, 12, (255, 220, 225), 0)
         if view == "back":
             return
@@ -3324,12 +3334,15 @@ class FlatComposer:
             jy += k * (4 * math.sin(t * 0.67 + 2.0) + 2 * math.sin(t * 1.6))
         if rot:                                          # tilt the picture; zoom far enough to hide the corners
             ar = math.radians(abs(rot))
-            zoom = max(zoom, math.cos(ar) + (H / W) * math.sin(ar) + 0.02)
-            im = im.rotate(rot, resample=Image.BILINEAR, center=(fx_, fy_))
+            zoom = max(zoom, math.cos(ar) + (H / W) * math.sin(ar) + 0.06)
+            im = im.rotate(rot, resample=Image.BILINEAR, center=(W / 2, H / 2))    # about the centre: no gaps
         cw, ch = W / zoom, H / zoom
         f = min(1.0, max(0.0, (zoom - 1.0) / 0.3)) * 0.9  # the closer in, the more the face is centred
         cx = W / 2 + (fx_ - W / 2) * f + pan * W + jx
         cy = H * 0.56 + (fy_ - H * 0.56) * f * 0.8 + low * H + jy
+        if rot:                                          # tilted: stay near the centre so no corner shows
+            cx = W / 2 + (cx - W / 2) * 0.25
+            cy = H * 0.5 + (cy - H * 0.5) * 0.25
         x0b = min(max(0.0, cx - cw / 2), W - cw)
         y0b = min(max(0.0, cy - ch * (0.5 - 0.12 * f)), H - ch)       # zoomed in: room above the head
         box = (x0b, y0b, x0b + cw, y0b + ch)

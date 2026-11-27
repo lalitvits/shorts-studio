@@ -212,6 +212,8 @@ _FLAT = {
         kind="brain", color=(244, 150, 172), glow=(255, 110, 140), horns=True, height=1.0)),
     "flat_heart": ("Flat: Talking heart (red, beats, big eyes, little arms and legs)", False, dict(
         kind="brain", shape="heart", color=(222, 36, 52), glow=(255, 90, 110), horns=False, height=1.0)),
+    "flat_heart_broken": ("Flat: Broken heart (cracked, with a plaster; talks, cries, beats)", False, dict(
+        kind="brain", shape="heart", broken=True, color=(206, 40, 56), glow=(170, 120, 200), horns=False, height=0.9)),
     "flat_dog": ("Flat: Dog (brown)", False, dict(kind="dog", color=(146, 94, 58), light=(196, 150, 104), height=1.0)),
     "flat_cat": ("Flat: Cat (grey)", False, dict(kind="cat", color=(150, 150, 160), light=(220, 220, 226), height=0.9)),
 }
