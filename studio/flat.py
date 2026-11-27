@@ -3356,6 +3356,10 @@ class FlatComposer:
             zoom = max(zoom, 1.03)
             jx += k * (6 * math.sin(t * 0.83) + 3 * math.sin(t * 1.9 + 1.0))
             jy += k * (4 * math.sin(t * 0.67 + 2.0) + 2 * math.sin(t * 1.6))
+        wide_group = lay.get("type") == "wide" and len(lay["actors"]) > 1
+        if wide_group:                                   # a group shot: move gently and keep everyone in the frame
+            zoom = 1.0 + (zoom - 1.0) * 0.35
+            fx_, fy_ = W / 2, H * 0.56
         if rot:                                          # tilt the picture; zoom far enough to hide the corners
             ar = math.radians(abs(rot))
             zoom = max(zoom, math.cos(ar) + (H / W) * math.sin(ar) + 0.06)
