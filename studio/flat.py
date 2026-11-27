@@ -160,7 +160,7 @@ def hold_prop(pose: dict, prop: str, action: str):
         pose["prop"] = "phone_hand" if prop == "phone" else prop
 
 
-SIT_DROP = 250            # how much lower a seated body is (character units)
+SIT_DROP = 175            # how much lower a seated body is (character units)
 # Actions that get a seated character up off the sofa for the rest of the scene
 STAND_UP = {"walk", "walk_in", "walk_out", "run_in", "run_out", "jump", "dance", "step_back", "wake_jolt",
             "run_across", "cartoon_run", "chase", "sneak_in", "tiptoe", "lie_sleep", "sleep_stand", "kick",
@@ -212,28 +212,44 @@ def draw_desk(im, x, ground, u):
     pen.circle(0, -200, 10, (230, 196, 90), 3)
 
 
-def draw_sofa(im, x, ground, u, width=1.0):
-    """A cushioned sofa with a wooden frame (like the living room's), centred at pixel x on the floor at pixel
-    `ground`, in character units of u pixels. It is drawn before the character who sits on it."""
+SOFA_HW = 285            # half width of the armchair (character units, times the sitter's build)
+SEAT_TOP = -300          # top of the seat cushion: the sitter's hips rest here
+
+
+def _sofa_pen(im, x, ground, u):
     pen = Pen(im, x, ground, u)
-    hw = 330 * width
-    cream, dark, light = (238, 222, 182), (222, 200, 152), (250, 238, 206)
-    wood, wood_d = (150, 88, 40), (112, 64, 28)
 
     def rr(x0, y0, x1, y1, r, fill):
         pen.d.rounded_rectangle(pen.box(x0, y0, x1, y1), radius=max(1, round(r * u)), fill=fill,
                                 outline=OUT, width=pen.wd(OL))
-    for lx in (-hw + 40, hw - 70):                                   # short wooden legs
+    return pen, rr
+
+
+def draw_sofa(im, x, ground, u, width=1.0):
+    """An armchair (cream cushions, wooden frame), centred at pixel x on the floor at pixel `ground`, in character
+    units of u pixels: the back, the seat and the base, drawn before the character who sits in it. The arms are
+    drawn after the character (draw_sofa_front), so the sitter is inside the chair."""
+    pen, rr = _sofa_pen(im, x, ground, u)
+    hw = SOFA_HW * width
+    cream, dark, light = (238, 222, 182), (222, 200, 152), (250, 238, 206)
+    wood_d = (112, 64, 28)
+    for lx in (-hw + 30, hw - 60):                                   # short wooden legs
         rr(lx, -46, lx + 30, 0, 4, wood_d)
-    rr(-hw + 20, -610, hw - 20, -230, 60, cream)                     # backrest
-    for cx in ((-hw / 2 + 10, hw / 2 - 10) if width > 1.4 else (0,)):
-        w2 = (hw - 90) / (2 if width > 1.4 else 1)
-        rr(cx - w2, -560, cx + w2, -280, 46, light)                  # back cushions
-    rr(-hw + 30, -300, hw - 30, -52, 26, dark)                       # seat base
-    rr(-hw + 50, -330, hw - 50, -238, 30, light)                     # seat cushion
-    for ax in (-hw, hw - 86):                                        # wooden arms
-        rr(ax, -430, ax + 86, -46, 34, wood)
-        pen.line([(ax + 18, -404), (ax + 68, -404)], wood_d, 8)
+    rr(-hw + 10, -760, hw - 10, -260, 70, cream)                     # tall backrest, behind the shoulders
+    rr(-hw + 60, -700, hw - 60, -330, 50, light)                     # back cushion
+    rr(-hw + 20, SEAT_TOP + 40, hw - 20, -52, 22, dark)              # seat base (seen between the shins)
+    rr(-hw + 40, SEAT_TOP - 26, hw - 40, SEAT_TOP + 56, 30, light)   # seat cushion: the hips rest on it
+    pen.line([(-hw + 60, SEAT_TOP + 44), (hw - 60, SEAT_TOP + 44)], (206, 184, 140), 6)
+
+
+def draw_sofa_front(im, x, ground, u, width=1.0):
+    """The armchair's wooden arms, drawn over the sides of the character sitting in it."""
+    pen, rr = _sofa_pen(im, x, ground, u)
+    hw = SOFA_HW * width
+    wood, wood_d = (150, 88, 40), (112, 64, 28)
+    for ax in (-hw - 6, hw - 78):
+        rr(ax, -470, ax + 84, -46, 32, wood)
+        pen.line([(ax + 16, -444), (ax + 66, -444)], wood_d, 8)
 
 
 def is_flat_look(look_id: str) -> bool:
@@ -1108,24 +1124,25 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
             col = sp["bottom_color"] if not dress else _mix(sp["bottom_color"], 1.1)
             pen.limb([hip, knee, foot], 38 * lw ** 0.5, col if sp["bottom"] != "shorts" else skin)
             pen.ellipse(foot[0] - 30, foot[1] - 18, foot[0] + 44, foot[1] + 14, sp.get("shoe", (44, 40, 42)))
-    if sit:                                         # seated: a lap toward us, knees apart, shins down to the floor
+    if sit:                                         # seated: thighs come toward us over the seat, knees, shins down
         col = sp["bottom_color"] if not dress else _mix(sp["bottom_color"], 1.1)
-        floor = 26 - drop - pose["dy"]             # feet a little forward of the sofa (lower on the screen)
-        ky = hip_y + 66                             # knee height: just below the hips (thighs come toward us)
-        kx = 92 * lw
+        floor = 30 - drop - pose["dy"]             # feet a little in front of the chair (lower on the screen)
+        ky = hip_y + 120                            # knees: lower than the hips, over the front of the seat
+        kx = 82 * lw
         for side in (-1, 1):
-            knee, foot = (side * kx, ky), (side * (kx + 6), floor - 30)
+            knee, foot = (side * kx, ky), (side * (kx - 4), floor - 30)
+            if not dress:                           # the thigh, foreshortened: from the hip forward to the knee
+                pen.limb([(side * 52 * lw, hip_y + 10), knee], 74 * lw ** 0.5, col)
             if sp["bottom"] == "shorts":
                 pen.limb([knee, foot], 30, skin)
             else:
-                pen.limb([(knee[0], knee[1] - 10), foot], (36 if dress else 40) * lw ** 0.5, col)
-            pen.ellipse(foot[0] - 40 + side * 6, floor - 50, foot[0] + 40 + side * 6, floor - 6,
+                pen.limb([knee, foot], (36 if dress else 40) * lw ** 0.5, col)
+            pen.ellipse(foot[0] - 44 + side * 6, floor - 54, foot[0] + 44 + side * 6, floor - 4,
                         sp.get("shoe", (44, 40, 42)))
-        if not dress:                               # the lap: both thighs seen end-on, knees as round caps
-            pen.poly(_sup(0, hip_y + 34, kx + 36, 62, n=3.2), col)
+        if not dress:                               # round knee caps, a little lighter (they are nearest to us)
             for side in (-1, 1):
-                pen.ellipse(side * kx - 40, ky - 42, side * kx + 40, ky + 30, _mix(col, 1.08))
-            pen.line([(0, hip_y + 4), (0, hip_y + 74)], _mix(col, 0.8), 5)
+                pen.ellipse(side * kx - 42, ky - 40, side * kx + 42, ky + 34, _mix(col, 1.12))
+            pen.line([(0, hip_y + 4), (0, hip_y + 60)], _mix(col, 0.8), 5)
     for side in ((-1, 1) if pose.get("ride") is None and not sit else ()):   # (a vehicle hides the legs)
         sw = 26 * math.sin(wk * 8) * side if wk else 0
         top, foot = (side * 44 * lw, hip_y), (side * 50 * lw + sw, -34)
@@ -3179,6 +3196,7 @@ class FlatComposer:
                 seat = draw_office_chair if bid in OFFICE_BGS else draw_sofa
                 seat(im, a["x"] * k, a["g"] * k, u * 1.04 * sp_.get("build", 1.0) ** 0.25,
                      width=max(1.0, sp_.get("build", 1.0) ** 0.8))
+                a["_chair"] = (u * 1.04 * sp_.get("build", 1.0) ** 0.25, max(1.0, sp_.get("build", 1.0) ** 0.8))
         glows = []                               # faces lit by a phone screen (for the dark lighting)
         for a in lay["actors"]:
             cid = a["cid"]
@@ -3317,6 +3335,8 @@ class FlatComposer:
                 fx += a["face"] * pose["move"][0] * hk
                 fy += pose["move"][1] * hk
             im.paste(spr, (round(fx - ax), round(fy - ay)), spr)
+            if a.get("_chair") and bid not in OFFICE_BGS and self._seated(sc, cid, t) and not walk:
+                draw_sofa_front(im, a["x"] * k, a["g"] * k, *a["_chair"])      # the chair's arms, over the sitter
             if bid in OFFICE_BGS and sp["kind"] == "human" and self._sits(sc, cid) and self._seated(sc, cid, t):
                 draw_desk(im, fx, fy, scale_px * sp.get("height", 1.0))      # behind a desk in the office
             if action in PHONE_ACTIONS and sp.get("kind") in ("human", "stick"):
