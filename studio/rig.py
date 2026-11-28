@@ -196,7 +196,7 @@ def pose_for(action: str | None, emotion: str, t: float, speaking: bool, phase: 
         p["look_y"] = 0.8
         p["eyes_closed"] = 1.0
         p["hand_r"] = "open"
-    elif act in ("phone_call", "sit_call"):   # phone held to the right ear: lift the arm, tilt the head toward it
+    elif act in ("phone_call", "sit_call", "squat_call"):   # phone held to the right ear: lift the arm, tilt the head toward it
         p["arm_r"], p["ua_fs_r"], p["fore_r"] = 1.55, 0.9, 2.05
         p["head"] = -0.09
         p["prop"] = "phone_ear"

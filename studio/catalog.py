@@ -28,7 +28,8 @@ ACTION_LABELS = {
     "ride_in": "Ride in on a cycle", "ride_out": "Ride away on a cycle", "ride_cycle": "Ride a cycle (in place)",
     "run_out": "Run away (leaves running)",
     "sit": "Sit on sofa", "sit_phone": "Sit and use phone", "sit_tea": "Sit and drink tea",
-    "sit_read": "Sit and read", "sit_eat": "Sit and eat a snack", "sit_sleep": "Sit and sleep", "sit_call": "Sit and talk on the phone", "folded_hands": "Folded hands (pleading, namaste)", "wag_finger": "Wag a finger (scolding)",
+    "sit_read": "Sit and read", "sit_eat": "Sit and eat a snack", "sit_sleep": "Sit and sleep", "sit_call": "Sit and talk on the phone", "folded_hands": "Folded hands (pleading, namaste)", "squat": "Squat on the ground",
+    "warm_hands": "Squat and warm hands at a fire", "squat_call": "Squat and talk on the phone", "wag_finger": "Wag a finger (scolding)",
     "wipe_sweat": "Wipe sweat off the forehead (nervous)",
     "go_to_bag": "Walk up to the mystery bag (bends toward it)",
 }
@@ -324,6 +325,8 @@ FLAT_BACKGROUNDS = {
     "flat_bathroom": "Flat cartoon: bathroom (tiles, shower curtain, bucket and mug, wooden door)",
     "flat_home": "Flat cartoon: home living room (ceiling fan turning, TV playing, curtains in the breeze)",
     "flat_fridge": "Flat cartoon: inside a fridge (shelves, bottles, eggs, a bowl of chana in front)",
+    "flat_rooftop": "Flat cartoon: rooftop terrace at night (moon, lit windows, clothes line, plant, bucket)",
+    "flat_bonfire": "Flat cartoon: village lane at night with a bonfire (shop with bulbs, motorbike, street lamp)",
     "flat_white": "Plain white (stickman comedy)",
     "flat_doodle": "Doodle paper (hand-drawn hills, sun, clouds)",
 }

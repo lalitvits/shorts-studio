@@ -191,7 +191,8 @@ def normalize(tl: dict) -> dict:
                 captions=bool(tl.get("captions", True)), language=str(tl.get("language") or "hi"),
                 cinematic=bool(tl.get("cinematic", True)),
                 hook=" ".join(str(tl.get("hook") or "").split())[:80], effects=bool(tl.get("effects", True)),
-                pace="tight" if tl.get("pace") == "tight" else "normal", hook_stay=bool(tl.get("hook_stay")))
+                pace="tight" if tl.get("pace") == "tight" else "normal", hook_stay=bool(tl.get("hook_stay")),
+                overlay_pos="top" if tl.get("overlay_pos") == "top" else "middle")
 
 
 @dataclass
@@ -741,7 +742,7 @@ def _chunks(words: list) -> list:
 
 
 def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = True, hook: str = "",
-             hook_end: float = 2.4, language: str = "hi", hook_stay: bool = False) -> str:
+             hook_end: float = 2.4, language: str = "hi", hook_stay: bool = False, overlay_top: bool = False) -> str:
     """Captions, the hook title and text-card titles, in one ASS subtitle file."""
     size, outline, margin_v = int(h * 0.05), max(2, int(h * 0.006)), int(h * 0.29)
     head = (
@@ -760,6 +761,8 @@ def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = Tru
         f"{int(outline * 1.5)},2,5,{int(w * 0.08)},{int(w * 0.08)},0,1\n"
         f"Style: Over,{font_family},{int(h * 0.058)},&H00FFFFFF,&H00FFFFFF,&H002A1FD0,&H002A1FD0,-1,0,0,0,100,100,0,0,3,"
         f"{int(h * 0.012)},0,2,{int(w * 0.06)},{int(w * 0.06)},{int(h * 0.2)},1\n"
+        f"Style: OverTop,{font_family},{int(h * 0.036)},&H00141414,&H00141414,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,"
+        f"{max(4, int(h * 0.009))},0,8,{int(w * 0.08)},{int(w * 0.08)},{int(h * 0.11)},1\n"
         f"Style: Explain,{font_family},{int(h * 0.046)},&H00FFFFFF,&H00FFFFFF,&H00301810,&H96000000,-1,0,0,0,100,100,0,0,1,"
         f"{int(outline * 1.4)},2,2,{int(w * 0.06)},{int(w * 0.06)},{int(h * 0.09)},1\n"
         + overlays.popup_ass_styles(w, h, font_family) + "\n"
@@ -788,7 +791,7 @@ def make_ass(sched: list, w: int, h: int, font_family: str, captions: bool = Tru
                 parts = [x.strip().replace("{", "").replace("}", "") for x in ln.overlay.split("|") if x.strip()]
                 if parts:
                     txt = parts[0] + "".join("\\N{\\fs%d}%s" % (int(h * 0.036), x) for x in parts[1:])
-                    events.append(f"Dialogue: 3,{_ass_time(ln.start + 0.05)},{_ass_time(sc.end)},Over,,0,0,0,,"
+                    events.append(f"Dialogue: 3,{_ass_time(ln.start + 0.05)},{_ass_time(sc.end)},{'OverTop' if overlay_top else 'Over'},,0,0,0,,"
                                   "{\\fad(150,200)\\fscx70\\fscy70\\t(0,220,\\fscx105\\fscy105)\\t(220,340,\\fscx100\\fscy100)}"
                                   + txt)
             if getattr(ln, "broll", "") in kitchen.EXPLAINERS:         # the explainer's words, step by step
@@ -1026,7 +1029,8 @@ def render_video(tl: dict, quality: str = "preview", progress=None) -> dict:
                             "Put a font such as Noto Sans Devanagari in assets/fonts (see README).")
         hook_end = total if tl.get("hook_stay") else min(2.4, total)      # the title stays all video, or 2.4 s
         (work / "captions.ass").write_text(make_ass(sched, w, h, family, tl["captions"], tl["hook"], hook_end,
-                                                    tl["language"], bool(tl.get("hook_stay"))), encoding="utf-8")
+                                                    tl["language"], bool(tl.get("hook_stay")),
+                                                    tl.get("overlay_pos") == "top"), encoding="utf-8")
         events = []                               # sound effects: hits, scene whooshes, the hook's pop
         if tl["effects"]:
             thrown = set(round(x, 3) for x in overlays.throw_hits(sched))

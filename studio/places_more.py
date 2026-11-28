@@ -18,7 +18,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from .realms import OUT, _sky
 
 MORE = ("flat_chai_tapri", "flat_sabzi_mandi", "flat_airport", "flat_bus_stop", "flat_white", "flat_doodle",
-        "flat_highway", "flat_bathroom", "flat_home", "flat_fridge")
+        "flat_highway", "flat_bathroom", "flat_home", "flat_fridge", "flat_rooftop",
+        "flat_bonfire")
 
 
 def _mix(c, k):
@@ -816,6 +817,116 @@ def _fridge(im, d, P, L, PW, ps, rnd):
         x, y = rnd.uniform(330, PW - 330), rnd.uniform(140, 300)
         d.ellipse(P(x - 6, y - 6, x + 6, y + 6), fill=(255, 255, 255))
 
+def _night_sky(d, im, ps, top=(16, 26, 62), bottom=(54, 72, 120), y1=1100):
+    _sky(d, im.width, ps, [(0, top), (y1, bottom)])
+
+
+def _rooftop(im, d, P, L, PW, ps, rnd):
+    """A rooftop terrace at night: moon and stars, houses with lit windows behind, the terrace wall with damp
+    patches, a clothes line with a dupatta, a potted plant, a steel bucket and a water tank."""
+    _night_sky(d, im, ps)
+    d.ellipse(P(1900, 120, 2040, 260), fill=(250, 250, 240))                                    # moon
+    for _ in range(50):
+        x, y = rnd.uniform(0, PW), rnd.uniform(20, 600)
+        d.ellipse(P(x - 4, y - 4, x + 4, y + 4), fill=(240, 240, 255))
+    x = 0
+    while x < PW:                                                                               # houses behind
+        w, h = rnd.uniform(220, 380), rnd.uniform(380, 760)
+        col = rnd.choice(((40, 52, 86), (52, 60, 96), (34, 44, 74)))
+        d.rectangle(P(x, 1100 - h, x + w, 1100), fill=col)
+        for wy in range(int(1100 - h + 60), 1060, 120):
+            for wx in range(int(x + 40), int(x + w - 60), 110):
+                if rnd.random() < 0.55:
+                    d.rectangle(P(wx, wy, wx + 50, wy + 60), fill=(250, 210, 110))
+        x += w + rnd.uniform(10, 40)
+    d.rectangle(P(0, 1050, PW, 1460), fill=(222, 170, 126))                                     # terrace wall
+    d.rectangle(P(0, 1030, PW, 1060), fill=(236, 190, 146), outline=OUT, width=L(5))
+    for _ in range(14):                                                                         # damp patches
+        x, y = rnd.uniform(0, PW), rnd.uniform(1100, 1420)
+        d.ellipse(P(x - 70, y - 30, x + 70, y + 30), fill=(206, 152, 110))
+    _ground(d, im, ps, 1460, (196, 150, 112), (170, 124, 90))                                   # terrace floor
+    d.line(P(0, 1460, PW, 1460), fill=OUT, width=L(6))
+    d.line(P(0, 260, 900, 300), fill=(60, 60, 60), width=L(4))                                  # clothes line
+    d.polygon([tuple(P(250, 270)), tuple(P(380, 276)), tuple(P(400, 640)), tuple(P(230, 620))], fill=(236, 110, 150))
+    d.rectangle(P(560, 280, 700, 520), fill=(240, 240, 230), outline=OUT, width=L(3))
+    d.rectangle(P(80, 0, 130, 1460), fill=(200, 150, 110), outline=OUT, width=L(4))             # a pillar
+    d.polygon([tuple(P(340, 1440)), tuple(P(520, 1440)), tuple(P(490, 1640)), tuple(P(370, 1640))],
+              fill=(200, 100, 50), outline=OUT)                                                 # plant pot
+    for a in range(-70, 80, 18):
+        d.line(P(430, 1440, 430 + 200 * math.sin(math.radians(a)), 1440 - 240 * math.cos(math.radians(a))),
+               fill=(70, 140, 70), width=L(14))
+    d.polygon([tuple(P(600, 1520)), tuple(P(740, 1520)), tuple(P(720, 1660)), tuple(P(620, 1660))],
+              fill=(180, 186, 196), outline=OUT)                                                # bucket
+    d.rounded_rectangle(P(2150, 820, 2500, 1100), radius=L(40), fill=(40, 40, 46), outline=OUT, width=L(5))   # tank
+
+
+FIRE_X = 1300                         # where the bonfire burns in flat_bonfire (picture units)
+
+
+def _bonfire(im, d, P, L, PW, ps, rnd):
+    """A village lane at night in winter: lime-washed houses, a little shop with a string of bulbs and jars of
+    sweets, a motorbike parked, a street lamp, a dusty ground; the bonfire burns in the middle (see animate)."""
+    _night_sky(d, im, ps, (14, 22, 52), (40, 52, 92), 700)
+    for x0, x1, h, col in ((0, 700, 700, (226, 196, 150)), (700, 1150, 560, (214, 178, 132)),
+                           (1500, 2000, 620, (230, 202, 160)), (2000, PW, 760, (208, 172, 128))):
+        d.rectangle(P(x0, 1250 - h, x1, 1250), fill=col, outline=OUT, width=L(4))
+        d.rectangle(P(x0 + 60, 1250 - h + 120, x0 + 200, 1250 - h + 260), fill=(250, 200, 100), outline=OUT, width=L(4))
+    d.rectangle(P(1150, 760, 1500, 1250), fill=(120, 70, 40), outline=OUT, width=L(5))          # shop
+    d.polygon([tuple(P(1110, 760)), tuple(P(1540, 760)), tuple(P(1500, 680)), tuple(P(1150, 680))], fill=(200, 80, 40),
+              outline=OUT)
+    for k in range(6):                                                                          # jars of sweets
+        x = 1180 + k * 52
+        d.rounded_rectangle(P(x, 1100, x + 40, 1170), radius=L(8), fill=(250, 170, 60), outline=OUT, width=L(3))
+    d.rectangle(P(1150, 1170, 1500, 1250), fill=(150, 96, 56), outline=OUT, width=L(4))
+    d.line(P(1100, 790, 1560, 800), fill=(60, 50, 40), width=L(3))                              # bulb string
+    for k in range(9):
+        x = 1110 + k * 55
+        d.ellipse(P(x - 12, 792, x + 12, 820), fill=(255, 220, 120))
+    d.rectangle(P(2300, 400, 2320, 1250), fill=(70, 70, 76))                                    # street lamp
+    d.polygon([tuple(P(2250, 400)), tuple(P(2370, 400)), tuple(P(2340, 440)), tuple(P(2280, 440))], fill=(70, 70, 76))
+    d.ellipse(P(2280, 430, 2340, 470), fill=(255, 230, 150))
+    bx = 1850                                                                                   # motorbike
+    for wx in (bx, bx + 300):
+        d.ellipse(P(wx - 70, 1130, wx + 70, 1270), fill=(30, 30, 34), outline=OUT, width=L(4))
+    d.polygon([tuple(P(bx, 1180)), tuple(P(bx + 300, 1180)), tuple(P(bx + 230, 1100)), tuple(P(bx + 60, 1100))],
+              fill=(40, 40, 46), outline=OUT)
+    _ground(d, im, ps, 1250, (150, 108, 70), (118, 80, 50))                                     # dusty ground
+    d.line(P(0, 1250, PW, 1250), fill=OUT, width=L(5))
+    for _ in range(60):
+        x, y = rnd.uniform(0, PW), rnd.uniform(1270, 1900)
+        d.ellipse(P(x - 6, y - 3, x + 6, y + 3), fill=(130, 92, 60))
+
+
+def _bonfire_animate(d, t, px, s, visible):
+    """The bonfire: logs, flickering flames in three layers, rising sparks, and a warm glow on the ground."""
+    X, Y = FIRE_X, 1780
+    if not visible(X, 600):
+        return
+    cx, cy = px(X, Y)
+    for r, a_ in ((520, 50), (360, 70), (220, 90)):                                              # warm glow
+        d.ellipse([cx - r * s, cy - r * 0.45 * s, cx + r * s, cy + r * 0.45 * s], fill=(255, 150, 60, a_))
+    for ang in (-25, 25, 0):                                                                    # logs
+        a = math.radians(ang)
+        dx, dy = 170 * math.cos(a) * s, 30 * math.sin(a) * s
+        d.line([(cx - dx, cy + 20 * s - dy), (cx + dx, cy + 20 * s + dy)], fill=(90, 56, 30, 255), width=max(2, round(36 * s)))
+    for layer, (col, scale) in enumerate((((240, 80, 30), 1.0), ((255, 150, 40), 0.72), ((255, 230, 120), 0.42))):
+        pts = []
+        n = 9
+        for i in range(n + 1):
+            u = i / n
+            x = (u - 0.5) * 300 * scale
+            h = (330 * scale) * (0.35 + 0.65 * math.sin(math.pi * u)) * (0.8 + 0.25 * math.sin(t * 9 + i * 1.7 + layer))
+            pts.append((cx + x * s, cy - h * s))
+        pts += [(cx + 150 * scale * s, cy + 10 * s), (cx - 150 * scale * s, cy + 10 * s)]
+        d.polygon(pts, fill=col + (255,))
+    for k in range(8):                                                                          # sparks
+        u = (t * 0.7 + k / 8) % 1.0
+        x = cx + (60 * math.sin(k * 2.3 + t * 2) + (k - 4) * 14) * s
+        y = cy - (300 + 500 * u) * s
+        r = 6 * s * (1 - u)
+        d.ellipse([x - r, y - r, x + r, y + r], fill=(255, 200, 90, int(255 * (1 - u))))
+
+
 def _white(im, d, P, L, PW, ps, rnd):
     """Plain white, the classic stickman look: only a faint floor line."""
     d.rectangle(P(0, 0, PW, 1920), fill=(252, 252, 250))
@@ -869,7 +980,8 @@ def _doodle(im, d, P, L, PW, ps, rnd):
 
 DRAW = {"flat_chai_tapri": _chai_tapri, "flat_sabzi_mandi": _sabzi_mandi, "flat_airport": _airport,
         "flat_bus_stop": _bus_stop, "flat_white": _white, "flat_doodle": _doodle, "flat_highway": _highway,
-        "flat_bathroom": _bathroom, "flat_home": _home, "flat_fridge": _fridge}
+        "flat_bathroom": _bathroom, "flat_home": _home, "flat_fridge": _fridge,
+        "flat_rooftop": _rooftop, "flat_bonfire": _bonfire}
 
 
 def draw(bid, im, d, P, L, PW, ps, rnd):
@@ -915,6 +1027,8 @@ def animate(d, bid: str, t: float, px, s: float, visible, x0: float, vw: float, 
         _bathroom_door(d, px, s, t, *door)
     if bid == "flat_home":
         _home_animate(d, t, px, s, visible)
+    if bid == "flat_bonfire":
+        _bonfire_animate(d, t, px, s, visible)
     if bid == "flat_chai_tapri":
         _tapri_animate(d, t, px, s, visible, x0, vw, PW, birds)
     elif bid == "flat_sabzi_mandi":

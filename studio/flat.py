@@ -30,7 +30,7 @@ OL = 5.5                    # outline width (world units)
 FW, FH = 1080, 1920         # frame in world units
 STRONG = {"angry", "shocked", "surprised", "crying", "laughing", "scared", "excited"}
 # where the camera looks in a place whose key part must stay in view (picture x): next to the bathroom door
-VIEW_CENTRE = {"flat_bathroom": 1720}
+VIEW_CENTRE = {"flat_bathroom": 1720, "flat_bonfire": 1300}
 # the camera move that suits a line's emotion (when the line's move is "auto")
 MOVE_FOR = {"scared": "push_in", "worried": "push_in", "sad": "push_in", "crying": "push_in",
             "thinking": "push_in", "shocked": "punch_in", "surprised": "punch_in", "angry": "shake",
@@ -38,9 +38,9 @@ MOVE_FOR = {"scared": "push_in", "worried": "push_in", "sad": "push_in", "crying
             "excited": "punch_in", "embarrassed": "pull_out", "confused": "dutch", "disgusted": "dutch"}
 MOVE_CYCLE = ("push_in", "pan", "pull_out")
 SHOTS = ("auto", "wide", "single", "ots", "close")
-PHONE_ACTIONS = {"use_phone", "sit_phone", "phone_call", "sit_call"}
+PHONE_ACTIONS = {"use_phone", "sit_phone", "phone_call", "sit_call", "squat_call"}
 # actions a character keeps doing while someone else talks (on top of the rig's long activities)
-FLAT_PERSIST = PERSISTENT | {"cook", "hold_jug", "lower_jug", "hand_on_shoulder", "look_camera", "go_to_bag", "dance"} | \
+FLAT_PERSIST = PERSISTENT | {"squat", "warm_hands", "squat_call", "cook", "hold_jug", "lower_jug", "hand_on_shoulder", "look_camera", "go_to_bag", "dance"} | \
     stick.STAYS | stick.LOOPS
 TWO_PERSON = {"grab_hand", "hand_on_shoulder"} | stick.TWO_PERSON
 # actions that need the whole body in the shot (no medium shot from the knees up)
@@ -498,6 +498,18 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
         p["L"] = ("ik", -10, -690)
         p["prop"] = "phone"
         p["head_dy"] = 10
+    elif action in ("squat", "warm_hands", "squat_call"):   # squatting on the ground (by a fire, on the phone)
+        p["squat"] = True
+        if action == "warm_hands":           # both palms held out toward the fire, rubbed now and then
+            rub = 10 * math.sin(t * 6) if (t % 3) < 1.0 else 0.0
+            p["L"] = ("ik", 46 + rub, -600)          # both hands out in front, palms to the fire
+            p["R"] = ("ik", 46 - rub, -600)
+        elif action == "squat_call":
+            p["R"] = ("ik", 104, -878)
+            p["L"] = ("ik", 150, -470)        # forearm resting on the knee
+            p["prop"] = "phone_ear"
+        else:
+            p["L"] = p["R"] = ("ik", 150, -470)
     elif action == "wag_finger":            # scolding: the index finger up, wagging side to side
         p["R"] = ("fk", 150 + 14 * s(t * 13), 25)
         p["L"] = HIP_T
@@ -1150,7 +1162,8 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
     female = sp.get("female")
     dress = sp["bottom"] == "dress"
     sit = bool(pose.get("sit")) and pose.get("ride") is None and not back
-    drop = SIT_DROP if sit else 0.0                 # seated: the whole body is this much lower
+    squat = bool(pose.get("squat")) and not back
+    drop = SIT_DROP if sit else 300.0 if squat else 0.0     # seated / squatting: the whole body is lower
     pen = Pen(im, ox + pose["dx"] * s, oy + (pose["dy"] + drop) * s, s)
     skin, sk_d = sp["skin"], _mix(sp["skin"], 0.85)
     hx, hy, r = pose["head_dx"], -890 + pose["head_dy"], 104
@@ -1192,7 +1205,19 @@ def draw_human(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t):
             for side in (-1, 1):
                 pen.ellipse(side * kx - 42, ky - 40, side * kx + 42, ky + 34, _mix(col, 1.12))
             pen.line([(0, hip_y + 4), (0, hip_y + 60)], _mix(col, 0.8), 5)
-    for side in ((-1, 1) if pose.get("ride") is None and not sit else ()):   # (a vehicle hides the legs)
+    if squat:                                       # squatting: knees up high and wide, shins down to flat feet
+        col = sp["bottom_color"] if not dress else _mix(sp["bottom_color"], 1.1)
+        floor = -34 - drop - pose["dy"]
+        for side in (-1, 1):
+            hip, knee, foot = (side * 50 * lw, hip_y + 10), (side * 150 * lw, hip_y - 40), (side * 110 * lw, floor)
+            if sp["bottom"] == "shorts":
+                pen.limb([hip, knee], 56, col)
+                pen.limb([knee, foot], 30, skin)
+            else:
+                pen.limb([hip, knee, foot], (40 if not dress else 36) * lw ** 0.5, col)
+            pen.ellipse(foot[0] - 50 + side * 10, floor - 18, foot[0] + 50 + side * 10, floor + 18,
+                        sp.get("shoe", (44, 40, 42)))
+    for side in ((-1, 1) if pose.get("ride") is None and not sit and not squat else ()):   # (a vehicle hides the legs)
         sw = 26 * math.sin(wk * 8) * side if wk else 0
         top, foot = (side * 44 * lw, hip_y), (side * 50 * lw + sw, -34)
         if side > 0 and pose.get("kick"):              # a kick: the right leg swings forward
