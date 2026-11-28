@@ -13,7 +13,7 @@ from __future__ import annotations
 import math
 import random
 
-from PIL import ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from .realms import OUT, _sky
 
@@ -749,38 +749,72 @@ def _home_animate(d, t, px, s, visible):
 
 
 def _fridge(im, d, P, L, PW, ps, rnd):
-    """Inside a fridge: white walls, a light, glass shelves with bottles, an egg tray and leftovers; the fruits sit on
-    the lowest shelf (where the characters stand) and a steel bowl of chana is in front."""
-    d.rectangle(P(0, 0, PW, 1920), fill=(228, 238, 244))                                     # back wall
-    for x in (300, 2300):                                                                     # side walls (perspective)
-        d.polygon([tuple(P(x - 300 if x < 1000 else x + 300, 0)), tuple(P(x, 160)), tuple(P(x, 1580)),
-                   tuple(P(x - 300 if x < 1000 else x + 300, 1920))], fill=(206, 220, 230))
-    d.rounded_rectangle(P(1150, 40, 1450, 120), radius=L(20), fill=(255, 252, 230), outline=OUT, width=L(4))   # light
-    for y0 in (560, 1040):                                                                    # glass shelves
-        d.polygon([tuple(P(300, y0)), tuple(P(2300, y0)), tuple(P(2380, y0 + 40)), tuple(P(220, y0 + 40))],
-                  fill=(200, 226, 236), outline=OUT)
-    for i, (x, h, col) in enumerate(((520, 330, (60, 150, 220)), (640, 380, (230, 70, 60)), (760, 300, (60, 170, 90)),
-                                     (1820, 360, (250, 200, 50)), (1940, 300, (240, 240, 240)))):
-        d.rounded_rectangle(P(x - 45, 560 - h, x + 45, 560), radius=L(18), fill=col, outline=OUT, width=L(5))
-        d.rectangle(P(x - 20, 560 - h - 50, x + 20, 560 - h + 4), fill=col, outline=OUT, width=L(4))
-    d.rounded_rectangle(P(1000, 470, 1600, 560), radius=L(12), fill=(250, 246, 236), outline=OUT, width=L(5))   # egg tray
-    for k in range(6):
-        cx = 1050 + k * 95
-        d.ellipse(P(cx - 34, 410, cx + 34, 500), fill=(250, 244, 228), outline=OUT, width=L(4))
-    d.rounded_rectangle(P(560, 900, 900, 1040), radius=L(16), fill=(120, 190, 220), outline=OUT, width=L(5))  # tiffin
-    d.rectangle(P(600, 880, 860, 910), fill=(90, 150, 190), outline=OUT, width=L(4))
-    d.ellipse(P(1700, 920, 2100, 1040), fill=(250, 250, 250), outline=OUT, width=L(5))       # milk bowl
-    d.ellipse(P(1720, 930, 2080, 990), fill=(255, 255, 248))
-    d.rectangle(P(300, 1500, 2300, 1580), fill=(196, 222, 234))                               # crisper shelf edge
-    d.line(P(300, 1500, 2300, 1500), fill=OUT, width=L(5))
-    _ground(d, im, ps, 1580, (170, 196, 210), (140, 166, 182))
-    d.chord(P(900, 1560, 1700, 1980), 180, 360, fill=(196, 198, 206), outline=OUT, width=L(8))   # steel bowl of chana
-    rr = random.Random(5)
-    for _ in range(70):
-        x = rr.uniform(960, 1640)
-        y = rr.uniform(1640, 1770)
-        d.ellipse(P(x - 18, y - 14, x + 18, y + 14), fill=(196, 140, 70), outline=(150, 100, 50), width=L(2))
+    """Inside a real fridge: a white moulded plastic liner lit by an LED strip at the top (brighter at the top, cooler
+    and darker lower down), shelf-support ridges on the side walls, thick glass shelves with silver front trims,
+    everyday things on the shelves (milk packet, ketchup, jars, a covered bowl, eggs), clear crisper drawers with
+    vegetables at the bottom, and a little frost. The fruits stand on the middle glass shelf."""
+    W = im.width
+    for y in range(im.height):                                    # liner: warm-white near the light, cooler below
+        u = y / im.height
+        c = (int(246 - 40 * u), int(248 - 30 * u), int(250 - 16 * u))
+        d.line([(0, y), (W, y)], fill=c)
+    for x0, x1, sgn in ((0, 330, 1), (PW - 330, PW, -1)):        # side walls in perspective, with support ridges
+        xa, xb = (x0, x1) if sgn > 0 else (x1, x0)
+        d.polygon([tuple(P(xa, 0)), tuple(P(xb, 140)), tuple(P(xb, 1660)), tuple(P(xa, 1920))], fill=(214, 224, 232))
+        for yy in range(260, 1600, 120):
+            d.line(P(xa, yy - 40 * (1 if sgn > 0 else 1), xb, yy), fill=(194, 206, 216), width=L(8))
+            d.line(P(xa, yy - 34, xb, yy + 6), fill=(236, 242, 246), width=L(3))
+    d.rounded_rectangle(P(900, 30, 1700, 110), radius=L(30), fill=(255, 255, 246))                   # LED strip
+    glow = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    for r, a_ in ((900, 40), (600, 50), (350, 60)):
+        cx, cy = P(1300, 80)
+        gd.ellipse([cx - r * ps, cy - r * 0.5 * ps, cx + r * ps, cy + r * 0.5 * ps], fill=(255, 255, 235, a_))
+    im.paste(Image.alpha_composite(im.convert("RGBA"), glow.filter(ImageFilter.GaussianBlur(40 * ps))).convert(im.mode))
+    d = ImageDraw.Draw(im)
 
+    def shelf(y):                                                 # thick glass shelf with a silver front trim
+        d.polygon([tuple(P(330, y - 30)), tuple(P(PW - 330, y - 30)), tuple(P(PW - 250, y + 10)),
+                   tuple(P(250, y + 10))], fill=(214, 236, 242))
+        d.rectangle(P(250, y + 10, PW - 250, y + 34), fill=(176, 186, 196), outline=OUT, width=L(3))
+        d.line(P(260, y + 16, PW - 260, y + 16), fill=(240, 244, 248), width=L(4))                  # trim shine
+        d.line(P(380, y - 22, 900, y - 22), fill=(250, 255, 255), width=L(5))                       # glass glint
+    # top shelf: milk packet, ketchup, a jar of pickle, butter
+    d.polygon([tuple(P(470, 560)), tuple(P(620, 560)), tuple(P(620, 300)), tuple(P(545, 250)), tuple(P(470, 300))],
+              fill=(250, 250, 250), outline=OUT)
+    d.rectangle(P(470, 380, 620, 470), fill=(60, 120, 210))                                                      # milk
+    d.rounded_rectangle(P(700, 300, 790, 560), radius=L(30), fill=(200, 30, 30), outline=OUT, width=L(5))        # ketchup
+    d.rectangle(P(725, 250, 765, 305), fill=(240, 240, 240), outline=OUT, width=L(4))
+    d.rounded_rectangle(P(860, 380, 1040, 560), radius=L(20), fill=(206, 150, 60), outline=OUT, width=L(5))      # pickle
+    d.rectangle(P(850, 350, 1050, 390), fill=(230, 60, 50), outline=OUT, width=L(4))
+    d.rounded_rectangle(P(1700, 470, 1960, 560), radius=L(14), fill=(250, 220, 90), outline=OUT, width=L(5))     # butter
+    for k in range(6):                                                                                             # eggs
+        cx = 1160 + k * 85
+        d.ellipse(P(cx - 34, 450, cx + 34, 545), fill=(250, 240, 222), outline=OUT, width=L(3))
+    shelf(580)
+    # second shelf: a covered steel bowl, a tiffin, a bottle of water
+    d.chord(P(420, 960, 720, 1140), 180, 360, fill=(196, 200, 210), outline=OUT, width=L(5))
+    d.rectangle(P(420, 1045, 720, 1070), fill=(220, 224, 232), outline=OUT, width=L(4))
+    d.rounded_rectangle(P(1900, 940, 2140, 1110), radius=L(18), fill=(120, 190, 220), outline=OUT, width=L(5))
+    d.rectangle(P(1940, 915, 2100, 950), fill=(90, 150, 190), outline=OUT, width=L(4))
+    d.rounded_rectangle(P(1130, 800, 1220, 1110), radius=L(26), fill=(170, 214, 240), outline=OUT, width=L(5))
+    d.rectangle(P(1150, 760, 1200, 805), fill=(40, 90, 200), outline=OUT, width=L(4))
+    shelf(1130)
+    shelf(1700)                                                   # the fruits stand on this one
+    # crisper drawers: clear plastic with vegetables inside
+    for x0, x1 in ((300, 1280), (1320, PW - 300)):
+        d.rounded_rectangle(P(x0, 1750, x1, 2000), radius=L(24), fill=(206, 226, 222), outline=OUT, width=L(5))
+        rr = random.Random(x0)
+        for _ in range(9):
+            cx, cy = rr.uniform(x0 + 80, x1 - 80), rr.uniform(1830, 1900)
+            col = rr.choice(((90, 160, 70), (230, 120, 40), (200, 40, 40), (120, 180, 80)))
+            d.ellipse(P(cx - 60, cy - 40, cx + 60, cy + 40), fill=col)
+        d.rectangle(P(x0 + 10, 1760, x1 - 10, 2000), fill=None, outline=(240, 248, 248), width=L(3))
+        d.rounded_rectangle(P((x0 + x1) / 2 - 120, 1770, (x0 + x1) / 2 + 120, 1806), radius=L(16),
+                            fill=(236, 244, 244), outline=OUT, width=L(4))                     # drawer handle
+    for _ in range(40):                                                                         # frost specks
+        x, y = rnd.uniform(330, PW - 330), rnd.uniform(140, 300)
+        d.ellipse(P(x - 6, y - 6, x + 6, y + 6), fill=(255, 255, 255))
 
 def _white(im, d, P, L, PW, ps, rnd):
     """Plain white, the classic stickman look: only a faint floor line."""

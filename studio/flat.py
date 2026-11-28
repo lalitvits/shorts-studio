@@ -2359,6 +2359,9 @@ BRAIN_BOX = (-330, -1130, 330, 40)
 def draw_brain(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t, speaking):
     """'My brain': a floating pink cartoon brain with a face, little devil horns, tiny arms and a soft glow."""
     bob = 18 * math.sin(t * 2.4) + (6 * math.sin(t * 9) if speaking else 0)
+    if sp.get("shape") in ("apple", "pear", "mango"):  # fruits stand on the shelf (feet on the ground), little hops
+        oy += 470 * s
+        bob = -abs(10 * math.sin(t * (6 if speaking else 2.4)))
     if emotion == "laughing":                         # bouncing with laughter
         bob += 14 * abs(math.sin(t * 11))
     elif emotion == "angry":                          # trembling with rage
