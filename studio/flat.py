@@ -131,6 +131,18 @@ def hold_prop(pose: dict, prop: str, action: str):
     """Put the held prop in the character's hands (keeps the action's own prop when it has one)."""
     if prop in ("glass", "bottle", "cola", "cutting_chai", "kulhad") and pose.get("prop") == "cup":   # drinking from it
         pose["prop"] = prop
+        if prop in ("bottle", "cola"):          # a bottle: tipped up to the mouth, head back, eyes shut, gulping
+            sw = pose.get("lift", 0.0)
+            pose["prop"] = prop + "_swig"
+            pose["swig"] = sw
+            pose["R"] = ("ik", 60 + 20 * sw, -700 - 200 * sw)
+            if sw < 0.35:                       # not up at the mouth yet: held upright
+                pose["prop"] = prop
+            pose["head_dy"] = pose.get("head_dy", 0) - 22 * sw
+            pose["head_dx"] = pose.get("head_dx", 0) + 8 * sw
+            if sw > 0.5:
+                pose["eyes"] = "closed"
+                pose["chew"] = 0.18 + 0.12 * abs(math.sin(sw * 40))
         return
     if prop in FOODS and pose.get("prop") == "snack":                  # eating it
         pose["prop"] = prop
@@ -492,6 +504,7 @@ def pose_for(action: str, emotion: str, t: float, speaking: bool, key: str = "")
         lift = 0.5 + 0.5 * s(t * 1.3)
         p["R"] = ("ikd", 40, -700 - 110 * lift ** 6)       # elbow down: the cup comes up to the mouth from below
         p["prop"] = "cup"
+        p["lift"] = lift ** 6
     elif action in ("read_book", "sit_read"):
         p["L"] = ("ik", -55, -700)
         p["R"] = ("ik", 55, -700)
@@ -1859,6 +1872,31 @@ def _prop(pen, kind, hand, other=None, skin=None, bite=0):
     if kind == "snack" and bite:
         pen.circle(x, y - 18, 22 * k, (230, 180, 80), 4)
         return
+    if kind == "burger":                    # each bite takes a scalloped bite out of the right side
+        bt = min(bite, 3)
+        xr = x + 62 - 24 * bt                        # the bitten edge moves left with every bite
+        yc = y - 44
+        crumb = (250, 232, 180)
+        bun = []                                     # the top bun: a half dome that ends at the bitten edge
+        for i in range(25):
+            a_ = math.pi * i / 24
+            bx = x - 62 * math.cos(a_)
+            bun.append((min(bx, xr), yc - 32 - 38 * math.sin(a_)))
+        bun += [(xr, yc - 32), (x - 62, yc - 32)]
+        pen.poly(bun, (226, 160, 70), 4)
+        for y0, y1, col in ((yc - 34, yc - 18, (110, 190, 70)), (yc - 20, yc - 4, (250, 200, 40)),
+                            (yc - 10, yc + 12, (110, 60, 36)), (yc + 10, yc + 34, (226, 160, 70))):
+            pen.d.rounded_rectangle(pen.box(x - 62, y0, xr, y1), radius=8 * pen.s, fill=col, outline=OUT,
+                                    width=pen.wd(3))
+        for dx in (-30, 0, 26):
+            if x + dx < xr - 10:
+                pen.ellipse(x + dx - 5, yc - 54, x + dx + 5, yc - 46, (255, 244, 210), 0)
+        if bt:                                       # the bite: the top bun ends at xr too, with scalloped bread
+            for k_ in range(4):
+                cy_ = yc - 60 + k_ * 26
+                pen.ellipse(xr - 16, cy_ - 15, xr + 12, cy_ + 15, crumb, 3)
+        pen.circle(x, y, 24, skin or (200, 140, 95), 4)
+        return
     if kind in FOODS:                       # held up in the fingers
         _food(_scaled(pen, x, y - 44, k) if k < 1 else pen, kind, x, y - 44)
         pen.circle(x, y, 24, skin or (200, 140, 95), 4)
@@ -1908,6 +1946,23 @@ def _prop(pen, kind, hand, other=None, skin=None, bite=0):
         pen.poly([(x - 26, y - 70), (x + 26, y - 70), (x + 20, y + 16), (x - 20, y + 16)], (225, 240, 250), 4)
         pen.poly([(x - 23, y - 40), (x + 23, y - 40), (x + 19, y + 12), (x - 19, y + 12)], (130, 190, 240), 0)
         pen.circle(x, y - 6, 24, skin or (200, 140, 95), 4)
+        return
+    if kind in ("cola_swig", "bottle_swig"):  # a bottle tipped up: the neck at the lips, the bottom up and out
+        body, label = ((52, 30, 24), (214, 36, 40)) if kind == "cola_swig" else ((150, 205, 245), (60, 130, 220))
+        nx, ny = x - 46, y + 58                     # the neck, at the mouth (below-left of the hand)
+        dx_, dy_ = 0.62, -0.78                      # along the bottle, toward its bottom (up and out)
+        px_, py_ = -dy_, dx_                        # across the bottle
+
+        def R(u, v):
+            return (nx + dx_ * u + px_ * v, ny + dy_ * u + py_ * v)
+        pen.poly([R(0, -12), R(0, 12), R(50, 28), R(50, -28)], body, 4)                # neck and shoulder
+        pen.poly([R(50, -28), R(50, 28), R(230, 28), R(230, -28)], body, 4)            # body
+        pen.poly([R(110, -27), R(110, 27), R(160, 27), R(160, -27)], label, 0)         # label
+        pen.line([R(60, -14), R(220, -14)], _mix(body, 1.6), 4)                        # shine
+        for k_ in range(3):                                                             # bubbles
+            bx, by = R(200 - 45 * k_, 8 - 6 * k_)
+            pen.circle(bx, by, 5, (255, 255, 255), 0)
+        pen.circle(x, y + 4, 24, skin or (200, 140, 95), 4)
         return
     if kind == "cola":                      # a big bottle of cola
         pen.d.rounded_rectangle(pen.box(x - 26, y - 130, x + 26, y + 44), radius=14 * pen.s, fill=(52, 30, 24),
