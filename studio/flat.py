@@ -185,6 +185,40 @@ STAND_UP = {"walk", "walk_in", "walk_out", "run_in", "run_out", "jump", "dance",
 OFFICE_BGS = {"flat_office", "office"}     # a seated character here gets a boss's chair and a desk
 
 
+def _fridge_frame(im, W, H, t, open_=1.0):
+    """The inside of a fridge around the edges of the frame (we look out of it at the person in the kitchen), its
+    cold light, and the door that swings open at the start (open_ 0..1)."""
+    k = W / 1080
+    d = ImageDraw.Draw(im, "RGBA")
+
+    def P(pts):
+        return [(x * k, y * k) for x, y in pts]
+    wall, edge = (226, 236, 242, 255), (196, 210, 220, 255)
+    d.polygon(P([(0, 0), (150, 150), (150, 1640), (0, 1920)]), fill=wall, outline=OUT + (255,))        # left wall
+    d.polygon(P([(1080, 0), (930, 150), (930, 1640), (1080, 1920)]), fill=wall, outline=OUT + (255,))  # right wall
+    d.polygon(P([(0, 0), (1080, 0), (930, 150), (150, 150)]), fill=edge, outline=OUT + (255,))         # top
+    d.rounded_rectangle(P([(440, 40), (640, 100)]), radius=14 * k, fill=(255, 252, 226, 255))             # light
+    d.polygon(P([(0, 1920), (150, 1640), (930, 1640), (1080, 1920)]), fill=(206, 224, 234, 255), outline=OUT + (255,))
+    d.line(P([(150, 1640), (930, 1640)]), fill=OUT + (255,), width=max(1, round(6 * k)))                 # shelf edge
+    for i, (x, h, col) in enumerate(((60, 300, (60, 150, 220)), (1000, 340, (230, 70, 60)))):            # bottles
+        d.rounded_rectangle(P([(x - 40, 1640 - h), (x + 40, 1640)]), radius=16 * k, fill=col + (255,),
+                            outline=OUT + (255,), width=max(1, round(4 * k)))
+    for cx, col in ((330, (214, 40, 36)), (470, (170, 200, 70)), (620, (250, 176, 40)), (760, (214, 40, 36))):
+        d.ellipse(P([(cx - 70, 1700), (cx + 70, 1850)]), fill=col + (255,), outline=OUT + (255,),
+                  width=max(1, round(5 * k)))                                                         # fruit tops
+    glow = Image.new("RGBA", im.size, (220, 240, 255, 40))                                            # cold light
+    im.alpha_composite(glow)
+    if open_ < 1.0:                              # the door swinging open toward the left, light pouring in
+        w = 1080 * (1 - open_)
+        d.polygon(P([(0, -60 * open_), (w, 60 * open_), (w, 1920 - 60 * open_), (0, 1920 + 60 * open_)]),
+                  fill=(244, 246, 250, 255), outline=OUT + (255,))
+        if w > 120:
+            d.rounded_rectangle(P([(w - 90, 760), (w - 60, 1160)]), radius=12 * k, fill=(170, 176, 186, 255))
+        if open_ > 0:
+            flash = Image.new("RGBA", im.size, (255, 255, 240, int(120 * (1 - open_))))
+            im.alpha_composite(flash)
+
+
 def draw_office_chair(im, x, ground, u, width=1.0):
     """A tall red leather office chair (a boss's chair), drawn before the character who sits in it."""
     pen = Pen(im, x, ground, u)
@@ -274,6 +308,7 @@ class Pen:
     """Draws in character units: origin at the feet, y up is negative. s = pixels per unit."""
 
     def __init__(self, im, ox, oy, s):
+        self.img = im
         self.d = ImageDraw.Draw(im)
         self.ox, self.oy, self.s = ox, oy, s
 
@@ -1696,6 +1731,70 @@ def _phone_back(pen, cx, cy, w, h, skin=None):
                 pen.ellipse(cx + side * (w / 2) - 13, fy - 9, cx + side * (w / 2) + 13, fy + 9, skin, 3)
 
 
+def _label_text(pen, text, cx, cy, ang_deg, size):
+    """White bold letters centred at (cx, cy) in character units, rotated by ang_deg (for a label)."""
+    from PIL import ImageFont
+    px = max(6, round(size * pen.s))
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", px)
+    except OSError:
+        font = ImageFont.load_default()
+    tw = pen.d.textlength(text, font=font)
+    tile = Image.new("RGBA", (int(tw) + 4, int(px * 1.3) + 4), (0, 0, 0, 0))
+    ImageDraw.Draw(tile).text((2, 0), text, font=font, fill=(255, 255, 255, 255))
+    if ang_deg:
+        tile = tile.rotate(ang_deg, expand=True, resample=Image.BICUBIC)
+    X, Y = pen.p(cx, cy)
+    _paste_on(pen, tile, X, Y)
+
+
+def _paste_on(pen, tile, X, Y):
+    img = pen.img
+    img.alpha_composite(tile, (max(0, round(X - tile.width / 2)), max(0, round(Y - tile.height / 2))))
+
+
+def _fingers(pen, x, y, ang, width, skin):
+    """Four fingers wrapped round something held (a bottle), across it, plus the thumb; centred at (x, y)."""
+    skin = skin or (200, 140, 95)
+    dark = _mix(skin, 0.82)
+    ca, sa = math.cos(math.radians(ang)), math.sin(math.radians(ang))
+
+    def R(u, v):                                   # u across the held thing, v along it
+        return (x + u * ca - v * sa, y + u * sa + v * ca)
+    for i in range(4):
+        v = -30 + i * 20
+        a, b = R(-width / 2 - 4, v), R(width / 2 + 6, v)
+        pen.line([a, b], OUT, 22)
+        pen.line([a, b], skin, 16)
+        pen.circle(b[0], b[1], 9, dark, 2.5)                                                     # fingertips
+    th = R(-width / 2 - 8, -42)
+    pen.line([R(-width / 2 - 14, 10), th], OUT, 24)
+    pen.line([R(-width / 2 - 14, 10), th], skin, 18)
+
+
+def _swig_bottle(pen, kind, x, y, skin):
+    """A bottle tipped up to the lips: the neck at the mouth, the bottom up and out, fingers round its middle."""
+    body, label = ((52, 30, 24), (214, 36, 40)) if kind == "cola_swig" else ((150, 205, 245), (60, 130, 220))
+    nx, ny = x - 46, y + 58
+    dx_, dy_ = 0.62, -0.78
+    px_, py_ = -dy_, dx_
+
+    def R(u, v):
+        return (nx + dx_ * u + px_ * v, ny + dy_ * u + py_ * v)
+    pen.poly([R(0, -12), R(0, 12), R(50, 28), R(50, -28)], body, 4)
+    pen.poly([R(50, -28), R(50, 28), R(230, 28), R(230, -28)], body, 4)
+    pen.poly([R(150, -27), R(150, 27), R(215, 27), R(215, -27)], label, 0)
+    if kind == "cola_swig":
+        lx, ly = R(182, 0)
+        _label_text(pen, "COLA", lx, ly, math.degrees(math.atan2(-dy_, dx_)), 30)
+    pen.line([R(60, -14), R(140, -14)], _mix(body, 1.6), 4)
+    for k_ in range(3):
+        bx, by = R(120 - 25 * k_, 8 - 6 * k_)
+        pen.circle(bx, by, 5, (255, 255, 255), 0)
+    hx, hy = R(95, 0)
+    _fingers(pen, hx, hy, math.degrees(math.atan2(dy_, dx_)) + 90, 56, skin)
+
+
 def _parcel(pen, x, y, k=1.0):
     """A food-delivery parcel: brown box with tape and an orange label."""
     w, h = 150 * k, 110 * k
@@ -1948,6 +2047,9 @@ def _prop(pen, kind, hand, other=None, skin=None, bite=0):
         pen.circle(x, y - 6, 24, skin or (200, 140, 95), 4)
         return
     if kind in ("cola_swig", "bottle_swig"):  # a bottle tipped up: the neck at the lips, the bottom up and out
+        _swig_bottle(pen, kind, x, y, skin)
+        return
+    if kind in ("cola_swig_old",):
         body, label = ((52, 30, 24), (214, 36, 40)) if kind == "cola_swig" else ((150, 205, 245), (60, 130, 220))
         nx, ny = x - 46, y + 58                     # the neck, at the mouth (below-left of the hand)
         dx_, dy_ = 0.62, -0.78                      # along the bottle, toward its bottom (up and out)
@@ -1964,7 +2066,17 @@ def _prop(pen, kind, hand, other=None, skin=None, bite=0):
             pen.circle(bx, by, 5, (255, 255, 255), 0)
         pen.circle(x, y + 4, 24, skin or (200, 140, 95), 4)
         return
-    if kind == "cola":                      # a big bottle of cola
+    if kind == "cola":                      # a big bottle of cola (COLA on the red label, fingers round it)
+        pen.d.rounded_rectangle(pen.box(x - 26, y - 130, x + 26, y + 44), radius=14 * pen.s, fill=(52, 30, 24),
+                                outline=OUT, width=pen.wd(4))
+        pen.d.rectangle(pen.box(x - 25, y - 118, x + 25, y - 30), fill=(214, 36, 40))
+        _label_text(pen, "COLA", x, y - 74, 90, 30)            # written up the bottle
+        pen.d.rounded_rectangle(pen.box(x - 13, y - 156, x + 13, y - 128), radius=4 * pen.s, fill=(220, 40, 40),
+                                outline=OUT, width=pen.wd(3))
+        pen.line([(x - 15, y - 120), (x - 15, y - 100)], (130, 90, 80), 4)
+        _fingers(pen, x, y + 2, 0, 60, skin)
+        return
+    if kind == "cola_old":                  # a big bottle of cola
         pen.d.rounded_rectangle(pen.box(x - 26, y - 130, x + 26, y + 44), radius=14 * pen.s, fill=(52, 30, 24),
                                 outline=OUT, width=pen.wd(4))
         pen.d.rectangle(pen.box(x - 25, y - 70, x + 25, y - 26), fill=(214, 36, 40))       # red label
@@ -2797,6 +2909,13 @@ class FlatComposer:
         self.segs[key] = segs
         return segs
 
+    def _fridge_door(self, sc, t):
+        """How far the fridge door has swung open (0 shut .. 1 open); 1 when no line opens it in this scene."""
+        for ln in sc.lines:
+            if getattr(ln, "sound_id", "") == "door_open":
+                return max(0.0, min(1.0, (t - ln.start - 0.1) / 0.7))
+        return 1.0
+
     def _door_state(self, sc, t):
         """(shake 0..1, open 0..1) of the bathroom door: banged on during a "knock" line, opening on "door_open"."""
         shake, open_ = 0.0, 0.0
@@ -3449,6 +3568,10 @@ class FlatComposer:
                 and not self._stick_scene(sc):           # out-of-focus grass right in front of the camera
             h_ = _h(bid, round(seg[0], 2))
             cinema.foreground(im, h_ % 97, (-1, 1, 0, -1)[h_ % 4])
+        if bid == "flat_kitchen_fridge":         # looking out from inside the fridge: its walls frame the shot
+            im = im.convert("RGBA") if im.mode != "RGBA" else im
+            _fridge_frame(im, self.w, self.h, t, self._fridge_door(sc, t))
+            im = im.convert("RGB")
         im = self._light(sc, t, im, glows)
         if kst is not None:
             im = kitchen.glow(im, kst, t, x0, y0, z, k)

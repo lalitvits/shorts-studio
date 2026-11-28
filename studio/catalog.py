@@ -312,6 +312,7 @@ FLAT_BACKGROUNDS = {
     "flat_village": "Flat cartoon: village (huts, well, smoke)",
     "flat_school": "Flat cartoon: school (flag, clock)",
     "flat_kitchen": "Flat cartoon: kitchen (stove, steam, cooker)",
+    "flat_kitchen_fridge": "Flat cartoon: kitchen seen from inside the open fridge (a 'door_open' sound opens it)",
     "flat_office": "Flat cartoon: office (computers, city window)",
     "flat_market": "Flat cartoon: market (stalls, lights, shoppers)",
     "flat_bedroom": "Flat cartoon: bedroom at night (bed, window, fan)",

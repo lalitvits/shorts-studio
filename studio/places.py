@@ -18,7 +18,8 @@ from .realms import OUT, _glow, _h, _sky
 
 from . import places_more
 
-PLACES = ("flat_village", "flat_school", "flat_kitchen", "flat_office", "flat_market", "flat_bedroom") + places_more.MORE
+PLACES = ("flat_village", "flat_school", "flat_kitchen", "flat_office", "flat_market", "flat_bedroom",
+          "flat_kitchen_fridge") + places_more.MORE
 
 
 def _mix(c, k):
@@ -33,7 +34,7 @@ def draw_static(bid: str, im: Image.Image, ps: float, PW: int):
     rnd = random.Random(_h(bid))
     if bid in places_more.MORE:                     # chai tapri, sabzi mandi, airport, bus stop
         return places_more.draw(bid, im, d, P, L, PW, ps, rnd)
-    {"flat_village": _village, "flat_school": _school, "flat_kitchen": _kitchen,
+    {"flat_village": _village, "flat_school": _school, "flat_kitchen": _kitchen, "flat_kitchen_fridge": _kitchen,
      "flat_office": _office, "flat_market": _market, "flat_bedroom": _bedroom}[bid](im, d, P, L, PW, ps, rnd)
 
 
@@ -359,7 +360,7 @@ def animate(im: Image.Image, bid: str, t: float, x0: float, y0: float, z: float,
             cx, cy = px(1300, 560)
             _clock(d, cx, cy, 62 * s, t, s)
         _birds(d, x0, vw, t, px, s)
-    elif bid == "flat_kitchen":
+    elif bid in ("flat_kitchen", "flat_kitchen_fridge"):
         for X, Y, spd in it["clouds"]:                            # clouds in the window
             cxw = 1050 + ((X + t * spd) % 640) - 70
             x, y = px(cxw, 520 + Y * 0.6)
