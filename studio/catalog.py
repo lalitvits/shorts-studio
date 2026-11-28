@@ -214,6 +214,12 @@ _FLAT = {
         kind="brain", shape="heart", color=(222, 36, 52), glow=(255, 90, 110), horns=False, height=1.0)),
     "flat_heart_broken": ("Flat: Broken heart (cracked, with a plaster; talks, cries, beats)", False, dict(
         kind="brain", shape="heart", broken=True, color=(206, 40, 56), glow=(170, 120, 200), horns=False, height=0.9)),
+    "flat_apple": ("Flat: Talking apple (red, grumpy uncle of the fridge)", False, dict(
+        kind="brain", shape="apple", color=(214, 40, 36), glow=(255, 150, 120), horns=False, height=0.8)),
+    "flat_pear": ("Flat: Talking pear (green, speckled)", False, dict(
+        kind="brain", shape="pear", color=(170, 200, 70), glow=(200, 240, 150), horns=False, height=0.82)),
+    "flat_mango": ("Flat: Talking mango (orange-yellow, green shoulder)", False, dict(
+        kind="brain", shape="mango", color=(250, 176, 40), glow=(255, 220, 120), horns=False, height=0.8)),
     "flat_dog": ("Flat: Dog (brown)", False, dict(kind="dog", color=(146, 94, 58), light=(196, 150, 104), height=1.0)),
     "flat_cat": ("Flat: Cat (grey)", False, dict(kind="cat", color=(150, 150, 160), light=(220, 220, 226), height=0.9)),
 }
@@ -280,7 +286,7 @@ PROP_LABELS = {"": "Prop: none", "phone": "Mobile phone (in the hand)", "glass":
                "samosa": "Samosa", "jalebi": "Jalebi", "vada_pav": "Vada pav", "cutting_chai": "Cutting chai (small glass)",
                "kulhad": "Kulhad chai (clay cup)", "plate_samosa": "Plate of samosas (both hands)",
                "tasla": "Tasla (iron pan of cement, both hands)",
-               "chips": "Packet of chips", "blanket": "Blanket (covers the body: lie_sleep under it)",
+               "chips": "Packet of chips", "burger": "Burger", "cola": "Bottle of cola", "blanket": "Blanket (covers the body: lie_sleep under it)",
                # fruit
                "banana": "Banana", "apple": "Apple", "mango": "Mango", "orange": "Orange", "grapes": "Grapes",
                "watermelon": "Watermelon slice",
@@ -316,6 +322,7 @@ FLAT_BACKGROUNDS = {
     "flat_highway": "Flat cartoon: highway with a speed breaker (trees, marker posts, golden hour)",
     "flat_bathroom": "Flat cartoon: bathroom (tiles, shower curtain, bucket and mug, wooden door)",
     "flat_home": "Flat cartoon: home living room (ceiling fan turning, TV playing, curtains in the breeze)",
+    "flat_fridge": "Flat cartoon: inside a fridge (shelves, bottles, eggs, a bowl of chana in front)",
     "flat_white": "Plain white (stickman comedy)",
     "flat_doodle": "Doodle paper (hand-drawn hills, sun, clouds)",
 }

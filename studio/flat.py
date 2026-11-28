@@ -105,12 +105,13 @@ def char_spec(c: dict) -> dict:
 
 
 # things a character holds (PROP_LABELS): which hand pose goes with each
-ONE_HAND = {"phone": ("ik", 62, -650), "glass": ("ik", 62, -640), "bottle": ("ik", 62, -640), "cup": ("ik", 50, -690),
+ONE_HAND = {"phone": ("ik", 62, -650), "glass": ("ik", 62, -640), "bottle": ("ik", 62, -640), "cola": ("ik", 62, -640),
+            "cup": ("ik", 50, -690),
             "flowers": ("ik", 60, -680), "thali": ("ik", 80, -690), "chappal": ("fk", 30, 20),
             "umbrella": ("ik", 36, -790), "suitcase": ("fk", 14, 4), "lathi": ("fk", 12, -6), "bag": None,
             "cutting_chai": ("ik", 56, -660), "kulhad": ("ik", 56, -660), "veg_basket": ("fk", 18, 6),
             "sabzi_bag": ("fk", 14, 4)}
-FOODS = {"chips", "samosa", "jalebi", "vada_pav", "banana", "apple", "mango", "orange", "grapes", "watermelon", "tomato", "onion",
+FOODS = {"burger", "chips", "samosa", "jalebi", "vada_pav", "banana", "apple", "mango", "orange", "grapes", "watermelon", "tomato", "onion",
          "potato", "carrot", "brinjal", "chilli", "cabbage", "cucumber", "lemon", "cauliflower", "bhindi", "garlic", "peas",
          "bhutta", "coconut"}
 for _f in FOODS:
@@ -128,7 +129,7 @@ BUSY_HANDS = {"clap", "cry", "facepalm", "wipe_tears", "punch", "slap", "throw",
 
 def hold_prop(pose: dict, prop: str, action: str):
     """Put the held prop in the character's hands (keeps the action's own prop when it has one)."""
-    if prop in ("glass", "bottle", "cutting_chai", "kulhad") and pose.get("prop") == "cup":   # drinking from it
+    if prop in ("glass", "bottle", "cola", "cutting_chai", "kulhad") and pose.get("prop") == "cup":   # drinking from it
         pose["prop"] = prop
         return
     if prop in FOODS and pose.get("prop") == "snack":                  # eating it
@@ -1719,6 +1720,18 @@ def _jug(pen, x, y, tilt=0.0, k=1.0):
 
 def _food(pen, kind, x, y):
     """A food / fruit / vegetable, about hand-sized, centred at (x, y)."""
+    if kind == "burger":                    # a big burger: bun, lettuce, cheese, patty
+        pen.pie(x - 62, y - 70, x + 62, y + 6, 180, 360, (226, 160, 70), 4)                  # top bun
+        for dx in (-30, 0, 26):
+            pen.ellipse(x + dx - 5, y - 50, x + dx + 5, y - 42, (255, 244, 210), 0)          # sesame
+        pen.d.rounded_rectangle(pen.box(x - 64, y - 34, x + 64, y - 18), radius=6 * pen.s, fill=(110, 190, 70),
+                                outline=OUT, width=pen.wd(3))                                 # lettuce
+        pen.poly([(x - 60, y - 20), (x + 60, y - 20), (x + 44, y - 4), (x - 50, y - 6)], (250, 200, 40), 3)   # cheese
+        pen.d.rounded_rectangle(pen.box(x - 60, y - 10, x + 60, y + 12), radius=10 * pen.s, fill=(110, 60, 36),
+                                outline=OUT, width=pen.wd(3))                                 # patty
+        pen.d.rounded_rectangle(pen.box(x - 58, y + 10, x + 58, y + 34), radius=10 * pen.s, fill=(226, 160, 70),
+                                outline=OUT, width=pen.wd(3))                                 # bottom bun
+        return
     if kind == "chips":                     # a crinkly packet of chips, open at the top
         pen.poly([(x - 48, y - 70), (x + 48, y - 74), (x + 54, y + 60), (x - 54, y + 62)], (250, 196, 30), 4)
         for k in range(5):
@@ -1895,6 +1908,16 @@ def _prop(pen, kind, hand, other=None, skin=None, bite=0):
         pen.poly([(x - 26, y - 70), (x + 26, y - 70), (x + 20, y + 16), (x - 20, y + 16)], (225, 240, 250), 4)
         pen.poly([(x - 23, y - 40), (x + 23, y - 40), (x + 19, y + 12), (x - 19, y + 12)], (130, 190, 240), 0)
         pen.circle(x, y - 6, 24, skin or (200, 140, 95), 4)
+        return
+    if kind == "cola":                      # a big bottle of cola
+        pen.d.rounded_rectangle(pen.box(x - 26, y - 130, x + 26, y + 44), radius=14 * pen.s, fill=(52, 30, 24),
+                                outline=OUT, width=pen.wd(4))
+        pen.d.rectangle(pen.box(x - 25, y - 70, x + 25, y - 26), fill=(214, 36, 40))       # red label
+        pen.line([(x - 16, y - 48), (x + 16, y - 48)], (255, 255, 255), 5)
+        pen.d.rounded_rectangle(pen.box(x - 13, y - 156, x + 13, y - 128), radius=4 * pen.s, fill=(220, 40, 40),
+                                outline=OUT, width=pen.wd(3))
+        pen.line([(x - 14, y - 112), (x - 14, y + 30)], (110, 70, 60), 4)                     # shine
+        pen.circle(x, y + 4, 24, skin or (200, 140, 95), 4)
         return
     if kind == "bottle":                    # a plastic water bottle
         pen.d.rounded_rectangle(pen.box(x - 22, y - 110, x + 22, y + 40), radius=12 * pen.s, fill=(150, 205, 245),
@@ -2176,7 +2199,7 @@ def draw_brain(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t, speaking
     tint = Image.new("RGBA", im.size, sp.get("glow", (255, 110, 140)) + (255,))
     tint.putalpha(glow)
     im.alpha_composite(tint)
-    heart = sp.get("shape") == "heart"
+    heart = sp.get("shape") in ("heart", "apple", "pear", "mango")
     if heart:                                         # a talking heart: beats (lub-dub), faster while it talks
         bpm = 2.2 if speaking else 1.3
         ph = (t * bpm) % 1.0
@@ -2210,14 +2233,34 @@ def draw_brain(im, ox, oy, s, sp, view, pose, emotion, mouth, blink, t, speaking
             elbow, hand = _fk(sx, sy, min(160, a), e, 80, 70, side)
             pen.limb([(sx, sy), elbow, hand], 15, OUT, 0)
             pen.circle(hand[0], hand[1], 17, (250, 250, 250), 4)
-        pts = []                                      # the heart shape (the classic heart curve)
+        shape = sp.get("shape")
+        pts = []
         for i in range(72):
             a = 2 * math.pi * i / 72
-            x = 16 * math.sin(a) ** 3
-            y = 13 * math.cos(a) - 5 * math.cos(2 * a) - 2 * math.cos(3 * a) - math.cos(4 * a)
-            pts.append((cx + x * 13.5 * k, cy - 30 - y * 13.5 * k))
+            if shape == "heart":                      # the classic heart curve
+                x = 16 * math.sin(a) ** 3
+                y = 13 * math.cos(a) - 5 * math.cos(2 * a) - 2 * math.cos(3 * a) - math.cos(4 * a)
+                pts.append((cx + x * 13.5 * k, cy - 30 - y * 13.5 * k))
+            elif shape == "apple":                    # round, a dip at the top and a flatter bottom
+                r = 205 * (1 - 0.12 * math.cos(a) ** 8 * (1 if math.cos(a) > 0 else 0.4))
+                pts.append((cx + r * math.sin(a) * 1.05 * k, cy - 20 - r * math.cos(a) * 0.95 * k))
+            elif shape == "pear":                     # narrow top, wide bottom
+                w = 120 + 90 * (1 - math.cos(a)) / 2
+                pts.append((cx + w * math.sin(a) * k, cy - 10 - 230 * math.cos(a) * k))
+            else:                                     # mango: a tilted oval with a bulge
+                pts.append((cx + (190 + 25 * math.sin(2 * a)) * math.sin(a) * k,
+                            cy - 20 - 220 * math.cos(a) * k))
         pen.poly(pts, col, 6)
+        if shape == "mango":                          # the green shoulder of a ripening mango
+            pen.pie(cx - 190 * k, cy - 240 * k, cx + 190 * k, cy + 200 * k, 200, 300, (130, 180, 60), 0)
         pen.arc(cx - 170 * k, cy - 190 * k, cx - 40 * k, cy - 20 * k, 200, 260, 14, _mix(col, 1.35))   # shine
+        if shape in ("apple", "pear", "mango"):       # stem and a leaf
+            top = cy - (220 if shape == "apple" else 245) * k
+            pen.line([(cx, top + 20), (cx + 12, top - 50)], (110, 70, 40), 12)
+            pen.poly([(cx + 14, top - 30), (cx + 90, top - 70), (cx + 40, top - 10)], (90, 170, 70), 4)
+        if shape == "pear":
+            for dx, dy in ((-90, 60), (60, 110), (-20, 150), (100, 20)):
+                pen.circle(cx + dx, cy + dy, 6, _mix(col, 0.8), 0)                              # speckles
         if sp.get("broken"):                          # a broken heart: a jagged crack down the middle, and a plaster
             crack = [(cx - 4, cy - 160 * k), (cx + 30, cy - 105 * k), (cx - 22, cy - 50 * k), (cx + 26, cy + 10 * k),
                      (cx - 14, cy + 70 * k), (cx + 4, cy + 120 * k)]

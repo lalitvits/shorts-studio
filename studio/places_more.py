@@ -18,7 +18,7 @@ from PIL import ImageDraw, ImageFont
 from .realms import OUT, _sky
 
 MORE = ("flat_chai_tapri", "flat_sabzi_mandi", "flat_airport", "flat_bus_stop", "flat_white", "flat_doodle",
-        "flat_highway", "flat_bathroom", "flat_home")
+        "flat_highway", "flat_bathroom", "flat_home", "flat_fridge")
 
 
 def _mix(c, k):
@@ -748,6 +748,40 @@ def _home_animate(d, t, px, s, visible):
                 d.line([px(xx, y0 - 30), px(xx + sway * k, y1 + 110)], fill=(210, 120, 40, 255), width=max(1, round(5 * s)))
 
 
+def _fridge(im, d, P, L, PW, ps, rnd):
+    """Inside a fridge: white walls, a light, glass shelves with bottles, an egg tray and leftovers; the fruits sit on
+    the lowest shelf (where the characters stand) and a steel bowl of chana is in front."""
+    d.rectangle(P(0, 0, PW, 1920), fill=(228, 238, 244))                                     # back wall
+    for x in (300, 2300):                                                                     # side walls (perspective)
+        d.polygon([tuple(P(x - 300 if x < 1000 else x + 300, 0)), tuple(P(x, 160)), tuple(P(x, 1580)),
+                   tuple(P(x - 300 if x < 1000 else x + 300, 1920))], fill=(206, 220, 230))
+    d.rounded_rectangle(P(1150, 40, 1450, 120), radius=L(20), fill=(255, 252, 230), outline=OUT, width=L(4))   # light
+    for y0 in (560, 1040):                                                                    # glass shelves
+        d.polygon([tuple(P(300, y0)), tuple(P(2300, y0)), tuple(P(2380, y0 + 40)), tuple(P(220, y0 + 40))],
+                  fill=(200, 226, 236), outline=OUT)
+    for i, (x, h, col) in enumerate(((520, 330, (60, 150, 220)), (640, 380, (230, 70, 60)), (760, 300, (60, 170, 90)),
+                                     (1820, 360, (250, 200, 50)), (1940, 300, (240, 240, 240)))):
+        d.rounded_rectangle(P(x - 45, 560 - h, x + 45, 560), radius=L(18), fill=col, outline=OUT, width=L(5))
+        d.rectangle(P(x - 20, 560 - h - 50, x + 20, 560 - h + 4), fill=col, outline=OUT, width=L(4))
+    d.rounded_rectangle(P(1000, 470, 1600, 560), radius=L(12), fill=(250, 246, 236), outline=OUT, width=L(5))   # egg tray
+    for k in range(6):
+        cx = 1050 + k * 95
+        d.ellipse(P(cx - 34, 410, cx + 34, 500), fill=(250, 244, 228), outline=OUT, width=L(4))
+    d.rounded_rectangle(P(560, 900, 900, 1040), radius=L(16), fill=(120, 190, 220), outline=OUT, width=L(5))  # tiffin
+    d.rectangle(P(600, 880, 860, 910), fill=(90, 150, 190), outline=OUT, width=L(4))
+    d.ellipse(P(1700, 920, 2100, 1040), fill=(250, 250, 250), outline=OUT, width=L(5))       # milk bowl
+    d.ellipse(P(1720, 930, 2080, 990), fill=(255, 255, 248))
+    d.rectangle(P(300, 1500, 2300, 1580), fill=(196, 222, 234))                               # crisper shelf edge
+    d.line(P(300, 1500, 2300, 1500), fill=OUT, width=L(5))
+    _ground(d, im, ps, 1580, (170, 196, 210), (140, 166, 182))
+    d.chord(P(900, 1560, 1700, 1980), 180, 360, fill=(196, 198, 206), outline=OUT, width=L(8))   # steel bowl of chana
+    rr = random.Random(5)
+    for _ in range(70):
+        x = rr.uniform(960, 1640)
+        y = rr.uniform(1640, 1770)
+        d.ellipse(P(x - 18, y - 14, x + 18, y + 14), fill=(196, 140, 70), outline=(150, 100, 50), width=L(2))
+
+
 def _white(im, d, P, L, PW, ps, rnd):
     """Plain white, the classic stickman look: only a faint floor line."""
     d.rectangle(P(0, 0, PW, 1920), fill=(252, 252, 250))
@@ -801,7 +835,7 @@ def _doodle(im, d, P, L, PW, ps, rnd):
 
 DRAW = {"flat_chai_tapri": _chai_tapri, "flat_sabzi_mandi": _sabzi_mandi, "flat_airport": _airport,
         "flat_bus_stop": _bus_stop, "flat_white": _white, "flat_doodle": _doodle, "flat_highway": _highway,
-        "flat_bathroom": _bathroom, "flat_home": _home}
+        "flat_bathroom": _bathroom, "flat_home": _home, "flat_fridge": _fridge}
 
 
 def draw(bid, im, d, P, L, PW, ps, rnd):
