@@ -1754,22 +1754,32 @@ def _paste_on(pen, tile, X, Y):
 
 
 def _fingers(pen, x, y, ang, width, skin):
-    """Four fingers wrapped round something held (a bottle), across it, plus the thumb; centred at (x, y)."""
+    """A hand gripping something round (a bottle), centred at (x, y): the back of the hand on the near side, four
+    fingers of different lengths curling across the front with knuckle creases and nails, and the thumb up the side.
+    `ang` turns it with the bottle; `width` is how wide the bottle is."""
     skin = skin or (200, 140, 95)
-    dark = _mix(skin, 0.82)
+    dark, light, nail = _mix(skin, 0.8), _mix(skin, 1.08), _mix(skin, 1.18)
     ca, sa = math.cos(math.radians(ang)), math.sin(math.radians(ang))
 
-    def R(u, v):                                   # u across the held thing, v along it
+    def R(u, v):                                   # u across the bottle (toward the fingertips), v along it
         return (x + u * ca - v * sa, y + u * sa + v * ca)
-    for i in range(4):
-        v = -30 + i * 20
-        a, b = R(-width / 2 - 4, v), R(width / 2 + 6, v)
-        pen.line([a, b], OUT, 22)
-        pen.line([a, b], skin, 16)
-        pen.circle(b[0], b[1], 9, dark, 2.5)                                                     # fingertips
-    th = R(-width / 2 - 8, -42)
-    pen.line([R(-width / 2 - 14, 10), th], OUT, 24)
-    pen.line([R(-width / 2 - 14, 10), th], skin, 18)
+    h = width / 2
+    palm = [R(-h - 34, -40), R(-h + 2, -46), R(-h + 8, 40), R(-h - 26, 50), R(-h - 40, 10)]
+    pen.poly(palm, skin, 4)                                                                   # back of the hand
+    pen.line([R(-h - 22, -24), R(-h - 18, 30)], dark, 3)                                      # a crease on it
+    for i, (th, reach) in enumerate(((19, 10), (19, 12), (18, 9), (15, 2))):                  # index .. little finger
+        v0 = -32 + i * 21
+        pts = [R(-h, v0), R(-h * 0.2, v0 + 2), R(h * 0.55, v0 + 4), R(h + reach, v0 + 2)]     # curls round the front
+        pen.line(pts, OUT, th + 6)
+        pen.line(pts, skin if i % 2 == 0 else light, th)
+        kx, ky = R(-h * 0.25, v0 + 2)                                                         # middle knuckle crease
+        pen.line([R(-h * 0.25, v0 - th * 0.32), R(-h * 0.25 + 3, v0 + th * 0.32)], dark, 2.5)
+        tx, ty = R(h + reach - 4, v0 + 2)                                                     # nail at the tip
+        pen.ellipse(tx - 6, ty - 5, tx + 6, ty + 5, nail, 1.5)
+    base, tip = R(-h - 18, 30), R(-h + 6, -52)                                                # thumb, up the side
+    pen.line([base, R(-h - 6, -18), tip], OUT, 25)
+    pen.line([base, R(-h - 6, -18), tip], light, 19)
+    pen.ellipse(tip[0] - 7, tip[1] - 6, tip[0] + 7, tip[1] + 6, nail, 1.5)
 
 
 def _swig_bottle(pen, kind, x, y, skin):
